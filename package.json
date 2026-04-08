@@ -1,0 +1,17 @@
+{
+  "name": "pnda-se",
+  "version": "1.0.0",
+  "description": "PNDA Suivi-Évaluation",
+  "scripts": {
+    "start": "node scripts/start.js",
+    "start:win": "scripts/start.bat",
+    "start:mac": "chmod +x scripts/start.sh && ./scripts/start.sh",
+    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:both": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

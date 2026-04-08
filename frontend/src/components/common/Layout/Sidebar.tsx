@@ -1,0 +1,296 @@
+// frontend/src/components/common/Layout/Sidebar.tsx
+import React, { useState } from 'react';
+import {
+  Box,
+  Drawer,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  Collapse,
+  Typography,
+  IconButton,
+} from '@mui/material';
+import { useNavigate, useLocation } from 'react-router-dom';
+import GoogleIcon from '../GoogleIcon';
+import { PndaLogo } from '../PndaLogo';
+
+interface SidebarProps {
+  open: boolean;
+  onClose: () => void;
+  variant: 'permanent' | 'temporary';
+}
+
+interface MenuItem {
+  title: string;
+  path?: string;
+  icon: React.ReactNode;
+  roles?: string[];
+  children?: MenuItem[];
+}
+
+const menuItems: MenuItem[] = [
+  {
+    title: 'Tableaux de bord',
+    icon: <GoogleIcon name="dashboard" size={26} />,
+    children: [
+      { title: 'National', path: '/dashboard/national', icon: <GoogleIcon name="dashboard" size={24} />, roles: ['admin', 'uncp'] },
+      { title: 'Provincial', path: '/dashboard/provincial', icon: <GoogleIcon name="map" size={24} />, roles: ['admin', 'uncp', 'upep'] },
+      { title: 'Officier Terrain', path: '/dashboard/ot', icon: <GoogleIcon name="person_pin_circle" size={24} />, roles: ['ot'] },
+      { title: 'Partenaires', path: '/dashboard/partenaires', icon: <GoogleIcon name="handshake" size={24} />, roles: ['admin', 'uncp', 'upep', 'partenaire'] },
+    ],
+  },
+  {
+    title: 'Indicateurs de performance',
+    icon: <GoogleIcon name="bar_chart" size={26} />,
+    roles: ['admin', 'uncp', 'upep', 'ot', 'partenaire'],
+    children: [
+      { title: 'IODP', path: '/indicateurs/iodp', icon: <GoogleIcon name="bar_chart" size={24} /> },
+      { title: 'Résultats intermédiaires', path: '/indicateurs/ir', icon: <GoogleIcon name="trending_up" size={24} /> },
+      { title: 'Cadre des résultats', path: '/indicateurs/cadre', icon: <GoogleIcon name="assignment_turned_in" size={24} /> },
+      { title: 'Environnement & VBG', path: '/indicateurs/environnement', icon: <GoogleIcon name="eco" size={24} /> },
+    ],
+  },
+  {
+    title: 'Bénéficiaires',
+    icon: <GoogleIcon name="groups" size={26} />,
+    roles: ['admin', 'uncp', 'upep', 'ot'],
+    children: [
+      { title: 'RNA', path: '/beneficiaires/rna', icon: <GoogleIcon name="person" size={24} /> },
+      { title: 'Organisations partenaires', path: '/beneficiaires/organisations', icon: <GoogleIcon name="corporate_fare" size={24} /> },
+      { title: 'Fournisseurs', path: '/beneficiaires/fournisseurs', icon: <GoogleIcon name="local_shipping" size={24} />, roles: ['admin', 'uncp', 'upep'] },
+    ],
+  },
+  {
+    title: 'Suivi opérationnel',
+    icon: <GoogleIcon name="assignment" size={26} />,
+    roles: ['admin', 'uncp', 'upep', 'ot'],
+    children: [
+      { title: 'Missions T4 2025', path: '/suivi/missions', icon: <GoogleIcon name="flight_takeoff" size={24} /> },
+      { title: 'Activités du projet', path: '/suivi/activites', icon: <GoogleIcon name="task" size={24} /> },
+    ],
+  },
+  {
+    title: 'Gestion des risques',
+    icon: <GoogleIcon name="warning" size={26} />,
+    roles: ['admin', 'uncp', 'upep'],
+    children: [
+      { title: 'Registre des risques', path: '/risques/registre', icon: <GoogleIcon name="report_problem" size={24} /> },
+      { title: "Plan d'atténuation", path: '/risques/plan', icon: <GoogleIcon name="security" size={24} /> },
+      { title: 'Alertes', path: '/risques/alertes', icon: <GoogleIcon name="notifications_active" size={24} /> },
+    ],
+  },
+  {
+    title: 'Mécanisme de plaintes',
+    icon: <GoogleIcon name="support_agent" size={26} />,
+    roles: ['admin', 'uncp', 'upep', 'ot'],
+    children: [
+      { title: 'Registre des plaintes', path: '/database/plaintes', icon: <GoogleIcon name="feedback" size={24} /> },
+    ],
+  },
+  {
+    title: 'Données du projet',
+    icon: <GoogleIcon name="folder_open" size={26} />,
+    roles: ['admin', 'uncp', 'upep'],
+    children: [
+      { title: 'Base bénéficiaires', path: '/database/beneficiaires', icon: <GoogleIcon name="people" size={24} /> },
+      { title: 'Base activités', path: '/database/activites', icon: <GoogleIcon name="list_alt" size={24} /> },
+      { title: 'Base indicateurs', path: '/database/indicateurs', icon: <GoogleIcon name="analytics" size={24} /> },
+    ],
+  },
+  {
+    title: 'Outils terrain',
+    icon: <GoogleIcon name="agriculture" size={26} />,
+    roles: ['admin', 'uncp', 'upep', 'ot'],
+    children: [
+      { title: 'Calculateur indicateurs', path: '/outils/calculateur', icon: <GoogleIcon name="calculate" size={24} />, roles: ['admin', 'uncp', 'upep'] },
+      { title: 'Collecte mobile', path: '/outils/collecte', icon: <GoogleIcon name="phone_android" size={24} /> },
+      { title: 'Cartographie', path: '/outils/cartographie', icon: <GoogleIcon name="map" size={24} /> },
+    ],
+  },
+  {
+    title: 'Rapports',
+    path: '/rapports',
+    icon: <GoogleIcon name="description" size={26} />,
+    roles: ['admin', 'uncp', 'upep', 'partenaire'],
+  },
+  {
+    title: 'Administration',
+    icon: <GoogleIcon name="settings" size={26} />,
+    roles: ['admin'],
+    children: [
+      { title: 'Utilisateurs', path: '/admin/utilisateurs', icon: <GoogleIcon name="admin_panel_settings" size={24} /> },
+      { title: 'Configurations', path: '/admin/configurations', icon: <GoogleIcon name="tune" size={24} /> },
+    ],
+  },
+  {
+    title: 'Aide & Documentation',
+    path: '/aide',
+    icon: <GoogleIcon name="help" size={26} />,
+  },
+];
+
+export const Sidebar: React.FC<SidebarProps> = ({ open, onClose, variant }) => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({});
+
+  // Rôle de l'utilisateur connecté
+  const userRole = React.useMemo(() => {
+    try {
+      const s = localStorage.getItem('user');
+      return s ? (JSON.parse(s) as { role: string }).role : '';
+    } catch {
+      return '';
+    }
+  }, []);
+
+  // Filtrer les éléments selon le rôle
+  const canSee = (item: MenuItem) =>
+    !item.roles || item.roles.includes(userRole);
+
+  const visibleItems = menuItems
+    .filter(canSee)
+    .map((item) => ({
+      ...item,
+      children: item.children?.filter(canSee),
+    }))
+    .filter((item) => !item.children || item.children.length > 0);
+
+  const handleMenuClick = (title: string) => {
+    setOpenMenus(prev => ({ ...prev, [title]: !prev[title] }));
+  };
+
+  const handleItemClick = (path: string) => {
+    navigate(path);
+    if (variant === 'temporary') {
+      onClose();
+    }
+  };
+
+  const isActive = (path: string) => location.pathname === path;
+
+  const drawerContent = (
+    <Box sx={{ width: 280, height: '100%', bgcolor: 'primary.main', color: 'white', display: 'flex', flexDirection: 'column' }}>
+      {/* Header avec logo */}
+      <Box sx={{ p: 3, borderBottom: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1.5 }}>
+        <Box>
+          <PndaLogo height={72} sx={{ mb: 1 }} />
+          <Typography variant="h6" sx={{ fontWeight: 700, letterSpacing: 0.2 }}>
+          
+          </Typography>
+          <Typography variant="caption" sx={{ opacity: 0.7 }}>
+            Système de Suivi-Évaluation
+          </Typography>
+        </Box>
+        {variant === 'temporary' && (
+          <IconButton onClick={onClose} sx={{ color: 'white' }}>
+            <GoogleIcon name="close" size={26} />
+          </IconButton>
+        )}
+      </Box>
+
+      {/* Menu de navigation */}
+      <List sx={{ px: 1, py: 2, flex: 1, overflow: 'auto' }}>
+        {visibleItems.map((item) => (
+          <React.Fragment key={item.title}>
+            <ListItem disablePadding>
+              <ListItemButton
+                onClick={() => item.children ? handleMenuClick(item.title) : item.path && handleItemClick(item.path)}
+                sx={{
+                  borderRadius: '10px',
+                  mb: 0.5,
+                  bgcolor: isActive(item.path || '') ? 'rgba(255,255,255,0.2)' : 'transparent',
+                  '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' },
+                }}
+              >
+                <ListItemIcon sx={{ color: 'white', minWidth: 40, fontSize: '26px' }}>
+                  {item.icon}
+                </ListItemIcon>
+                <ListItemText 
+                  primary={item.title} 
+                  primaryTypographyProps={{ fontSize: 14, fontWeight: 500 }} 
+                />
+                {item.children && (openMenus[item.title] ? <GoogleIcon name="expand_less" size={24} /> : <GoogleIcon name="expand_more" size={24} />)}
+              </ListItemButton>
+            </ListItem>
+            {item.children && (
+              <Collapse in={openMenus[item.title]} timeout="auto" unmountOnExit>
+                <List component="div" disablePadding>
+                  {item.children.map((child) => (
+                    <ListItemButton
+                      key={child.title}
+                      onClick={() => child.path && handleItemClick(child.path)}
+                      sx={{
+                        pl: 6,
+                        borderRadius: '10px',
+                        ml: 1,
+                        mr: 1,
+                        mb: 0.5,
+                        bgcolor: isActive(child.path || '') ? 'rgba(255,255,255,0.2)' : 'transparent',
+                        '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' },
+                      }}
+                    >
+                      <ListItemIcon sx={{ color: 'white', minWidth: 32, fontSize: '24px' }}>
+                        {child.icon}
+                      </ListItemIcon>
+                      <ListItemText 
+                        primary={child.title} 
+                        primaryTypographyProps={{ fontSize: 13 }} 
+                      />
+                    </ListItemButton>
+                  ))}
+                </List>
+              </Collapse>
+            )}
+          </React.Fragment>
+        ))}
+      </List>
+
+      {/* Footer */}
+      <Box sx={{ p: 2, borderTop: '1px solid rgba(255,255,255,0.2)' }}>
+        <Typography variant="caption" sx={{ opacity: 0.6 }}>
+          Version 2.0 © PNDA RDC 2026
+        </Typography>
+      </Box>
+    </Box>
+  );
+
+  if (variant === 'permanent') {
+    return (
+      <Drawer
+        variant="permanent"
+        sx={{
+          width: 280,
+          flexShrink: 0,
+          '& .MuiDrawer-paper': {
+            width: 280,
+            boxSizing: 'border-box',
+            border: 'none',
+            bgcolor: 'transparent',
+          },
+        }}
+      >
+        {drawerContent}
+      </Drawer>
+    );
+  }
+
+  return (
+    <Drawer
+      variant="temporary"
+      open={open}
+      onClose={onClose}
+      sx={{
+        '& .MuiDrawer-paper': {
+          width: 280,
+          boxSizing: 'border-box',
+          border: 'none',
+        },
+      }}
+    >
+      {drawerContent}
+    </Drawer>
+  );
+};

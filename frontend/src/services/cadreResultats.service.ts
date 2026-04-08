@@ -1,0 +1,59 @@
+import axios from 'axios';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+
+const api = axios.create({
+  baseURL: API_URL,
+  headers: { 'Content-Type': 'application/json' },
+});
+
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+
+export interface AnneeCadre {
+  prevu: number | null;
+  realise: number | null;
+}
+
+export interface IndicateurCadre {
+  id: number;
+  code: string;
+  nom: string;
+  composante: string;
+  sous_composante: string;
+  est_odp: boolean;
+  reference: string;
+  unite: string;
+  frequence: string;
+  source_donnees: string;
+  responsable: string;
+  annees: {
+    '2023': AnneeCadre;
+    '2024': AnneeCadre;
+    '2025': AnneeCadre;
+    '2026': AnneeCadre;
+  };
+  final_prevu: number | null;
+}
+
+export interface CadreStats {
+  total: number;
+  odp_count: number;
+  avec_donnees_2025: number;
+  en_retard: number;
+  en_cours: number;
+  atteint: number;
+  moyenne_performance: number;
+  composantes: { nom: string; count: number }[];
+}
+
+export const cadreResultatsService = {
+  getAll: (params?: { composante?: string; odp?: boolean }) =>
+    api.get<IndicateurCadre[]>('/cadre-resultats', { params }),
+  getStats: () => api.get<CadreStats>('/cadre-resultats/stats'),
+};
+
+export default cadreResultatsService;
