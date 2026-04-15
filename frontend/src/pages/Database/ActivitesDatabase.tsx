@@ -74,6 +74,7 @@ import {
   InsertDriveFile,
 } from '@mui/icons-material';
 import GoogleIcon from '../../components/common/GoogleIcon';
+import { GradientWidget } from '../../components/common/Widget/GradientWidget';
 import { ExportToolbar } from '../../components/common/ExportToolbar/ExportToolbar';
 import { activitesService, type Activite, type ActiviteFilters, type ActiviteStats } from '../../services/activites.service';
 
@@ -501,53 +502,42 @@ export const ActivitesDatabase: React.FC = () => {
 
       {/* Statistiques */}
       {stats && (
-        <Grid container spacing={2} sx={{ mb: 3 }}>
+        <Grid container spacing={3} sx={{ mb: 4 }}>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <Card sx={{ borderRadius: 2, borderLeft: '4px solid #2E7D32' }}>
-              <CardContent>
-                <Typography variant="caption" color="text.secondary">Total activités</Typography>
-                <Typography variant="h4" fontWeight={700}>{stats.total}</Typography>
-                <LinearProgress variant="determinate" value={stats.taux_realisation} sx={{ mt: 1, height: 4, borderRadius: 2 }} />
-                <Typography variant="caption" color="text.secondary">Taux de réalisation: {stats.taux_realisation}%</Typography>
-              </CardContent>
-            </Card>
+            <GradientWidget
+              title="Total activités"
+              value={stats.total.toLocaleString('fr-FR')}
+              icon={<EventNote sx={{ fontSize: 36 }} />}
+              trend={{ value: stats.taux_realisation, direction: 'up', period: 'taux de réalisation' }}
+              color="primary"
+            />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <Card sx={{ borderRadius: 2 }}>
-              <CardContent>
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <AttachMoney sx={{ color: '#4CAF50' }} />
-                  <Typography variant="caption" color="text.secondary">Budget</Typography>
-                </Stack>
-                <Typography variant="h6" fontWeight={600}>{(stats.budget_total / 1000000).toFixed(0)} M FCFA</Typography>
-                <Typography variant="caption" color="text.secondary">Dépensé: {(stats.budget_depense / 1000000).toFixed(0)} M FCFA</Typography>
-                <LinearProgress variant="determinate" value={(stats.budget_depense / stats.budget_total) * 100} sx={{ mt: 1, height: 4, borderRadius: 2 }} />
-              </CardContent>
-            </Card>
+            <GradientWidget
+              title="Budget total"
+              value={`${(stats.budget_total / 1000000).toFixed(0)} M FCFA`}
+              icon={<AttachMoney sx={{ fontSize: 36 }} />}
+              trend={{ value: stats.budget_total > 0 ? Math.round((stats.budget_depense / stats.budget_total) * 100) : 0, direction: 'up', period: 'budget consommé' }}
+              color="success"
+            />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <Card sx={{ borderRadius: 2 }}>
-              <CardContent>
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <People sx={{ color: '#2196F3' }} />
-                  <Typography variant="caption" color="text.secondary">Participants</Typography>
-                </Stack>
-                <Typography variant="h4" fontWeight={700}>{stats.participants_total.toLocaleString()}</Typography>
-                <Typography variant="caption" color="text.secondary">bénéficiaires touchés</Typography>
-              </CardContent>
-            </Card>
+            <GradientWidget
+              title="Participants"
+              value={stats.participants_total.toLocaleString('fr-FR')}
+              icon={<People sx={{ fontSize: 36 }} />}
+              trend={{ value: stats.total > 0 ? Math.round(stats.participants_total / stats.total) : 0, direction: 'up', period: 'participants / activité' }}
+              color="info"
+            />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <Card sx={{ borderRadius: 2 }}>
-              <CardContent>
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <CheckCircle sx={{ color: '#4CAF50' }} />
-                  <Typography variant="caption" color="text.secondary">Activités terminées</Typography>
-                </Stack>
-                <Typography variant="h4" fontWeight={700}>{stats.par_statut.terminee}</Typography>
-                <Typography variant="caption" color="text.secondary">sur {stats.total} activités</Typography>
-              </CardContent>
-            </Card>
+            <GradientWidget
+              title="Activités terminées"
+              value={stats.par_statut.terminee.toLocaleString('fr-FR')}
+              icon={<CheckCircle sx={{ fontSize: 36 }} />}
+              trend={{ value: stats.total > 0 ? Math.round((stats.par_statut.terminee / stats.total) * 100) : 0, direction: 'up', period: 'du total' }}
+              color="warning"
+            />
           </Grid>
         </Grid>
       )}

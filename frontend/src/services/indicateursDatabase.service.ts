@@ -28,12 +28,16 @@ export interface IndicateurComplet {
   unite: string;
   frequence: 'mensuelle' | 'trimestrielle' | 'semestrielle' | 'annuelle';
   source_donnees: string;
+  methodologie_collecte?: string | null;
   responsable_collecte: string;
   valeurs: {
     reference: number;
     cible: number;
+    cible_annuelle?: number;
+    cible_finale?: number;
     actuelle: number;
     progression: number;
+    final_realise?: number | null;
   };
   historique: Array<{
     periode: string;

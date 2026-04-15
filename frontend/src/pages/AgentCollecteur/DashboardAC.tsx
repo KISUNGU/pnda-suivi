@@ -67,6 +67,8 @@ import {
   Close as CloseIcon,
 } from '@mui/icons-material';
 import GoogleIcon from '../../components/common/GoogleIcon';
+import { GradientWidget } from '../../components/common/Widget/GradientWidget';
+import { moduleGridStyles } from '../../components/common/Layout/moduleGridStyles';
 import type { AgentCollecteur, CollecteData, StatistiquesAC } from '../../services/agentCollecteur.service';
 
 
@@ -589,38 +591,40 @@ export const DashboardAC: React.FC = () => {
       {/* Statistiques */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card sx={{ borderRadius: 2, borderLeft: '4px solid #2E7D32' }}>
-            <CardContent>
-              <Typography variant="caption" color="text.secondary">Total collectes</Typography>
-              <Typography variant="h3" fontWeight={700}>{stats?.total_collectes}</Typography>
-            </CardContent>
-          </Card>
+          <GradientWidget
+            title="Total collectes"
+            value={(stats?.total_collectes ?? 0).toLocaleString('fr-FR')}
+            icon={<GoogleIcon name="assignment" size={36} />}
+            trend={{ value: stats?.collectes_mois ?? 0, direction: 'up', period: 'ce mois' }}
+            color="primary"
+          />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card sx={{ borderRadius: 2, borderLeft: '4px solid #1976D2' }}>
-            <CardContent>
-              <Typography variant="caption" color="text.secondary">Bénéficiaires couverts</Typography>
-              <Typography variant="h3" fontWeight={700}>{stats?.beneficiaires_couverts}</Typography>
-            </CardContent>
-          </Card>
+          <GradientWidget
+            title="Bénéficiaires couverts"
+            value={(stats?.beneficiaires_couverts ?? 0).toLocaleString('fr-FR')}
+            icon={<GoogleIcon name="groups" size={36} />}
+            trend={{ value: stats?.collectes_semaine ?? 0, direction: 'up', period: 'collectes cette semaine' }}
+            color="info"
+          />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card sx={{ borderRadius: 2, borderLeft: '4px solid #FF8F00' }}>
-            <CardContent>
-              <Typography variant="caption" color="text.secondary">Taux synchronisation</Typography>
-              <Typography variant="h3" fontWeight={700}>{stats?.taux_synchronisation}%</Typography>
-            </CardContent>
-          </Card>
+          <GradientWidget
+            title="Taux synchronisation"
+            value={`${stats?.taux_synchronisation ?? 0}%`}
+            icon={<GoogleIcon name="sync" size={36} />}
+            trend={{ value: stats?.taux_synchronisation ?? 0, direction: 'up', period: 'des collectes' }}
+            color="warning"
+          />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card sx={{ borderRadius: 2, borderLeft: pendingCollectes > 0 ? '4px solid #F44336' : '4px solid #4CAF50' }}>
-            <CardContent>
-              <Typography variant="caption" color="text.secondary">En attente de synchro</Typography>
-              <Typography variant="h3" fontWeight={700} color={pendingCollectes > 0 ? 'error.main' : 'success.main'}>
-                {pendingCollectes}
-              </Typography>
-            </CardContent>
-          </Card>
+          <GradientWidget
+            title="En attente de synchro"
+            value={pendingCollectes.toLocaleString('fr-FR')}
+            icon={<GoogleIcon name="cloud_off" size={36} />}
+            trend={{ value: pendingCollectes, direction: pendingCollectes > 0 ? 'down' : 'up', period: pendingCollectes > 0 ? 'à synchroniser' : 'tout est synchronisé' }}
+            color={pendingCollectes > 0 ? 'danger' : 'success'}
+          />
         </Grid>
       </Grid>
 
@@ -628,10 +632,10 @@ export const DashboardAC: React.FC = () => {
       <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
         Formulaires disponibles
       </Typography>
-      <Grid container spacing={2} sx={{ mb: 4 }}>
+      <Grid container spacing={3} sx={{ mb: 4 }}>
         {formulaires.map((form) => (
           <Grid size={{ xs: 12, sm: 6, md: 3 }} key={form.id}>
-            <Card sx={{ borderRadius: 2, cursor: 'pointer' }} onClick={() => { setSelectedFormulaire(form.id); setCollecteDialogOpen(true); }}>
+            <Card sx={{ ...moduleGridStyles.statCard, cursor: 'pointer' }} onClick={() => { setSelectedFormulaire(form.id); setCollecteDialogOpen(true); }}>
               <CardContent>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                   <Avatar sx={{ bgcolor: '#E8F5E9' }}>
@@ -652,7 +656,7 @@ export const DashboardAC: React.FC = () => {
       <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
         Bénéficiaires dans ma circonscription
       </Typography>
-      <Paper sx={{ p: 2, mb: 3, borderRadius: 2 }}>
+      <Paper sx={moduleGridStyles.filterPanel}>
         <TextField
           fullWidth
           size="small"
@@ -667,7 +671,7 @@ export const DashboardAC: React.FC = () => {
         <Grid container spacing={2}>
           {filteredBeneficiaires.map((b) => (
             <Grid size={{ xs: 12, sm: 6, md: 4 }} key={b.id}>
-              <Card variant="outlined" sx={{ borderRadius: 2 }}>
+              <Card variant="outlined" sx={moduleGridStyles.statCard}>
                 <CardContent>
                   <Stack direction="row" justifyContent="space-between" alignItems="center">
                     <Box>

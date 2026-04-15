@@ -1,5 +1,6 @@
 // frontend/src/pages/Suivi/ActivitesSuivi.tsx
 import React, { useState, useEffect, useCallback } from 'react';
+import axios from 'axios';
 import {
   Box,
   Typography,
@@ -68,8 +69,10 @@ import {
   TableChart,
 } from '@mui/icons-material';
 import GoogleIcon from '../../components/common/GoogleIcon';
+import { GradientWidget } from '../../components/common/Widget/GradientWidget';
+import { moduleGridStyles } from '../../components/common/Layout/moduleGridStyles';
 import { ExportToolbar } from '../../components/common/ExportToolbar/ExportToolbar';
-import type { ActiviteSuivi, ActiviteFilters, ActiviteStats } from '../../services/suiviActivites.service';
+import suiviActivitesService, { type ActiviteSuivi, type ActiviteFilters, type ActiviteStats } from '../../services/suiviActivites.service';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -86,167 +89,31 @@ function TabPanel(props: TabPanelProps) {
   );
 }
 
-// Données mockées
-const mockActivites: ActiviteSuivi[] = [
-  {
-    id: 1,
-    code: 'ACT-2026-001',
-    titre: 'Enquête de production agricole - Kwilu',
-    description: 'Collecte des données de production dans la zone de Idiofa',
-    type: 'enquete',
-    statut: 'terminee',
-    priorite: 'haute',
-    date_debut: '2026-03-01',
-    date_fin: '2026-03-15',
-    lieu: 'Masi-Manimba',
-    province: 'Kwilu',
-    territoire: 'Idiofa',
-    responsable: 'Marie KABEYA',
-    equipe: ['Joseph MUKENDI', 'Albert TSHIBOLA'],
-    participants_prevus: 150,
-    participants_reels: 145,
-    objectifs: ['Collecter les données de production', 'Identifier les besoins des agriculteurs'],
-    resultats_attendus: ['Base de données actualisée', 'Rapport d\'analyse'],
-    resultats_obtenus: '145 exploitants enquêtés, données collectées avec succès',
-    photos: [],
-    documents: [{ nom: 'Rapport_enquete.pdf', url: '#' }],
-    created_at: '2026-02-20T10:00:00Z',
-    updated_at: '2026-03-16T14:30:00Z',
-    created_by: 'UNCP',
-  },
-  {
-    id: 2,
-    code: 'ACT-2026-002',
-    titre: 'Formation AIC - Kasaï',
-    description: 'Formation aux techniques agricoles intelligentes face au climat',
-    type: 'formation',
-    statut: 'en_cours',
-    priorite: 'haute',
-    date_debut: '2026-03-20',
-    date_fin: '2026-03-25',
-    lieu: 'Kananga',
-    province: 'Kasaï',
-    territoire: 'Tshikapa',
-    responsable: 'Albert TSHIBOLA',
-    equipe: ['Marie KABEYA', 'Joseph MUKENDI'],
-    participants_prevus: 50,
-    participants_reels: 48,
-    objectifs: ['Former aux techniques AIC', 'Sensibiliser à l\'adaptation climatique'],
-    resultats_attendus: ['50 agriculteurs formés', 'Adoption des techniques'],
-    photos: [],
-    documents: [],
-    created_at: '2026-03-05T09:00:00Z',
-    updated_at: '2026-03-22T11:00:00Z',
-    created_by: 'SENASEM',
-  },
-  {
-    id: 3,
-    code: 'ACT-2026-003',
-    titre: 'Distribution d\'intrants - Kongo Central',
-    description: 'Distribution de semences améliorées et engrais',
-    type: 'distribution',
-    statut: 'planifiee',
-    priorite: 'haute',
-    date_debut: '2026-04-05',
-    date_fin: '2026-04-10',
-    lieu: 'Matadi',
-    province: 'Kongo Central',
-    territoire: 'Matadi',
-    responsable: 'Pauline LUBALA',
-    equipe: ['David KALONJI'],
-    participants_prevus: 200,
-    objectifs: ['Distribuer les intrants', 'Appuyer la campagne agricole'],
-    resultats_attendus: ['200 exploitants servis', 'Amélioration des rendements'],
-    photos: [],
-    documents: [],
-    created_at: '2026-03-10T14:00:00Z',
-    updated_at: '2026-03-10T14:00:00Z',
-    created_by: 'UNCP',
-  },
-  {
-    id: 4,
-    code: 'ACT-2026-004',
-    titre: 'Suivi technique post-formation',
-    description: 'Évaluation de l\'adoption des techniques après formation',
-    type: 'suivi_technique',
-    statut: 'planifiee',
-    priorite: 'moyenne',
-    date_debut: '2026-04-15',
-    date_fin: '2026-04-20',
-    lieu: 'Kinshasa',
-    province: 'Kinshasa',
-    territoire: 'Mont Ngafula',
-    responsable: 'Joseph MUKENDI',
-    equipe: ['Marie KABEYA'],
-    participants_prevus: 80,
-    objectifs: ['Évaluer le niveau d\'adoption', 'Identifier les difficultés'],
-    resultats_attendus: ['Rapport d\'évaluation', 'Recommandations'],
-    photos: [],
-    documents: [],
-    created_at: '2026-03-12T11:30:00Z',
-    updated_at: '2026-03-12T11:30:00Z',
-    created_by: 'SENASEM',
-  },
-  {
-    id: 5,
-    code: 'ACT-2026-005',
-    titre: 'Réunion de coordination provinciale',
-    description: 'Réunion mensuelle des partenaires de la province',
-    type: 'reunion',
-    statut: 'terminee',
-    priorite: 'moyenne',
-    date_debut: '2026-03-18',
-    date_fin: '2026-03-18',
-    lieu: 'Kinshasa',
-    province: 'Kinshasa',
-    territoire: 'Gombe',
-    responsable: 'Jean MUKENDI',
-    equipe: ['Toute l\'équipe'],
-    participants_prevus: 25,
-    participants_reels: 22,
-    objectifs: ['Faire le point des activités', 'Planifier le trimestre suivant'],
-    resultats_attendus: ['Compte-rendu', 'Plan d\'action'],
-    resultats_obtenus: '22 participants, plan validé',
-    photos: [],
-    documents: [{ nom: 'CR_reunion.pdf', url: '#' }],
-    created_at: '2026-03-05T08:00:00Z',
-    updated_at: '2026-03-19T16:00:00Z',
-    created_by: 'UNCP',
-  },
-];
+const getApiErrorMessage = (error: unknown, fallback: string) => {
+  if (axios.isAxiosError(error)) {
+    const responseData = error.response?.data as { message?: string } | undefined;
+    return responseData?.message || error.message || fallback;
+  }
 
-const mockStats: ActiviteStats = {
-  total: 28,
-  par_type: {
-    enquete: 12,
-    formation: 8,
-    distribution: 4,
-    reunion: 3,
-    suivi_technique: 1,
-    autre: 0,
-  },
-  par_statut: {
-    planifiee: 10,
-    en_cours: 6,
-    terminee: 10,
-    reportee: 1,
-    annulee: 1,
-  },
-  par_province: {
-    Kinshasa: 8,
-    'Kongo Central': 6,
-    Kwilu: 7,
-    Kasaï: 5,
-    'Haut-Lomami': 2,
-  },
-  par_mois: [
-    { mois: 'Jan', total: 5 },
-    { mois: 'Fév', total: 7 },
-    { mois: 'Mar', total: 9 },
-    { mois: 'Avr', total: 7 },
-  ],
-  taux_realisation: 71.4,
-  participants_total: 245,
+  return fallback;
+};
+
+const buildSavePayload = (data: Partial<ActiviteSuivi>): Partial<ActiviteSuivi> => {
+  const payload: Partial<ActiviteSuivi> = {
+    ...data,
+    type: data.type || 'enquete',
+    statut: data.statut || 'planifiee',
+    priorite: data.priorite || 'moyenne',
+  };
+
+  Object.keys(payload).forEach((key) => {
+    const typedKey = key as keyof ActiviteSuivi;
+    if (payload[typedKey] === '') {
+      delete payload[typedKey];
+    }
+  });
+
+  return payload;
 };
 
 const getTypeIcon = (type: string) => {
@@ -344,21 +211,25 @@ export const ActivitesSuivi: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setActivites(mockActivites);
-      setTotal(mockActivites.length);
-      setStats(mockStats);
+      const [activitesRes, statsRes] = await Promise.all([
+        suiviActivitesService.getAll(filters),
+        suiviActivitesService.getStats(),
+      ]);
+
+      setActivites(activitesRes.data.data ?? []);
+      setTotal(activitesRes.data.total ?? 0);
+      setStats(statsRes.data);
     } catch (err) {
-      setError('Erreur lors du chargement des données');
+      setError(getApiErrorMessage(err, 'Erreur lors du chargement des données'));
       console.error(err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [filters]);
 
   useEffect(() => {
-    loadData();
-  }, [loadData, filters]);
+    void loadData();
+  }, [loadData]);
 
   const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setFilters({ ...filters, search: event.target.value, page: 0 });
@@ -387,9 +258,16 @@ export const ActivitesSuivi: React.FC = () => {
     });
   };
 
-  const handleViewDetail = (activite: ActiviteSuivi) => {
-    setSelectedActivite(activite);
-    setDetailDialogOpen(true);
+  const handleViewDetail = async (activite: ActiviteSuivi) => {
+    setError(null);
+    try {
+      const response = await suiviActivitesService.getById(activite.id);
+      setSelectedActivite(response.data);
+      setTabValue(0);
+      setDetailDialogOpen(true);
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Erreur lors du chargement du détail de l\'activité'));
+    }
   };
 
   const handleEdit = (activite: ActiviteSuivi) => {
@@ -398,19 +276,39 @@ export const ActivitesSuivi: React.FC = () => {
     setFormDialogOpen(true);
   };
 
-  const handleDelete = async () => {
+  const handleDelete = async (id: number) => {
     if (window.confirm('Êtes-vous sûr de vouloir supprimer cette activité ?')) {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      loadData();
+      setError(null);
+      try {
+        await suiviActivitesService.delete(id);
+        if (selectedActivite?.id === id) {
+          setDetailDialogOpen(false);
+          setSelectedActivite(null);
+        }
+        await loadData();
+      } catch (err) {
+        setError(getApiErrorMessage(err, 'Erreur lors de la suppression de l\'activité'));
+      }
     }
   };
 
   const handleSave = async () => {
+    setError(null);
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
+      const payload = buildSavePayload(formData);
+
+      if (selectedActivite?.id) {
+        await suiviActivitesService.update(selectedActivite.id, payload);
+      } else {
+        await suiviActivitesService.create(payload);
+      }
+
       setFormDialogOpen(false);
-      loadData();
+      setSelectedActivite(null);
+      setFormData({});
+      await loadData();
     } catch (err) {
+      setError(getApiErrorMessage(err, 'Erreur lors de l\'enregistrement de l\'activité'));
       console.error(err);
     }
   };
@@ -418,9 +316,18 @@ export const ActivitesSuivi: React.FC = () => {
   const handleExport = async (format: 'pdf' | 'excel') => {
     setExportAnchorEl(null);
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      alert(`Export ${format.toUpperCase()} démarré`);
+      const response = await suiviActivitesService.exporter(format);
+      const blob = new Blob([response.data]);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `activites-suivi.${format === 'pdf' ? 'pdf' : 'xlsx'}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
     } catch (err) {
+      setError(getApiErrorMessage(err, `Erreur lors de l'export ${format.toUpperCase()}`));
       console.error(err);
     }
   };
@@ -431,13 +338,13 @@ export const ActivitesSuivi: React.FC = () => {
     
     setImporting(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      alert('Importation terminée avec succès');
-      loadData();
-    } catch {
-      setError('Erreur lors de l\'importation');
+      await suiviActivitesService.importer(file);
+      await loadData();
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Erreur lors de l\'importation'));
     } finally {
       setImporting(false);
+      event.target.value = '';
     }
   };
 
@@ -460,58 +367,48 @@ export const ActivitesSuivi: React.FC = () => {
 
       {/* Statistiques */}
       {stats && (
-        <Grid container spacing={2} sx={{ mb: 3 }}>
+        <Grid container spacing={3} sx={{ mb: 4 }}>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <Card sx={{ borderRadius: 2, borderLeft: '4px solid #2E7D32' }}>
-              <CardContent>
-                <Typography variant="caption" color="text.secondary">Total activités</Typography>
-                <Typography variant="h4" fontWeight={700}>{stats.total}</Typography>
-                <LinearProgress variant="determinate" value={stats.taux_realisation} sx={{ mt: 1, height: 6, borderRadius: 2 }} />
-                <Typography variant="caption" color="text.secondary">Taux de réalisation: {stats.taux_realisation}%</Typography>
-              </CardContent>
-            </Card>
+            <GradientWidget
+              title="Total activités"
+              value={stats.total.toLocaleString('fr-FR')}
+              icon={<GoogleIcon name="assignment" size={36} />}
+              trend={{ value: stats.taux_realisation, direction: 'up', period: 'taux de réalisation' }}
+              color="primary"
+            />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <Card sx={{ borderRadius: 2 }}>
-              <CardContent>
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <Group sx={{ color: '#2196F3' }} />
-                  <Typography variant="caption" color="text.secondary">Participants</Typography>
-                </Stack>
-                <Typography variant="h4" fontWeight={700}>{stats.participants_total.toLocaleString()}</Typography>
-                <Typography variant="caption" color="text.secondary">bénéficiaires touchés</Typography>
-              </CardContent>
-            </Card>
+            <GradientWidget
+              title="Participants"
+              value={stats.participants_total.toLocaleString('fr-FR')}
+              icon={<GoogleIcon name="groups" size={36} />}
+              trend={{ value: stats.total > 0 ? Math.round(stats.participants_total / stats.total) : 0, direction: 'up', period: 'participants / activité' }}
+              color="info"
+            />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <Card sx={{ borderRadius: 2 }}>
-              <CardContent>
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <CheckCircle sx={{ color: '#4CAF50' }} />
-                  <Typography variant="caption" color="text.secondary">Activités terminées</Typography>
-                </Stack>
-                <Typography variant="h4" fontWeight={700} color="success.main">{stats.par_statut.terminee}</Typography>
-                <Typography variant="caption" color="text.secondary">sur {stats.total} activités</Typography>
-              </CardContent>
-            </Card>
+            <GradientWidget
+              title="Activités terminées"
+              value={stats.par_statut.terminee.toLocaleString('fr-FR')}
+              icon={<GoogleIcon name="check_circle" size={36} />}
+              trend={{ value: stats.total > 0 ? Math.round((stats.par_statut.terminee / stats.total) * 100) : 0, direction: 'up', period: 'du total' }}
+              color="success"
+            />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <Card sx={{ borderRadius: 2 }}>
-              <CardContent>
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <Pending sx={{ color: '#FFC107' }} />
-                  <Typography variant="caption" color="text.secondary">En cours</Typography>
-                </Stack>
-                <Typography variant="h4" fontWeight={700} color="warning.main">{stats.par_statut.en_cours}</Typography>
-                <Typography variant="caption" color="text.secondary">activités en cours</Typography>
-              </CardContent>
-            </Card>
+            <GradientWidget
+              title="En cours"
+              value={stats.par_statut.en_cours.toLocaleString('fr-FR')}
+              icon={<GoogleIcon name="pending_actions" size={36} />}
+              trend={{ value: stats.total > 0 ? Math.round((stats.par_statut.en_cours / stats.total) * 100) : 0, direction: 'up', period: 'du total' }}
+              color="warning"
+            />
           </Grid>
         </Grid>
       )}
 
       {/* Barre de recherche et actions */}
-      <Paper sx={{ p: 2, mb: 3, borderRadius: 2 }}>
+      <Paper sx={moduleGridStyles.filterPanel}>
         <Grid container spacing={2} alignItems="center">
           <Grid size={{ xs: 12, md: 6 }}>
             <TextField
@@ -671,7 +568,7 @@ export const ActivitesSuivi: React.FC = () => {
                     </IconButton>
                   </Tooltip>
                   <Tooltip title="Supprimer">
-                    <IconButton size="small" color="error" onClick={() => handleDelete()}>
+                    <IconButton size="small" color="error" onClick={() => handleDelete(activite.id)}>
                       <Delete fontSize="small" />
                     </IconButton>
                   </Tooltip>

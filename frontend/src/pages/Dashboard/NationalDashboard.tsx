@@ -5,35 +5,20 @@ import { GradientWidget } from '../../components/common/Widget/GradientWidget';
 import { IndicatorChart } from '../../components/common/Charts/IndicatorChart';
 import { PerformanceGauge } from '../../components/common/Charts/PerformanceGauge';
 import { InteractiveMap } from '../../components/common/Map/InteractiveMap';
-import { dashboardService, indicateurService } from '../../services/api';
+import { dashboardService, type RnaOverview } from '../../services/api';
 import { useNavigate } from 'react-router-dom';
 
 export const NationalDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [dashboardData, setDashboardData] = useState<any>(null);
-  const [beneficiairesTotal, setBeneficiairesTotal] = useState<number | null>(null);
+  const [dashboardData, setDashboardData] = useState<RnaOverview | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [dashboardResult, beneficiairesResult] = await Promise.allSettled([
-          indicateurService.getDashboard(),
-          dashboardService.getBeneficiairesSummary(),
-        ]);
-
-        if (dashboardResult.status === 'rejected') {
-          throw dashboardResult.reason;
-        }
-
-        setDashboardData(dashboardResult.value.data);
-
-        if (beneficiairesResult.status === 'fulfilled') {
-          setBeneficiairesTotal(beneficiairesResult.value.data.total);
-        } else {
-          console.error('Erreur lors du chargement des bénéficiaires RNA', beneficiairesResult.reason);
-        }
+        const response = await dashboardService.getRnaOverview();
+        setDashboardData(response.data);
       } catch (err) {
         setError('Erreur lors du chargement des données');
         console.error(err);
@@ -56,7 +41,17 @@ export const NationalDashboard: React.FC = () => {
     return <Alert severity="error">{error}</Alert>;
   }
 
-  const evolutionData = dashboardData?.evolution || [];
+  const evolutionData = (dashboardData?.evolution ?? []).map((item) => ({
+    name: item.month,
+    total: item.total,
+  }));
+  const femmes = dashboardData?.femmes ?? 0;
+  const hommes = dashboardData?.hommes ?? 0;
+  const total = dashboardData?.total ?? 0;
+  const provinces = dashboardData?.provinces ?? 0;
+  const femmesPct = total > 0 ? Math.round((femmes / total) * 100) : 0;
+  const hommesPct = total > 0 ? Math.round((hommes / total) * 100) : 0;
+  const coveragePct = Math.round((provinces / 26) * 100);
 
   return (
     <Box>
@@ -64,7 +59,7 @@ export const NationalDashboard: React.FC = () => {
         Tableau de bord national
       </Typography>
       <Typography variant="body2" sx={{ mb: 4, color: 'text.secondary' }}>
-        Vue d'ensemble des indicateurs clés du Programme National de Développement Agricole
+        Vue d'ensemble nationale issue du registre RNA des agriculteurs
       </Typography>
 
       {/* Widgets KPI */}
@@ -72,41 +67,41 @@ export const NationalDashboard: React.FC = () => {
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <GradientWidget
             title="Bénéficiaires"
-            value={beneficiairesTotal !== null ? beneficiairesTotal.toLocaleString('fr-FR') : '--'}
-            icon={<span style={{ fontSize: 40 }}>🌾</span>}
-            trend={{ value: 8.2, direction: 'up', period: 'trimestre précédent' }}
+            value={total.toLocaleString('fr-FR')}
+            icon={<Box component="span" sx={{ fontSize: 40 }}>🌾</Box>}
+            trend={{ value: coveragePct, direction: 'up', period: 'couverture nationale' }}
             color="primary"
             onClick={() => navigate('/beneficiaires/rna')}
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <GradientWidget
-            title="Productivité (IODP2)"
-            value={`+${dashboardData?.iodp2?.current || 0}%`}
-            icon={<span style={{ fontSize: 40 }}>📈</span>}
-            trend={{ value: dashboardData?.iodp2?.trend || 0, direction: 'up', period: 'trimestre précédent' }}
+            title="Femmes bénéficiaires"
+            value={femmes.toLocaleString('fr-FR')}
+            icon={<Box component="span" sx={{ fontSize: 40 }}>👩</Box>}
+            trend={{ value: femmesPct, direction: 'up', period: '% du total' }}
             color="success"
-            onClick={() => navigate('/indicateurs/iodp')}
+            onClick={() => navigate('/beneficiaires/rna')}
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <GradientWidget
-            title="Accès marché (IODP1)"
-            value={`+${dashboardData?.iodp1?.current || 0}%`}
-            icon={<span style={{ fontSize: 40 }}>💰</span>}
-            trend={{ value: dashboardData?.iodp1?.trend || 0, direction: 'up', period: 'trimestre précédent' }}
+            title="Hommes bénéficiaires"
+            value={hommes.toLocaleString('fr-FR')}
+            icon={<Box component="span" sx={{ fontSize: 40 }}>👨</Box>}
+            trend={{ value: hommesPct, direction: 'up', period: '% du total' }}
             color="info"
-            onClick={() => navigate('/indicateurs/iodp')}
+            onClick={() => navigate('/beneficiaires/rna')}
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <GradientWidget
-            title="Risques actifs"
-            value="12"
-            icon={<span style={{ fontSize: 40 }}>⚠️</span>}
-            trend={{ value: 3, direction: 'up', period: 'nouveaux' }}
+            title="Provinces couvertes"
+            value={provinces}
+            icon={<Box component="span" sx={{ fontSize: 40 }}>🗺️</Box>}
+            trend={{ value: coveragePct, direction: 'up', period: 'sur 26 provinces' }}
             color="warning"
-            onClick={() => navigate('/risques/registre')}
+            onClick={() => navigate('/dashboard/provincial')}
           />
         </Grid>
       </Grid>
@@ -116,22 +111,21 @@ export const NationalDashboard: React.FC = () => {
         <Grid size={{ xs: 12, md: 7 }}>
           <Paper sx={{ p: 2, borderRadius: 3 }}>
             <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
-              🗺️ Carte des interventions par province
+              Carte de couverture provinciale
             </Typography>
             <InteractiveMap height={400} />
           </Paper>
         </Grid>
         <Grid size={{ xs: 12, md: 5 }}>
           <IndicatorChart
-            title="Évolution des indicateurs clés"
+            title="Évolution des enregistrements RNA"
             data={evolutionData}
             lines={[
-              { key: 'iodp1', name: 'IODP1 - Accès marché', color: '#2E7D32' },
-              { key: 'iodp2', name: 'IODP2 - Productivité', color: '#4CAF50' },
-              { key: 'iodp3', name: 'IODP3 - Capacité publique', color: '#81C784' },
+              { key: 'total', name: 'Bénéficiaires RNA', color: '#2E7D32' },
             ]}
             type="line"
-            unit="%"
+            unit="pers."
+            showToggle={false}
           />
         </Grid>
       </Grid>
@@ -140,25 +134,25 @@ export const NationalDashboard: React.FC = () => {
       <Grid container spacing={3} sx={{ mt: 1 }}>
         <Grid size={{ xs: 12, md: 4 }}>
           <PerformanceGauge
-            title="IODP1 - Accès au marché"
-            current={dashboardData?.iodp1?.current || 0}
-            target={dashboardData?.iodp1?.target || 30}
+            title="Part des femmes"
+            current={femmesPct}
+            target={50}
             unit="%"
           />
         </Grid>
         <Grid size={{ xs: 12, md: 4 }}>
           <PerformanceGauge
-            title="IODP2 - Productivité agricole"
-            current={dashboardData?.iodp2?.current || 0}
-            target={dashboardData?.iodp2?.target || 40}
+            title="Part des hommes"
+            current={hommesPct}
+            target={50}
             unit="%"
           />
         </Grid>
         <Grid size={{ xs: 12, md: 4 }}>
           <PerformanceGauge
-            title="IODP3 - Capacité du secteur public"
-            current={dashboardData?.iodp3?.current || 0}
-            target={dashboardData?.iodp3?.target || 100}
+            title="Couverture provinciale"
+            current={coveragePct}
+            target={100}
             unit="%"
           />
         </Grid>

@@ -76,6 +76,70 @@ export interface BeneficiairesSummary {
   total: number;
 }
 
+export interface RnaOverview {
+  total: number;
+  femmes: number;
+  hommes: number;
+  provinces: number;
+  evolution: Array<{ month: string; total: number }>;
+  parProvince: Record<string, number>;
+}
+
+export type StatutCarte = 'distribuee' | 'en_attente' | 'a_imprimer';
+
+export interface CarteAgriculteur {
+  id: number;
+  rna_id: string;
+  nom_complet: string;
+  sexe: 'M' | 'F';
+  province: string;
+  territoire: string;
+  producteur_enregistre: boolean;
+  statut_carte: StatutCarte;
+  numero_carte?: string;
+  date_distribution?: string;
+}
+
+export interface CarteAgriculteurFilters {
+  search?: string;
+  province?: string;
+  statut?: StatutCarte;
+  page?: number;
+  limit?: number;
+}
+
+export interface CarteAgriculteurStats {
+  total: number;
+  producteurs_enregistres: number;
+  distribuees: number;
+  en_attente: number;
+  a_imprimer: number;
+  provinces: number;
+}
+
+export interface VenteSemence {
+  id: number;
+  province: string;
+  producteur: string;
+  rna_id: string;
+  type_semence: string;
+  quantite_kg: number;
+  montant_usd: number;
+  date_vente: string;
+}
+
+export interface VenteSemenceFilters {
+  search?: string;
+  province?: string;
+}
+
+export interface VenteSemenceStats {
+  provinces_actives: number;
+  producteurs_enregistres: number;
+  semences_vendues_kg: number;
+  montant_total_usd: number;
+}
+
 // Services bénéficiaires
 export const beneficiaireService = {
   getAll: (filters: BeneficiaireFilters = {}): Promise<{ data: PaginatedResponse<Beneficiaire> }> => 
@@ -97,6 +161,20 @@ export const beneficiaireService = {
     api.get('/beneficiaires/stats'),
 };
 
+export const carteAgriculteurService = {
+  getAll: (filters: CarteAgriculteurFilters = {}): Promise<{ data: PaginatedResponse<CarteAgriculteur> }> =>
+    api.get('/beneficiaires/cartes', { params: filters }),
+  getStats: (filters: Omit<CarteAgriculteurFilters, 'page' | 'limit'> = {}): Promise<{ data: CarteAgriculteurStats }> =>
+    api.get('/beneficiaires/cartes/stats', { params: filters }),
+};
+
+export const venteSemenceService = {
+  getAll: (filters: VenteSemenceFilters = {}): Promise<{ data: { data: VenteSemence[]; total: number } }> =>
+    api.get('/beneficiaires/ventes-semences', { params: filters }),
+  getStats: (filters: VenteSemenceFilters = {}): Promise<{ data: VenteSemenceStats }> =>
+    api.get('/beneficiaires/ventes-semences/stats', { params: filters }),
+};
+
 // Services indicateurs
 export const indicateurService = {
   getAll: () => api.get('/indicateurs'),
@@ -110,6 +188,8 @@ export const indicateurService = {
 export const dashboardService = {
   getBeneficiairesSummary: (): Promise<{ data: BeneficiairesSummary }> =>
     api.get('/dashboard/beneficiaires-summary'),
+  getRnaOverview: (): Promise<{ data: RnaOverview }> =>
+    api.get('/dashboard/rna-overview'),
 };
 
 // Export par défaut

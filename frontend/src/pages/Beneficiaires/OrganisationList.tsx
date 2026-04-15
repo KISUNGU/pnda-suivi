@@ -1,7 +1,7 @@
 // frontend/src/pages/Beneficiaires/OrganisationList.tsx
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Box, Grid, Typography, Paper, Card, CardContent, Chip, Stack, Divider,
+  Box, Grid, Typography, Paper, Card, Chip, Stack, Divider,
   TextField, InputAdornment, IconButton, Button, Tooltip,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TablePagination,
   FormControl, InputLabel, Select, MenuItem,
@@ -30,24 +30,9 @@ import PersonIcon from '@mui/icons-material/Person';
 import { organisationService } from '../../services/organisation.service';
 import type { Organisation, OrganisationFilters, OrganisationStats } from '../../services/organisation.service';
 import GoogleIcon from '../../components/common/GoogleIcon';
+import { GradientWidget } from '../../components/common/Widget/GradientWidget';
+import { moduleGridStyles } from '../../components/common/Layout/moduleGridStyles';
 import { ExportToolbar } from '../../components/common/ExportToolbar/ExportToolbar';
-
-// Composant de statistiques
-const StatsCard: React.FC<{ title: string; value: number; icon: React.ReactNode; color: string; subtitle?: string }> = 
-  ({ title, value, icon, color, subtitle }) => (
-  <Card sx={{ bgcolor: `${color}10`, borderLeft: `4px solid ${color}`, borderRadius: 2 }}>
-    <CardContent>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Box>
-          <Typography variant="caption" color="text.secondary">{title}</Typography>
-          <Typography variant="h4" fontWeight={600}>{(value ?? 0).toLocaleString()}</Typography>
-          {subtitle && <Typography variant="caption" color="text.secondary">{subtitle}</Typography>}
-        </Box>
-        <Box sx={{ color }}>{icon}</Box>
-      </Box>
-    </CardContent>
-  </Card>
-);
 
 const getTypeLabel = (type: string) => {
   switch (type) {
@@ -250,24 +235,48 @@ export const OrganisationList: React.FC = () => {
 
       {/* Statistiques */}
       {stats && (
-        <Grid container spacing={2} sx={{ mb: 3 }}>
+        <Grid container spacing={3} sx={{ mb: 4 }}>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <StatsCard title="Total organisations" value={stats.total} icon={<BusinessIcon />} color="#2E7D32" />
+            <GradientWidget
+              title="Total organisations"
+              value={stats.total.toLocaleString('fr-FR')}
+              icon={<BusinessIcon sx={{ fontSize: 36 }} />}
+              trend={{ value: stats.par_statut?.active ?? 0, direction: 'up', period: 'organisations actives' }}
+              color="primary"
+            />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <StatsCard title="Membres" value={stats.total_membres} icon={<GroupsIcon />} color="#1976D2" subtitle={`${stats.femmes_membres} femmes, ${stats.hommes_membres} hommes`} />
+            <GradientWidget
+              title="Membres"
+              value={stats.total_membres.toLocaleString('fr-FR')}
+              icon={<GroupsIcon sx={{ fontSize: 36 }} />}
+              trend={{ value: stats.total_membres > 0 ? Math.round((stats.femmes_membres / stats.total_membres) * 100) : 0, direction: 'up', period: 'part des femmes' }}
+              color="info"
+            />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <StatsCard title="Organisations actives" value={stats.par_statut?.active ?? 0} icon={<CheckCircleIcon />} color="#4CAF50" />
+            <GradientWidget
+              title="Organisations actives"
+              value={(stats.par_statut?.active ?? 0).toLocaleString('fr-FR')}
+              icon={<CheckCircleIcon sx={{ fontSize: 36 }} />}
+              trend={{ value: stats.total > 0 ? Math.round(((stats.par_statut?.active ?? 0) / stats.total) * 100) : 0, direction: 'up', period: 'du total' }}
+              color="success"
+            />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <StatsCard title="Jeunes membres" value={stats.jeunes_membres} icon={<GoogleIcon name="young" size={24} />} color="#FF8F00" />
+            <GradientWidget
+              title="Jeunes membres"
+              value={stats.jeunes_membres.toLocaleString('fr-FR')}
+              icon={<GoogleIcon name="young" size={36} />}
+              trend={{ value: stats.total_membres > 0 ? Math.round((stats.jeunes_membres / stats.total_membres) * 100) : 0, direction: 'up', period: 'du total' }}
+              color="warning"
+            />
           </Grid>
         </Grid>
       )}
 
       {/* Barre de recherche et actions */}
-      <Paper sx={{ p: 2, mb: 3, borderRadius: 2 }}>
+      <Paper sx={moduleGridStyles.filterPanel}>
         <Grid container spacing={2} alignItems="center">
           <Grid size={{ xs: 12, md: 6 }}>
             <TextField

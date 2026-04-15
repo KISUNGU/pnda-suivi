@@ -22,6 +22,8 @@ import { CollecteMobile } from './pages/Collecte/CollecteMobile';
 import { ProvincialDashboard } from './pages/Dashboard/ProvincialDashboard';
 import { PartnerDashboard } from './pages/Dashboard/PartnerDashboard';
 import { FournisseurList } from './pages/Beneficiaires/FournisseurList';
+import { DistributionCartesPage } from './pages/Beneficiaires/DistributionCartesPage';
+import { VentesSemencesPage } from './pages/Beneficiaires/VentesSemencesPage';
 import { CartographiePage } from './pages/Outils/CartographiePage';
 import { OrganisationList } from './pages/Beneficiaires/OrganisationList';
 import { IndicateurCalculator } from './pages/Outils/Calculateur/IndicateurCalculator';
@@ -40,6 +42,7 @@ import { AideDocumentation } from './pages/Aide/AideDocumentation';
 import { PlanAttenuation } from './pages/Risques/PlanAttenuation';
 import { AlertesRisques } from './pages/Risques/AlertesRisques';
 import { NotificationsPage } from './pages/Notifications/NotificationsPage';
+import { BeneficiaireDashboard } from './pages/Beneficiaires/BeneficiaireDashboard';
 
 // RÃ´les et page d'accueil par dÃ©faut
 const DEFAULT_HOME: Record<string, string> = {
@@ -166,6 +169,16 @@ function App() {
                     <Layout><FournisseurList /></Layout>
                   </ProtectedRoute>
                 } />
+                <Route path="/beneficiaires/cartes" element={
+                  <ProtectedRoute roles={['admin', 'uncp', 'upep', 'ot']}>
+                    <Layout><DistributionCartesPage /></Layout>
+                  </ProtectedRoute>
+                } />
+                <Route path="/beneficiaires/ventes-semences" element={
+                  <ProtectedRoute roles={['admin', 'uncp', 'upep', 'ot']}>
+                    <Layout><VentesSemencesPage /></Layout>
+                  </ProtectedRoute>
+                } />
                 <Route path="/suivi/missions" element={
                   <ProtectedRoute roles={['admin', 'uncp', 'upep', 'ot']}>
                     <Layout><SuiviMissions /></Layout>
@@ -262,6 +275,11 @@ function App() {
                     <Layout>
                       <AideDocumentation />
                     </Layout>
+                  </ProtectedRoute>
+                } />
+                <Route path="/beneficiaires/dashboard" element={
+                  <ProtectedRoute roles={['admin', 'uncp', 'upep']}>
+                    <Layout><BeneficiaireDashboard /></Layout>
                   </ProtectedRoute>
                 } />
                 {/* Fallback */}

@@ -49,7 +49,7 @@ const menuItems: MenuItem[] = [
       { title: 'IODP', path: '/indicateurs/iodp', icon: <GoogleIcon name="bar_chart" size={24} /> },
       { title: 'Résultats intermédiaires', path: '/indicateurs/ir', icon: <GoogleIcon name="trending_up" size={24} /> },
       { title: 'Cadre des résultats', path: '/indicateurs/cadre', icon: <GoogleIcon name="assignment_turned_in" size={24} /> },
-      { title: 'Environnement & VBG', path: '/indicateurs/environnement', icon: <GoogleIcon name="eco" size={24} /> },
+      // { title: 'Environnement & VBG', path: '/indicateurs/environnement', icon: <GoogleIcon name="eco" size={24} /> },
     ],
   },
   {
@@ -57,8 +57,11 @@ const menuItems: MenuItem[] = [
     icon: <GoogleIcon name="groups" size={26} />,
     roles: ['admin', 'uncp', 'upep', 'ot'],
     children: [
+      { title: 'Tableau de bord', path: '/beneficiaires/dashboard', icon: <GoogleIcon name="dashboard" size={24} />, roles: ['admin', 'uncp', 'upep'] },
       { title: 'RNA', path: '/beneficiaires/rna', icon: <GoogleIcon name="person" size={24} /> },
-      { title: 'Organisations partenaires', path: '/beneficiaires/organisations', icon: <GoogleIcon name="corporate_fare" size={24} /> },
+      { title: 'Cartes agriculteurs', path: '/beneficiaires/cartes', icon: <GoogleIcon name="badge" size={24} /> },
+      { title: 'Ventes semences', path: '/beneficiaires/ventes-semences', icon: <GoogleIcon name="sell" size={24} /> },
+      { title: 'Organisations paysannes', path: '/beneficiaires/organisations', icon: <GoogleIcon name="corporate_fare" size={24} /> },
       { title: 'Fournisseurs', path: '/beneficiaires/fournisseurs', icon: <GoogleIcon name="local_shipping" size={24} />, roles: ['admin', 'uncp', 'upep'] },
     ],
   },

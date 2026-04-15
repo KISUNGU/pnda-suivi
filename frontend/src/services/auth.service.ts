@@ -28,7 +28,8 @@ class AuthService {
   private token: string | null = null;
 
   constructor() {
-    this.token = localStorage.getItem('token');
+    const storedToken = localStorage.getItem('token');
+    this.token = storedToken && storedToken !== 'undefined' ? storedToken : null;
   }
 
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
@@ -49,15 +50,28 @@ class AuthService {
   }
 
   getToken(): string | null {
-    return this.token || localStorage.getItem('token');
+    const storedToken = this.token || localStorage.getItem('token');
+    if (!storedToken || storedToken === 'undefined' || storedToken === 'null') {
+      return null;
+    }
+    return storedToken;
   }
 
   getUser(): User | null {
     const userStr = localStorage.getItem('user');
-    if (userStr) {
-      return JSON.parse(userStr);
+    if (!userStr || userStr === 'undefined' || userStr === 'null') {
+      localStorage.removeItem('user');
+      return null;
     }
-    return null;
+
+    try {
+      return JSON.parse(userStr) as User;
+    } catch {
+      localStorage.removeItem('user');
+      localStorage.removeItem('token');
+      this.token = null;
+      return null;
+    }
   }
 
   isAuthenticated(): boolean {

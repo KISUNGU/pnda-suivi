@@ -1,5 +1,6 @@
 // frontend/src/pages/Risques/PlanAttenuation.tsx
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -19,97 +20,26 @@ import {
   AccordionDetails,
   LinearProgress,
   Divider,
-  Avatar,
-  Card,
-  CardContent,
+  Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Select,
+  IconButton,
+  Tooltip,
+  Alert,
+  Snackbar,
 } from '@mui/material';
-import { GoogleIcon } from '../../components/common/GoogleIcon';
+import GoogleIcon from '../../components/common/GoogleIcon';
+import { GradientWidget } from '../../components/common/Widget/GradientWidget';
 import { ExportToolbar } from '../../components/common/ExportToolbar/ExportToolbar';
-import risqueService from '../../services/risque.service';
-import type { Risque, ActionAtténuation } from '../../services/risque.service';
-
-const mockRisques: Risque[] = [
-  {
-    id: 1, code: 'RISK-001',
-    nom: 'Retard dans la distribution des intrants agricoles',
-    description: 'Les intrants agricoles ne sont pas distribués dans les délais impartis.',
-    categorie: 'gestion', probabilite: 4, impact: 3, niveau: 'Élevé', statut: 'en_cours',
-    plan_atténuation: 'Renforcer la logistique, mettre en place un suivi quotidien des livraisons, prévoir des stocks tampons',
-    responsable: 'UNCP / Cellule Logistique', date_identification: '2026-01-15', province: 'Kwilu, Kasaï',
-    actions_prevues: ['Établir un planning de livraison', 'Renforcer l\'équipe logistique', 'Mettre en place un système de tracking'],
-    dernier_suivi: '2026-03-25',
-  },
-  {
-    id: 2, code: 'RISK-002',
-    nom: 'Sécheresse prolongée affectant les rendements',
-    description: 'Risque de sécheresse pouvant réduire les rendements de 30 à 50%.',
-    categorie: 'environnemental', probabilite: 3, impact: 5, niveau: 'Critique', statut: 'identifie',
-    plan_atténuation: 'Mettre en place des systèmes d\'irrigation goutte-à-goutte, distribuer des semences résistantes à la sécheresse',
-    responsable: 'Ministère Agriculture / INERA', date_identification: '2026-02-10', province: 'Kasaï, Kwilu',
-    actions_prevues: ['Distribution de semences résistantes', 'Formation aux techniques AIC', 'Installation de systèmes d\'irrigation pilotes'],
-    dernier_suivi: '2026-03-20',
-  },
-  {
-    id: 3, code: 'RISK-003',
-    nom: 'Insécurité dans les zones d\'intervention',
-    description: 'Présence de groupes armés limitant l\'accès aux bénéficiaires.',
-    categorie: 'sante_securite', probabilite: 2, impact: 4, niveau: 'Élevé', statut: 'en_cours',
-    plan_atténuation: 'Coordination avec les autorités locales, adaptation des itinéraires, mise en place de couloirs sécurisés',
-    responsable: 'OVDA / Autorités provinciales', date_identification: '2026-01-05', province: 'Kasaï, Tanganyika',
-    actions_prevues: ['Réunions de coordination mensuelles', 'Évaluation des zones à risque', 'Plan de contingence sécuritaire'],
-    dernier_suivi: '2026-03-28',
-  },
-  {
-    id: 4, code: 'RISK-004',
-    nom: 'Faible adoption des technologies agricoles',
-    description: 'Les agriculteurs sont réticents à adopter les nouvelles technologies AIC/AIN.',
-    categorie: 'technique', probabilite: 3, impact: 3, niveau: 'Modéré', statut: 'atténue',
-    plan_atténuation: 'Renforcer les formations, organiser des démonstrations terrain, impliquer les leaders communautaires',
-    responsable: 'SENASEM / Services de vulgarisation', date_identification: '2025-12-10', province: 'Kinshasa, Kongo Central',
-    actions_prevues: ['Campagnes de sensibilisation', 'Champs écoles paysans', 'Visites d\'échanges inter-paysans'],
-    dernier_suivi: '2026-03-15',
-  },
-  {
-    id: 5, code: 'RISK-005',
-    nom: 'Fluctuation des prix des produits agricoles',
-    description: 'Variations importantes des prix impactant les revenus des petits exploitants.',
-    categorie: 'socio_economique', probabilite: 4, impact: 3, niveau: 'Élevé', statut: 'en_cours',
-    plan_atténuation: 'Mettre en place des systèmes d\'information sur les marchés, faciliter l\'accès au stockage',
-    responsable: 'UNCP / Services des marchés', date_identification: '2026-02-20', province: 'National',
-    actions_prevues: ['Création d\'un observatoire des prix', 'Appui aux organisations paysannes', 'Systèmes d\'alerte précoce'],
-    dernier_suivi: '2026-03-22',
-  },
-  {
-    id: 6, code: 'RISK-006',
-    nom: 'Capacité institutionnelle limitée',
-    description: 'Faiblesse des capacités des institutions pour la mise en œuvre du programme.',
-    categorie: 'gestion', probabilite: 3, impact: 4, niveau: 'Élevé', statut: 'identifie',
-    plan_atténuation: 'Renforcement des capacités, formations continues, appui technique personnalisé',
-    responsable: 'UNCP / Banque Mondiale', date_identification: '2026-01-20', province: 'National',
-    actions_prevues: ['Plan de formation annuel', 'Recrutement d\'experts', 'Mentorat des équipes provinciales'],
-    dernier_suivi: '2026-03-18',
-  },
-];
-
-const mockActions: Record<number, ActionAtténuation[]> = {
-  1: [
-    { id: 1, id_risque: 1, action: 'Établir un planning de livraison détaillé', responsable: 'Cellule Logistique', date_debut: '2026-02-01', date_fin: '2026-02-28', statut: 'realisee', resultat: 'Planning validé et diffusé' },
-    { id: 2, id_risque: 1, action: 'Renforcer l\'équipe logistique', responsable: 'UNCP', date_debut: '2026-02-15', date_fin: '2026-03-15', statut: 'realisee', resultat: '2 recrutements effectués' },
-    { id: 3, id_risque: 1, action: 'Mettre en place un système de tracking', responsable: 'DANTIC', date_debut: '2026-03-01', date_fin: '2026-04-30', statut: 'en_cours' },
-  ],
-  2: [
-    { id: 1, id_risque: 2, action: 'Distribution de semences résistantes', responsable: 'SENASEM', date_debut: '2026-03-01', date_fin: '2026-04-15', statut: 'prevue' },
-    { id: 2, id_risque: 2, action: 'Formation aux techniques AIC', responsable: 'Vulgarisation', date_debut: '2026-03-15', date_fin: '2026-05-30', statut: 'prevue' },
-  ],
-  3: [
-    { id: 1, id_risque: 3, action: 'Réunions de coordination mensuelles', responsable: 'OVDA', date_debut: '2026-02-01', date_fin: '2026-12-31', statut: 'en_cours' },
-    { id: 2, id_risque: 3, action: 'Cartographie des zones à risque', responsable: 'Autorités sécuritaires', date_debut: '2026-01-15', date_fin: '2026-02-28', statut: 'realisee', resultat: 'Carte validée' },
-  ],
-  4: [
-    { id: 1, id_risque: 4, action: 'Organiser des champs écoles paysans', responsable: 'SENASEM', date_debut: '2026-01-01', date_fin: '2026-06-30', statut: 'en_cours' },
-    { id: 2, id_risque: 4, action: 'Visites d\'échange inter-paysans', responsable: 'Vulgarisation', date_debut: '2026-02-01', date_fin: '2026-05-31', statut: 'realisee', resultat: '45 paysans formés' },
-  ],
-};
+import planAttenuationService from '../../services/planAttenuation.service';
+import type { PlanAtténuationRisque, ActionAtténuation, PlanStats } from '../../services/planAttenuation.service';
 
 const niveauConfig: Record<string, { label: string; color: string; bg: string }> = {
   Faible: { label: 'Faible', color: '#4CAF50', bg: '#E8F5E9' },
@@ -126,31 +56,108 @@ const statutActionConfig: Record<string, { label: string; color: string; bg: str
 };
 
 export const PlanAttenuation: React.FC = () => {
-  const [risques, setRisques] = useState<Risque[]>([]);
-  const [actions, setActions] = useState<Record<number, ActionAtténuation[]>>({});
+  const [risques, setRisques] = useState<PlanAtténuationRisque[]>([]);
+  const [stats, setStats] = useState<PlanStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<number | false>(false);
+  
+  // Dialog pour ajouter/modifier une action
+  const [actionDialogOpen, setActionDialogOpen] = useState(false);
+  const [selectedRisque, setSelectedRisque] = useState<PlanAtténuationRisque | null>(null);
+  const [selectedAction, setSelectedAction] = useState<ActionAtténuation | null>(null);
+  const [actionForm, setActionForm] = useState<Partial<ActionAtténuation>>({
+    action: '',
+    responsable: '',
+    date_debut: new Date().toISOString().split('T')[0],
+    date_fin: '',
+    statut: 'prevue',
+    resultat: '',
+  });
+  const [saving, setSaving] = useState(false);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
 
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      try {
-        const res = await risqueService.getAll();
-        setRisques(res.data?.length ? res.data : mockRisques);
-      } catch {
-        setRisques(mockRisques);
-      } finally {
-        setActions(mockActions);
-        setLoading(false);
-      }
-    };
-    load();
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [plansRes, statsRes] = await Promise.all([
+        planAttenuationService.getAll(),
+        planAttenuationService.getStats(),
+      ]);
+      setRisques(plansRes.data);
+      setStats(statsRes.data);
+    } catch (err) {
+      console.error('Erreur chargement plans:', err);
+      setError('Impossible de charger les plans d\'atténuation');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const totalActions = Object.values(actions).flat().length;
-  const realisees = Object.values(actions).flat().filter(a => a.statut === 'realisee').length;
-  const enCours = Object.values(actions).flat().filter(a => a.statut === 'en_cours').length;
-  const prevues = Object.values(actions).flat().filter(a => a.statut === 'prevue').length;
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const handleOpenActionDialog = (risque: PlanAtténuationRisque, action?: ActionAtténuation) => {
+    setSelectedRisque(risque);
+    if (action) {
+      setSelectedAction(action);
+      setActionForm({
+        action: action.action,
+        responsable: action.responsable,
+        date_debut: action.date_debut,
+        date_fin: action.date_fin,
+        statut: action.statut,
+        resultat: action.resultat || '',
+      });
+    } else {
+      setSelectedAction(null);
+      setActionForm({
+        action: '',
+        responsable: '',
+        date_debut: new Date().toISOString().split('T')[0],
+        date_fin: '',
+        statut: 'prevue',
+        resultat: '',
+      });
+    }
+    setActionDialogOpen(true);
+  };
+
+  const handleSaveAction = async () => {
+    if (!selectedRisque) return;
+    setSaving(true);
+    try {
+      if (selectedAction) {
+        await planAttenuationService.updateAction(selectedAction.id, actionForm);
+        setSnackbar({ open: true, message: 'Action mise à jour avec succès', severity: 'success' });
+      } else {
+        await planAttenuationService.addAction(selectedRisque.id, actionForm);
+        setSnackbar({ open: true, message: 'Action ajoutée avec succès', severity: 'success' });
+      }
+      setActionDialogOpen(false);
+      loadData();
+    } catch (err) {
+      console.error(err);
+      setSnackbar({ open: true, message: 'Erreur lors de l\'enregistrement', severity: 'error' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteAction = async (actionId: number) => {
+    if (window.confirm('Êtes-vous sûr de vouloir supprimer cette action ?')) {
+      try {
+        await planAttenuationService.deleteAction(actionId);
+        setSnackbar({ open: true, message: 'Action supprimée avec succès', severity: 'success' });
+        loadData();
+      } catch (err) {
+        console.error(err);
+        setSnackbar({ open: true, message: 'Erreur lors de la suppression', severity: 'error' });
+      }
+    }
+  };
 
   if (loading) {
     return (
@@ -160,16 +167,21 @@ export const PlanAttenuation: React.FC = () => {
     );
   }
 
+  const totalActions = risques.reduce((acc, r) => acc + (r.actions?.length || 0), 0);
+  const realisees = risques.reduce((acc, r) => acc + (r.actions?.filter(a => a.statut === 'realisee').length || 0), 0);
+  const enCours = risques.reduce((acc, r) => acc + (r.actions?.filter(a => a.statut === 'en_cours').length || 0), 0);
+  const prevues = risques.reduce((acc, r) => acc + (r.actions?.filter(a => a.statut === 'prevue').length || 0), 0);
+
   const exportData = risques.map(r => ({
     code: r.code,
     nom: r.nom,
     niveau: r.niveau,
     statut: r.statut,
-    plan: r.plan_atténuation,
+    plan: r.plan_attenuation,
     responsable: r.responsable,
-    actions_count: (actions[r.id] ?? []).length,
-    actions_realisees: (actions[r.id] ?? []).filter(a => a.statut === 'realisee').length,
-    dernier_suivi: r.dernier_suivi ?? '-',
+    actions_count: r.actions?.length || 0,
+    actions_realisees: r.actions?.filter(a => a.statut === 'realisee').length || 0,
+    dernier_suivi: r.dernier_suivi || '-',
   }));
 
   return (
@@ -184,59 +196,45 @@ export const PlanAttenuation: React.FC = () => {
         </Typography>
       </Box>
 
+      {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
+
       {/* Statistiques des actions */}
-      <Grid container spacing={2} sx={{ mb: 4 }}>
+      <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card sx={{ borderRadius: 2 }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                <Avatar sx={{ bgcolor: '#E3F2FD', width: 32, height: 32 }}>
-                  <GoogleIcon name="task" size={18} sx={{ color: '#1976D2' }} />
-                </Avatar>
-                <Typography variant="caption" color="text.secondary">Total actions</Typography>
-              </Box>
-              <Typography variant="h3" fontWeight={700}>{totalActions}</Typography>
-            </CardContent>
-          </Card>
+          <GradientWidget
+            title="Total actions"
+            value={totalActions.toLocaleString('fr-FR')}
+            icon={<GoogleIcon name="task" size={36} />}
+            trend={{ value: stats?.risques_avec_plan || 0, direction: 'up', period: 'risques suivis' }}
+            color="primary"
+          />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card sx={{ borderRadius: 2, borderLeft: '4px solid #4CAF50' }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                <Avatar sx={{ bgcolor: '#E8F5E9', width: 32, height: 32 }}>
-                  <GoogleIcon name="check_circle" size={18} sx={{ color: '#4CAF50' }} />
-                </Avatar>
-                <Typography variant="caption" color="text.secondary">Réalisées</Typography>
-              </Box>
-              <Typography variant="h3" fontWeight={700} color="success.main">{realisees}</Typography>
-            </CardContent>
-          </Card>
+          <GradientWidget
+            title="Réalisées"
+            value={realisees.toLocaleString('fr-FR')}
+            icon={<GoogleIcon name="check_circle" size={36} />}
+            trend={{ value: totalActions > 0 ? Math.round((realisees / totalActions) * 100) : 0, direction: 'up', period: 'des actions' }}
+            color="success"
+          />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card sx={{ borderRadius: 2, borderLeft: '4px solid #FF9800' }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                <Avatar sx={{ bgcolor: '#FFF3E0', width: 32, height: 32 }}>
-                  <GoogleIcon name="pending" size={18} sx={{ color: '#FF9800' }} />
-                </Avatar>
-                <Typography variant="caption" color="text.secondary">En cours</Typography>
-              </Box>
-              <Typography variant="h3" fontWeight={700} color="warning.main">{enCours}</Typography>
-            </CardContent>
-          </Card>
+          <GradientWidget
+            title="En cours"
+            value={enCours.toLocaleString('fr-FR')}
+            icon={<GoogleIcon name="pending" size={36} />}
+            trend={{ value: totalActions > 0 ? Math.round((enCours / totalActions) * 100) : 0, direction: 'up', period: 'des actions' }}
+            color="warning"
+          />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card sx={{ borderRadius: 2, borderLeft: '4px solid #9E9E9E' }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                <Avatar sx={{ bgcolor: '#F5F5F5', width: 32, height: 32 }}>
-                  <GoogleIcon name="schedule" size={18} sx={{ color: '#9E9E9E' }} />
-                </Avatar>
-                <Typography variant="caption" color="text.secondary">Prévues</Typography>
-              </Box>
-              <Typography variant="h3" fontWeight={700} color="text.secondary">{prevues}</Typography>
-            </CardContent>
-          </Card>
+          <GradientWidget
+            title="Prévues"
+            value={prevues.toLocaleString('fr-FR')}
+            icon={<GoogleIcon name="schedule" size={36} />}
+            trend={{ value: totalActions > 0 ? Math.round((prevues / totalActions) * 100) : 0, direction: 'up', period: 'des actions' }}
+            color="info"
+          />
         </Grid>
       </Grid>
 
@@ -281,168 +279,299 @@ export const PlanAttenuation: React.FC = () => {
       />
 
       {/* Accordions par risque */}
-      <Stack spacing={2} sx={{ mt: 2 }}>
-        {risques.map((risque) => {
-          const risqueActions = actions[risque.id] ?? [];
-          const done = risqueActions.filter(a => a.statut === 'realisee').length;
-          const pct = risqueActions.length > 0 ? Math.round((done / risqueActions.length) * 100) : 0;
-          const cfg = niveauConfig[risque.niveau] ?? niveauConfig['Modéré'];
+      {risques.length === 0 ? (
+        <Alert severity="info" sx={{ mt: 2 }}>
+          Aucun plan d'atténuation n'a été défini pour le moment.
+        </Alert>
+      ) : (
+        <Stack spacing={2} sx={{ mt: 2 }}>
+          {risques.map((risque) => {
+            const risqueActions = risque.actions || [];
+            const done = risqueActions.filter(a => a.statut === 'realisee').length;
+            const pct = risqueActions.length > 0 ? Math.round((done / risqueActions.length) * 100) : 0;
+            const cfg = niveauConfig[risque.niveau] || niveauConfig['Modéré'];
 
-          return (
-            <Accordion
-              key={risque.id}
-              expanded={expanded === risque.id}
-              onChange={() => setExpanded(expanded === risque.id ? false : risque.id)}
-              sx={{ borderRadius: 2, '&:before': { display: 'none' }, boxShadow: 1 }}
-            >
-              <AccordionSummary expandIcon={<GoogleIcon name="expand_more" />}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', width: '100%', pr: 2 }}>
-                  <Chip label={risque.code} size="small" sx={{ bgcolor: '#2E7D32', color: 'white', borderRadius: 1 }} />
-                  <Chip
-                    label={cfg.label}
-                    size="small"
-                    sx={{ bgcolor: cfg.bg, color: cfg.color, fontWeight: 600 }}
-                  />
-                  <Typography variant="body1" fontWeight={500} sx={{ flex: 1 }}>
-                    {risque.nom}
-                  </Typography>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 160 }}>
-                    <LinearProgress
-                      variant="determinate"
-                      value={pct}
-                      sx={{ flex: 1, height: 6, borderRadius: 2, bgcolor: '#E8F5E9', '& .MuiLinearProgress-bar': { bgcolor: '#2E7D32' } }}
+            return (
+              <Accordion
+                key={risque.id}
+                expanded={expanded === risque.id}
+                onChange={() => setExpanded(expanded === risque.id ? false : risque.id)}
+                sx={{ borderRadius: 2, '&:before': { display: 'none' }, boxShadow: 1 }}
+              >
+                <AccordionSummary expandIcon={<GoogleIcon name="expand_more" />}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', width: '100%', pr: 2 }}>
+                    <Chip label={risque.code} size="small" sx={{ bgcolor: '#2E7D32', color: 'white', borderRadius: 1 }} />
+                    <Chip
+                      label={cfg.label}
+                      size="small"
+                      sx={{ bgcolor: cfg.bg, color: cfg.color, fontWeight: 600 }}
                     />
-                    <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
-                      {done}/{risqueActions.length} actions
+                    <Typography variant="body1" fontWeight={500} sx={{ flex: 1 }}>
+                      {risque.nom}
                     </Typography>
-                  </Box>
-                </Box>
-              </AccordionSummary>
-              <AccordionDetails>
-                <Grid container spacing={3}>
-                  <Grid size={{ xs: 12, md: 7 }}>
-                    <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                      Plan d'atténuation
-                    </Typography>
-                    <Paper sx={{ p: 2, bgcolor: '#F1F8F1', borderRadius: 2, mb: 3, borderLeft: '3px solid #2E7D32' }}>
-                      <Typography variant="body2">{risque.plan_atténuation}</Typography>
-                    </Paper>
-
-                    <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                      Actions de mitigation
-                    </Typography>
-                    {risqueActions.length === 0 ? (
-                      <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                        Aucune action définie pour ce risque
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 160 }}>
+                      <LinearProgress
+                        variant="determinate"
+                        value={pct}
+                        sx={{ flex: 1, height: 6, borderRadius: 2, bgcolor: '#E8F5E9', '& .MuiLinearProgress-bar': { bgcolor: '#2E7D32' } }}
+                      />
+                      <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
+                        {done}/{risqueActions.length} actions
                       </Typography>
-                    ) : (
-                      <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
-                        <Table size="small">
-                          <TableHead sx={{ bgcolor: '#FAFAFA' }}>
-                            <TableRow>
-                              <TableCell sx={{ fontWeight: 600 }}>Action</TableCell>
-                              <TableCell sx={{ fontWeight: 600 }}>Responsable</TableCell>
-                              <TableCell sx={{ fontWeight: 600 }}>Échéance</TableCell>
-                              <TableCell sx={{ fontWeight: 600 }}>Statut</TableCell>
-                              <TableCell sx={{ fontWeight: 600 }}>Résultat</TableCell>
-                            </TableRow>
-                          </TableHead>
-                          <TableBody>
-                            {risqueActions.map((action) => {
-                              const sCfg = statutActionConfig[action.statut] ?? statutActionConfig['prevue'];
-                              return (
-                                <TableRow key={action.id} sx={{ '&:hover': { bgcolor: '#F9FBF9' } }}>
-                                  <TableCell sx={{ maxWidth: 200 }}>
-                                    <Typography variant="body2">{action.action}</Typography>
-                                  </TableCell>
-                                  <TableCell>
-                                    <Typography variant="caption">{action.responsable}</Typography>
-                                  </TableCell>
-                                  <TableCell>
-                                    <Typography variant="caption">
-                                      {new Date(action.date_fin).toLocaleDateString('fr-FR')}
-                                    </Typography>
-                                  </TableCell>
-                                  <TableCell>
-                                    <Chip
-                                      label={sCfg.label}
-                                      size="small"
-                                      sx={{ bgcolor: sCfg.bg, color: sCfg.color, fontSize: '0.7rem' }}
-                                    />
-                                  </TableCell>
-                                  <TableCell>
-                                    <Typography variant="caption" color="text.secondary">
-                                      {action.resultat ?? '—'}
-                                    </Typography>
-                                  </TableCell>
-                                </TableRow>
-                              );
-                            })}
-                          </TableBody>
-                        </Table>
-                      </TableContainer>
-                    )}
-                  </Grid>
-                  <Grid size={{ xs: 12, md: 5 }}>
-                    <Paper sx={{ p: 2, bgcolor: '#FAFAFA', borderRadius: 2 }}>
-                      <Typography variant="subtitle2" gutterBottom>Informations</Typography>
-                      <Divider sx={{ mb: 2 }} />
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.5 }}>
-                        <Typography variant="caption" color="text.secondary">Responsable</Typography>
-                        <Typography variant="body2" fontWeight={500}>{risque.responsable}</Typography>
-                      </Box>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.5 }}>
-                        <Typography variant="caption" color="text.secondary">Province(s)</Typography>
-                        <Typography variant="body2">{risque.province ?? '—'}</Typography>
-                      </Box>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.5 }}>
-                        <Typography variant="caption" color="text.secondary">Identification</Typography>
-                        <Typography variant="body2">
-                          {new Date(risque.date_identification).toLocaleDateString('fr-FR')}
-                        </Typography>
-                      </Box>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.5 }}>
-                        <Typography variant="caption" color="text.secondary">Dernier suivi</Typography>
-                        <Typography variant="body2">
-                          {risque.dernier_suivi
-                            ? new Date(risque.dernier_suivi).toLocaleDateString('fr-FR')
-                            : '—'}
-                        </Typography>
-                      </Box>
-                      <Divider sx={{ my: 1.5 }} />
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Typography variant="caption" color="text.secondary">Progression</Typography>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <LinearProgress
-                            variant="determinate"
-                            value={pct}
-                            sx={{ width: 70, height: 6, borderRadius: 2 }}
-                          />
-                          <Typography variant="caption" fontWeight={600}>{pct}%</Typography>
-                        </Box>
-                      </Box>
-                    </Paper>
-
-                    {(risque.indicateurs_surveillance ?? []).length > 0 && (
-                      <Paper sx={{ p: 2, bgcolor: '#FAFAFA', borderRadius: 2, mt: 2 }}>
-                        <Typography variant="subtitle2" gutterBottom>Indicateurs de surveillance</Typography>
-                        <Stack spacing={0.5}>
-                          {(risque.indicateurs_surveillance ?? []).map((ind, i) => (
-                            <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <GoogleIcon name="fiber_manual_record" size={8} sx={{ color: '#2E7D32' }} />
-                              <Typography variant="caption">{ind}</Typography>
-                            </Box>
-                          ))}
-                        </Stack>
+                    </Box>
+                  </Box>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Grid container spacing={3}>
+                    <Grid size={{ xs: 12, md: 7 }}>
+                      <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                        Plan d'atténuation
+                      </Typography>
+                      <Paper sx={{ p: 2, bgcolor: '#F1F8F1', borderRadius: 2, mb: 3, borderLeft: '3px solid #2E7D32' }}>
+                        <Typography variant="body2">{risque.plan_attenuation || 'Aucun plan défini'}</Typography>
                       </Paper>
-                    )}
+
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                        <Typography variant="subtitle2" color="text.secondary">
+                          Actions de mitigation
+                        </Typography>
+                        <Button
+                          size="small"
+                          startIcon={<GoogleIcon name="add" size={16} />}
+                          onClick={() => handleOpenActionDialog(risque)}
+                          sx={{ color: '#2E7D32' }}
+                        >
+                          Ajouter une action
+                        </Button>
+                      </Box>
+
+                      {risqueActions.length === 0 ? (
+                        <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                          Aucune action définie pour ce risque
+                        </Typography>
+                      ) : (
+                        <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
+                          <Table size="small">
+                            <TableHead sx={{ bgcolor: '#FAFAFA' }}>
+                              <TableRow>
+                                <TableCell sx={{ fontWeight: 600 }}>Action</TableCell>
+                                <TableCell sx={{ fontWeight: 600 }}>Responsable</TableCell>
+                                <TableCell sx={{ fontWeight: 600 }}>Échéance</TableCell>
+                                <TableCell sx={{ fontWeight: 600 }}>Statut</TableCell>
+                                <TableCell sx={{ fontWeight: 600 }}>Résultat</TableCell>
+                                <TableCell sx={{ fontWeight: 600 }} align="center">Actions</TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {risqueActions.map((action) => {
+                                const sCfg = statutActionConfig[action.statut] || statutActionConfig['prevue'];
+                                return (
+                                  <TableRow key={action.id} sx={{ '&:hover': { bgcolor: '#F9FBF9' } }}>
+                                    <TableCell sx={{ maxWidth: 200 }}>
+                                      <Typography variant="body2">{action.action}</Typography>
+                                    </TableCell>
+                                    <TableCell>
+                                      <Typography variant="caption">{action.responsable}</Typography>
+                                    </TableCell>
+                                    <TableCell>
+                                      <Typography variant="caption">
+                                        {new Date(action.date_fin).toLocaleDateString('fr-FR')}
+                                      </Typography>
+                                    </TableCell>
+                                    <TableCell>
+                                      <Chip
+                                        label={sCfg.label}
+                                        size="small"
+                                        sx={{ bgcolor: sCfg.bg, color: sCfg.color, fontSize: '0.7rem' }}
+                                      />
+                                    </TableCell>
+                                    <TableCell>
+                                      <Typography variant="caption" color="text.secondary">
+                                        {action.resultat || '—'}
+                                      </Typography>
+                                    </TableCell>
+                                    <TableCell align="center">
+                                      <Tooltip title="Modifier">
+                                        <IconButton size="small" onClick={() => handleOpenActionDialog(risque, action)}>
+                                          <GoogleIcon name="edit" size={16} />
+                                        </IconButton>
+                                      </Tooltip>
+                                      <Tooltip title="Supprimer">
+                                        <IconButton size="small" color="error" onClick={() => handleDeleteAction(action.id)}>
+                                          <GoogleIcon name="delete" size={16} />
+                                        </IconButton>
+                                      </Tooltip>
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </TableContainer>
+                      )}
+                    </Grid>
+                    <Grid size={{ xs: 12, md: 5 }}>
+                      <Paper sx={{ p: 2, bgcolor: '#FAFAFA', borderRadius: 2 }}>
+                        <Typography variant="subtitle2" gutterBottom>Informations</Typography>
+                        <Divider sx={{ mb: 2 }} />
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.5 }}>
+                          <Typography variant="caption" color="text.secondary">Responsable</Typography>
+                          <Typography variant="body2" fontWeight={500}>{risque.responsable}</Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.5 }}>
+                          <Typography variant="caption" color="text.secondary">Province(s)</Typography>
+                          <Typography variant="body2">{risque.province || '—'}</Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.5 }}>
+                          <Typography variant="caption" color="text.secondary">Identification</Typography>
+                          <Typography variant="body2">
+                            {new Date(risque.date_identification).toLocaleDateString('fr-FR')}
+                          </Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.5 }}>
+                          <Typography variant="caption" color="text.secondary">Dernier suivi</Typography>
+                          <Typography variant="body2">
+                            {risque.dernier_suivi
+                              ? new Date(risque.dernier_suivi).toLocaleDateString('fr-FR')
+                              : '—'}
+                          </Typography>
+                        </Box>
+                        <Divider sx={{ my: 1.5 }} />
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Typography variant="caption" color="text.secondary">Progression</Typography>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <LinearProgress
+                              variant="determinate"
+                              value={pct}
+                              sx={{ width: 70, height: 6, borderRadius: 2 }}
+                            />
+                            <Typography variant="caption" fontWeight={600}>{pct}%</Typography>
+                          </Box>
+                        </Box>
+                      </Paper>
+
+                      {(risque.indicateurs_surveillance || []).length > 0 && (
+                        <Paper sx={{ p: 2, bgcolor: '#FAFAFA', borderRadius: 2, mt: 2 }}>
+                          <Typography variant="subtitle2" gutterBottom>Indicateurs de surveillance</Typography>
+                          <Stack spacing={0.5}>
+                            {(risque.indicateurs_surveillance || []).map((ind, i) => (
+                              <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <GoogleIcon name="fiber_manual_record" size={8} sx={{ color: '#2E7D32' }} />
+                                <Typography variant="caption">{ind}</Typography>
+                              </Box>
+                            ))}
+                          </Stack>
+                        </Paper>
+                      )}
+                    </Grid>
                   </Grid>
-                </Grid>
-              </AccordionDetails>
-            </Accordion>
-          );
-        })}
-      </Stack>
+                </AccordionDetails>
+              </Accordion>
+            );
+          })}
+        </Stack>
+      )}
+
+      {/* Dialog pour ajouter/modifier une action */}
+      <Dialog open={actionDialogOpen} onClose={() => setActionDialogOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>
+          {selectedAction ? 'Modifier l\'action' : 'Ajouter une action'}
+          {selectedRisque && (
+            <Typography variant="caption" display="block" color="text.secondary">
+              Pour le risque: {selectedRisque.code} - {selectedRisque.nom}
+            </Typography>
+          )}
+        </DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid size={{ xs: 12 }}>
+              <TextField
+                fullWidth
+                label="Action"
+                multiline
+                rows={2}
+                value={actionForm.action}
+                onChange={(e) => setActionForm({ ...actionForm, action: e.target.value })}
+                required
+              />
+            </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <TextField
+                fullWidth
+                label="Responsable"
+                value={actionForm.responsable}
+                onChange={(e) => setActionForm({ ...actionForm, responsable: e.target.value })}
+                required
+              />
+            </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <FormControl fullWidth>
+                <InputLabel>Statut</InputLabel>
+                <Select
+                  value={actionForm.statut}
+                  label="Statut"
+                  onChange={(e) => setActionForm({ ...actionForm, statut: e.target.value as any })}
+                >
+                  <MenuItem value="prevue">Prévue</MenuItem>
+                  <MenuItem value="en_cours">En cours</MenuItem>
+                  <MenuItem value="realisee">Réalisée</MenuItem>
+                  <MenuItem value="abandonnee">Abandonnée</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <TextField
+                fullWidth
+                type="date"
+                label="Date de début"
+                value={actionForm.date_debut}
+                onChange={(e) => setActionForm({ ...actionForm, date_debut: e.target.value })}
+                InputLabelProps={{ shrink: true }}
+              />
+            </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <TextField
+                fullWidth
+                type="date"
+                label="Date de fin"
+                value={actionForm.date_fin}
+                onChange={(e) => setActionForm({ ...actionForm, date_fin: e.target.value })}
+                InputLabelProps={{ shrink: true }}
+              />
+            </Grid>
+            <Grid size={{ xs: 12 }}>
+              <TextField
+                fullWidth
+                label="Résultat / Observations"
+                multiline
+                rows={2}
+                value={actionForm.resultat}
+                onChange={(e) => setActionForm({ ...actionForm, resultat: e.target.value })}
+                placeholder="Décrire le résultat obtenu (si réalisée)"
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setActionDialogOpen(false)}>Annuler</Button>
+          <Button 
+            variant="contained" 
+            onClick={handleSaveAction} 
+            disabled={saving || !actionForm.action || !actionForm.responsable || !actionForm.date_fin}
+            sx={{ bgcolor: '#2E7D32', borderRadius: 2 }}
+          >
+            {saving ? 'Enregistrement...' : (selectedAction ? 'Mettre à jour' : 'Ajouter')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Snackbar */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        message={snackbar.message}
+      />
     </Box>
   );
 };

@@ -5,12 +5,14 @@ import {
   Chip,
   CircularProgress,
   Divider,
+  Grid,
   Paper,
   Stack,
   Typography,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import GoogleIcon from '../../components/common/GoogleIcon';
+import { GradientWidget } from '../../components/common/Widget/GradientWidget';
 import { useNotifications } from '../../context/NotificationsContext';
 import type { NotificationItem, NotificationType } from '../../services/notifications.service';
 import { formatNotificationRelativeDate } from '../../utils/notificationTime';
@@ -92,20 +94,35 @@ export const NotificationsPage: React.FC = () => {
         </Stack>
       </Box>
 
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 3 }}>
-        <Paper sx={{ p: 2.5, flex: 1, borderRadius: 3 }}>
-          <Typography variant="overline" color="text.secondary">Total</Typography>
-          <Typography variant="h4" fontWeight={700}>{summary.total}</Typography>
-        </Paper>
-        <Paper sx={{ p: 2.5, flex: 1, borderRadius: 3 }}>
-          <Typography variant="overline" color="text.secondary">Non lues</Typography>
-          <Typography variant="h4" fontWeight={700} color="#C62828">{summary.unread}</Typography>
-        </Paper>
-        <Paper sx={{ p: 2.5, flex: 1, borderRadius: 3 }}>
-          <Typography variant="overline" color="text.secondary">Risques / Plaintes</Typography>
-          <Typography variant="h4" fontWeight={700}>{(summary.byType.risk ?? 0) + (summary.byType.complaint ?? 0)}</Typography>
-        </Paper>
-      </Stack>
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+          <GradientWidget
+            title="Total"
+            value={summary.total.toLocaleString('fr-FR')}
+            icon={<GoogleIcon name="notifications" size={36} />}
+            trend={{ value: Object.values(summary.byType).reduce((sum, count) => sum + (count ?? 0), 0), direction: 'up', period: 'notifications suivies' }}
+            color="primary"
+          />
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+          <GradientWidget
+            title="Non lues"
+            value={summary.unread.toLocaleString('fr-FR')}
+            icon={<GoogleIcon name="mark_email_unread" size={36} />}
+            trend={{ value: summary.total > 0 ? Math.round((summary.unread / summary.total) * 100) : 0, direction: summary.unread > 0 ? 'down' : 'up', period: 'du total' }}
+            color="danger"
+          />
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+          <GradientWidget
+            title="Risques / Plaintes"
+            value={((summary.byType.risk ?? 0) + (summary.byType.complaint ?? 0)).toLocaleString('fr-FR')}
+            icon={<GoogleIcon name="crisis_alert" size={36} />}
+            trend={{ value: summary.total > 0 ? Math.round((((summary.byType.risk ?? 0) + (summary.byType.complaint ?? 0)) / summary.total) * 100) : 0, direction: 'up', period: 'des notifications' }}
+            color="info"
+          />
+        </Grid>
+      </Grid>
 
       <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 3 }}>
         {filterLabels.map((item) => (

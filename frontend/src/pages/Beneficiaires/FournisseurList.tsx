@@ -27,8 +27,6 @@ import {
   CircularProgress,
   Alert,
   Tooltip,
-  Card,
-  CardContent,
   Avatar,
   LinearProgress,
   Dialog,
@@ -38,6 +36,8 @@ import {
   Snackbar,
 } from '@mui/material';
 import GoogleIcon from '../../components/common/GoogleIcon';
+import { GradientWidget } from '../../components/common/Widget/GradientWidget';
+import { moduleGridStyles } from '../../components/common/Layout/moduleGridStyles';
 import { ExportToolbar } from '../../components/common/ExportToolbar/ExportToolbar';
 import { fournisseurService, type Fournisseur } from '../../services/api';
 
@@ -158,29 +158,25 @@ export const FournisseurList: React.FC = () => {
       {/* KPI */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
         {[
-          { label: 'Fournisseurs agréés', value: agrees, icon: 'verified', color: '#2E7D32' },
-          { label: 'Valeur des contrats', value: formatMontant(totalContrats), icon: 'account_balance_wallet', color: '#1565C0' },
-          { label: 'Bénéficiaires servis', value: totalBenef.toLocaleString(), icon: 'groups', color: '#E65100' },
-          { label: 'Taux de livraison moy.', value: `${tauxMoyen}%`, icon: 'local_shipping', color: '#6A1B9A' },
+          { label: 'Fournisseurs agréés', value: agrees.toLocaleString('fr-FR'), icon: 'verified', color: 'primary' as const, trend: fournisseurs.length > 0 ? Math.round((agrees / fournisseurs.length) * 100) : 0, period: 'du total' },
+          { label: 'Valeur des contrats', value: formatMontant(totalContrats), icon: 'account_balance_wallet', color: 'info' as const, trend: tauxMoyen, period: 'livraison moyenne' },
+          { label: 'Bénéficiaires servis', value: totalBenef.toLocaleString('fr-FR'), icon: 'groups', color: 'warning' as const, trend: fournisseurs.length > 0 ? Math.round(totalBenef / fournisseurs.length) : 0, period: 'moyenne / fournisseur' },
+          { label: 'Taux de livraison moy.', value: `${tauxMoyen}%`, icon: 'local_shipping', color: 'success' as const, trend: tauxMoyen, period: 'de performance' },
         ].map(kpi => (
           <Grid size={{ xs: 12, sm: 6, md: 3 }} key={kpi.label}>
-            <Card sx={{ bgcolor: `${kpi.color}0D`, borderLeft: `4px solid ${kpi.color}` }}>
-              <CardContent>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">{kpi.label}</Typography>
-                    <Typography variant="h5" fontWeight={700}>{kpi.value}</Typography>
-                  </Box>
-                  <GoogleIcon name={kpi.icon} size={32} sx={{ color: kpi.color }} />
-                </Box>
-              </CardContent>
-            </Card>
+            <GradientWidget
+              title={kpi.label}
+              value={kpi.value}
+              icon={<GoogleIcon name={kpi.icon} size={36} />}
+              trend={{ value: kpi.trend, direction: 'up', period: kpi.period }}
+              color={kpi.color}
+            />
           </Grid>
         ))}
       </Grid>
 
       {/* Filtres */}
-      <Paper sx={{ p: 2, mb: 3, borderRadius: 2 }}>
+      <Paper sx={moduleGridStyles.filterPanel}>
         <Grid container spacing={2} alignItems="center">
           <Grid size={{ xs: 12, md: 4 }}>
             <TextField

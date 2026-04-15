@@ -26,7 +26,7 @@ if not exist frontend mkdir frontend
 
 :: Lancer le backend (dans une nouvelle fenêtre)
 echo 🚀 Lancement du backend...
-start cmd /k "cd /d "%CD%\backend" && echo 🔧 Backend PNDA && npm run dev"
+start cmd /k "cd /d "%CD%\backend" && set PORT=3000 && echo 🔧 Backend PNDA sur http://localhost:3000 && npm run dev"
 
 :: Attendre
 timeout /t 3 /nobreak >nul

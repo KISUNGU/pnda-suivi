@@ -182,6 +182,11 @@ const IndicateurRow: React.FC<RowProps> = ({ indicateur: ind }) => {
           <Typography variant="body2" color="text.secondary">
             {fmtNum(ind.final_prevu, ind.unite)}
           </Typography>
+          {ind.final_realise !== null && ind.final_realise !== undefined && (
+            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+              Réalisé final: {fmtNum(ind.final_realise, ind.unite)}
+            </Typography>
+          )}
           {perfFinal !== null && (
             <Typography variant="caption" sx={{ color: perfColor(perfFinal) }}>
               {perfFinal}% atteint
@@ -195,17 +200,23 @@ const IndicateurRow: React.FC<RowProps> = ({ indicateur: ind }) => {
           <Collapse in={open} timeout="auto" unmountOnExit>
             <Box sx={{ py: 2 }}>
               <Grid container spacing={2} sx={{ mb: 1.5 }}>
-                <Grid size={{ xs: 12, sm: 6 }}>
+                <Grid size={{ xs: 12, sm: 4 }}>
                   <Typography variant="caption" color="text.secondary" fontWeight={600}>
                     Source des données
                   </Typography>
                   <Typography variant="body2">{ind.source_donnees}</Typography>
                 </Grid>
-                <Grid size={{ xs: 12, sm: 6 }}>
+                <Grid size={{ xs: 12, sm: 4 }}>
                   <Typography variant="caption" color="text.secondary" fontWeight={600}>
                     Sous-composante
                   </Typography>
                   <Typography variant="body2">{ind.sous_composante || '—'}</Typography>
+                </Grid>
+                <Grid size={{ xs: 12, sm: 4 }}>
+                  <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                    Méthodologie de collecte
+                  </Typography>
+                  <Typography variant="body2">{ind.methodologie_collecte || '—'}</Typography>
                 </Grid>
               </Grid>
               <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '8px' }}>
@@ -228,6 +239,9 @@ const IndicateurRow: React.FC<RowProps> = ({ indicateur: ind }) => {
                       ))}
                       <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>
                         Cible finale
+                      </TableCell>
+                      <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>
+                        Réalisé final
                       </TableCell>
                     </TableRow>
                   </TableHead>
@@ -257,6 +271,9 @@ const IndicateurRow: React.FC<RowProps> = ({ indicateur: ind }) => {
                       })}
                       <TableCell align="right" sx={{ fontWeight: 700 }}>
                         {fmtNum(ind.final_prevu, ind.unite)}
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 700 }}>
+                        {fmtNum(ind.final_realise ?? null, ind.unite)}
                       </TableCell>
                     </TableRow>
                   </TableBody>

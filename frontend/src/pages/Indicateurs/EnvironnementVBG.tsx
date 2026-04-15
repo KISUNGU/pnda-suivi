@@ -41,6 +41,7 @@ import {
   Rating,
 } from '@mui/material';
 import GoogleIcon from '../../components/common/GoogleIcon';
+import { GradientWidget } from '../../components/common/Widget/GradientWidget';
 import type { IndicateurEnvironnemental, PlainteSensible, FormationSensibilisation, StatsEnvironnement } from '../../services/environnement.service';
 
 interface TabPanelProps {
@@ -391,58 +392,42 @@ export const EnvironnementVBG: React.FC = () => {
 
       {/* Statistiques clés */}
       {stats && (
-        <Grid container spacing={2} sx={{ mb: 3 }}>
+        <Grid container spacing={3} sx={{ mb: 4 }}>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <Card sx={{ borderRadius: 2, borderLeft: '4px solid #2E7D32' }}>
-              <CardContent>
-                <Typography variant="caption" color="text.secondary">Conformité environnementale</Typography>
-                <Typography variant="h4" fontWeight={700}>{stats.taux_conformite}%</Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {stats.entreprises_conformes}/{stats.total_entreprises} entreprises
-                </Typography>
-                <LinearProgress variant="determinate" value={stats.taux_conformite} sx={{ mt: 1, height: 6, borderRadius: 2 }} />
-              </CardContent>
-            </Card>
+            <GradientWidget
+              title="Conformité environnementale"
+              value={`${stats.taux_conformite}%`}
+              icon={<GoogleIcon name="eco" size={36} />}
+              trend={{ value: stats.taux_conformite, direction: 'up', period: `${stats.entreprises_conformes}/${stats.total_entreprises} entreprises` }}
+              color="primary"
+            />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <Card sx={{ borderRadius: 2, borderLeft: '4px solid #F44336' }}>
-              <CardContent>
-                <Typography variant="caption" color="text.secondary">Plaintes VBG/EAS/HS</Typography>
-                <Typography variant="h4" fontWeight={700} color="error.main">
-                  {stats.plaintes_vbg + stats.plaintes_eas + stats.plaintes_hs}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  VBG: {stats.plaintes_vbg} | EAS: {stats.plaintes_eas} | HS: {stats.plaintes_hs}
-                </Typography>
-              </CardContent>
-            </Card>
+            <GradientWidget
+              title="Plaintes VBG/EAS/HS"
+              value={(stats.plaintes_vbg + stats.plaintes_eas + stats.plaintes_hs).toLocaleString('fr-FR')}
+              icon={<GoogleIcon name="warning" size={36} />}
+              trend={{ value: stats.plaintes_vbg, direction: 'down', period: `VBG ${stats.plaintes_vbg} | EAS ${stats.plaintes_eas} | HS ${stats.plaintes_hs}` }}
+              color="danger"
+            />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <Card sx={{ borderRadius: 2 }}>
-              <CardContent>
-                <Typography variant="caption" color="text.secondary">Traitement des plaintes</Typography>
-                <Typography variant="h4" fontWeight={700} color="success.main">{stats.plaintes_traitees}</Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Délai moyen: {stats.delai_moyen_traitement} jours
-                </Typography>
-                <LinearProgress 
-                  variant="determinate" 
-                  value={(stats.plaintes_traitees / (stats.plaintes_vbg + stats.plaintes_eas + stats.plaintes_hs)) * 100} 
-                  sx={{ mt: 1, height: 6, borderRadius: 2 }} 
-                />
-              </CardContent>
-            </Card>
+            <GradientWidget
+              title="Traitement des plaintes"
+              value={stats.plaintes_traitees.toLocaleString('fr-FR')}
+              icon={<GoogleIcon name="check_circle" size={36} />}
+              trend={{ value: (stats.plaintes_vbg + stats.plaintes_eas + stats.plaintes_hs) > 0 ? Math.round((stats.plaintes_traitees / (stats.plaintes_vbg + stats.plaintes_eas + stats.plaintes_hs)) * 100) : 0, direction: 'up', period: `${stats.delai_moyen_traitement} jours de délai moyen` }}
+              color="success"
+            />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <Card sx={{ borderRadius: 2 }}>
-              <CardContent>
-                <Typography variant="caption" color="text.secondary">Personnes sensibilisées</Typography>
-                <Typography variant="h4" fontWeight={700}>{stats.personnes_formees + stats.personnes_sensibilisees}</Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Formations: {stats.personnes_formees} | Sensibilisations: {stats.personnes_sensibilisees}
-                </Typography>
-              </CardContent>
-            </Card>
+            <GradientWidget
+              title="Personnes sensibilisées"
+              value={(stats.personnes_formees + stats.personnes_sensibilisees).toLocaleString('fr-FR')}
+              icon={<GoogleIcon name="groups" size={36} />}
+              trend={{ value: stats.personnes_formees, direction: 'up', period: `formations ${stats.personnes_formees} | sensibilisations ${stats.personnes_sensibilisees}` }}
+              color="info"
+            />
           </Grid>
         </Grid>
       )}

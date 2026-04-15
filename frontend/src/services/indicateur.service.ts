@@ -25,6 +25,10 @@ api.interceptors.request.use((config) => {
 // DÉFINITION DES TYPES
 // ============================================
 
+// frontend/src/services/indicateur.service.ts
+
+// frontend/src/services/indicateur.service.ts
+
 export type Indicateur = {
   id: number;
   code: string;
@@ -39,6 +43,18 @@ export type Indicateur = {
   progression: number;
   id_composante: number;
   est_iodp: boolean;
+  // Valeurs annuelles
+  cible_2023: number | null;
+  cible_2024: number | null;
+  cible_2025: number | null;
+  cible_2026: number | null;
+  realise_2023: number | null;
+  realise_2024: number | null;
+  realise_2025: number | null;
+  realise_2026: number | null;
+  source_donnees: string | null;
+  methodologie_collecte: string | null;
+  responsable_collecte: string | null;
 };
 
 export type DashboardData = {

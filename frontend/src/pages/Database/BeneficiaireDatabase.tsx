@@ -27,8 +27,6 @@ import {
   CircularProgress,
   Alert,
   Tooltip,
-  Card,
-  CardContent,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -36,7 +34,6 @@ import {
   Tabs,
   Tab,
   Avatar,
-  LinearProgress,
   Menu,
 } from '@mui/material';
 import {
@@ -62,6 +59,7 @@ import {
   TableChart,
 } from '@mui/icons-material';
 import GoogleIcon from '../../components/common/GoogleIcon';
+import { GradientWidget } from '../../components/common/Widget/GradientWidget';
 import { ExportToolbar } from '../../components/common/ExportToolbar/ExportToolbar';
 import { databaseService } from '../../services/database.service';
 import type { BeneficiaireComplet, StatistiquesBeneficiaires, ActiviteBeneficiaire } from '../../services/database.service';
@@ -410,55 +408,42 @@ export const BeneficiaireDatabase: React.FC = () => {
 
       {/* Statistiques */}
       {stats && (
-        <Grid container spacing={2} sx={{ mb: 3 }}>
+        <Grid container spacing={3} sx={{ mb: 4 }}>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <Card sx={{ borderRadius: 2, borderLeft: '4px solid #2E7D32' }}>
-              <CardContent>
-                <Typography variant="caption" color="text.secondary">Total bénéficiaires</Typography>
-                <Typography variant="h4" fontWeight={700}>{stats.total.toLocaleString()}</Typography>
-                <LinearProgress variant="determinate" value={100} sx={{ mt: 1, height: 4, borderRadius: 2 }} />
-              </CardContent>
-            </Card>
+            <GradientWidget
+              title="Total bénéficiaires"
+              value={stats.total.toLocaleString('fr-FR')}
+              icon={<GoogleIcon name="groups" size={36} />}
+              trend={{ value: stats.par_age.jeunes > 0 ? Math.round((stats.par_age.jeunes / stats.total) * 100) : 0, direction: 'up', period: 'jeunes bénéficiaires' }}
+              color="primary"
+            />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <Card sx={{ borderRadius: 2 }}>
-              <CardContent>
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <Female sx={{ color: '#F06292' }} />
-                  <Typography variant="caption" color="text.secondary">Femmes</Typography>
-                  <Typography variant="h6" fontWeight={600}>{stats.par_sexe.femmes.toLocaleString()}</Typography>
-                </Stack>
-                <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
-                  <Male sx={{ color: '#64B5F6' }} />
-                  <Typography variant="caption" color="text.secondary">Hommes</Typography>
-                  <Typography variant="h6" fontWeight={600}>{stats.par_sexe.hommes.toLocaleString()}</Typography>
-                </Stack>
-              </CardContent>
-            </Card>
+            <GradientWidget
+              title="Femmes bénéficiaires"
+              value={stats.par_sexe.femmes.toLocaleString('fr-FR')}
+              icon={<Female sx={{ fontSize: 36 }} />}
+              trend={{ value: stats.total > 0 ? Math.round((stats.par_sexe.femmes / stats.total) * 100) : 0, direction: 'up', period: '% du total' }}
+              color="success"
+            />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <Card sx={{ borderRadius: 2 }}>
-              <CardContent>
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <School sx={{ color: '#FFB74D' }} />
-                  <Typography variant="caption" color="text.secondary">Niveau instruction</Typography>
-                </Stack>
-                <Typography variant="body2">Secondaire: {stats.par_instruction.secondaire.toLocaleString()}</Typography>
-                <Typography variant="body2">Primaire: {stats.par_instruction.primaire.toLocaleString()}</Typography>
-              </CardContent>
-            </Card>
+            <GradientWidget
+              title="Hommes bénéficiaires"
+              value={stats.par_sexe.hommes.toLocaleString('fr-FR')}
+              icon={<Male sx={{ fontSize: 36 }} />}
+              trend={{ value: stats.total > 0 ? Math.round((stats.par_sexe.hommes / stats.total) * 100) : 0, direction: 'up', period: '% du total' }}
+              color="info"
+            />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <Card sx={{ borderRadius: 2 }}>
-              <CardContent>
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <FamilyRestroom sx={{ color: '#4DB6AC' }} />
-                  <Typography variant="caption" color="text.secondary">Jeunes</Typography>
-                  <Typography variant="h6" fontWeight={600}>{stats.par_age.jeunes.toLocaleString()}</Typography>
-                </Stack>
-                <Typography variant="caption" color="text.secondary">(moins de 35 ans)</Typography>
-              </CardContent>
-            </Card>
+            <GradientWidget
+              title="Jeunes bénéficiaires"
+              value={stats.par_age.jeunes.toLocaleString('fr-FR')}
+              icon={<FamilyRestroom sx={{ fontSize: 36 }} />}
+              trend={{ value: stats.total > 0 ? Math.round((stats.par_age.jeunes / stats.total) * 100) : 0, direction: 'up', period: 'moins de 35 ans' }}
+              color="warning"
+            />
           </Grid>
         </Grid>
       )}

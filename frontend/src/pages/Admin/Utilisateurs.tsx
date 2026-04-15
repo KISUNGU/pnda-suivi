@@ -27,8 +27,6 @@ import {
   CircularProgress,
   Alert,
   Tooltip,
-  Card,
-  CardContent,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -52,6 +50,8 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import GoogleIcon from '../../components/common/GoogleIcon';
+import { GradientWidget } from '../../components/common/Widget/GradientWidget';
+import { moduleGridStyles } from '../../components/common/Layout/moduleGridStyles';
 import { ExportToolbar } from '../../components/common/ExportToolbar/ExportToolbar';
 import { utilisateursService, type Utilisateur, type UtilisateurFilters, type UtilisateurStats } from '../../services/utilisateurs.service';
 import { useNotifications } from '../../context/NotificationsContext';
@@ -397,56 +397,48 @@ export const Utilisateurs: React.FC = () => {
 
       {/* Statistiques */}
       {stats && (
-        <Grid container spacing={2} sx={{ mb: 3 }}>
+        <Grid container spacing={3} sx={{ mb: 4 }}>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <Card sx={{ borderRadius: 2, borderLeft: '4px solid #2E7D32' }}>
-              <CardContent>
-                <Typography variant="caption" color="text.secondary">Total utilisateurs</Typography>
-                <Typography variant="h4" fontWeight={700}>{stats.total}</Typography>
-                <Chip 
-                  label={`+${stats.nouveaux_mois} ce mois`} 
-                  size="small" 
-                  sx={{ mt: 1, bgcolor: '#E8F5E9', color: '#2E7D32' }} 
-                />
-              </CardContent>
-            </Card>
+            <GradientWidget
+              title="Total utilisateurs"
+              value={stats.total.toLocaleString('fr-FR')}
+              icon={<GoogleIcon name="groups" size={36} />}
+              trend={{ value: stats.nouveaux_mois, direction: 'up', period: 'ce mois' }}
+              color="primary"
+            />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <Card sx={{ borderRadius: 2 }}>
-              <CardContent>
-                <Typography variant="caption" color="text.secondary">Utilisateurs actifs</Typography>
-                <Typography variant="h4" fontWeight={700} color="success.main">{stats.par_statut.actif}</Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {stats.actifs_30j} connectés ces 30 derniers jours
-                </Typography>
-              </CardContent>
-            </Card>
+            <GradientWidget
+              title="Utilisateurs actifs"
+              value={stats.par_statut.actif.toLocaleString('fr-FR')}
+              icon={<GoogleIcon name="verified_user" size={36} />}
+              trend={{ value: stats.total > 0 ? Math.round((stats.par_statut.actif / stats.total) * 100) : 0, direction: 'up', period: 'comptes actifs' }}
+              color="success"
+            />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <Card sx={{ borderRadius: 2 }}>
-              <CardContent>
-                <Typography variant="caption" color="text.secondary">Opérateurs terrain</Typography>
-                <Typography variant="h4" fontWeight={700} color="#FF8F00">{stats.par_role.ot}</Typography>
-                <Typography variant="caption" color="text.secondary">équipes de collecte</Typography>
-              </CardContent>
-            </Card>
+            <GradientWidget
+              title="Opérateurs terrain"
+              value={stats.par_role.ot.toLocaleString('fr-FR')}
+              icon={<GoogleIcon name="engineering" size={36} />}
+              trend={{ value: stats.total > 0 ? Math.round((stats.par_role.ot / stats.total) * 100) : 0, direction: 'up', period: 'du total' }}
+              color="warning"
+            />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <Card sx={{ borderRadius: 2 }}>
-              <CardContent>
-                <Typography variant="caption" color="text.secondary">Administrateurs</Typography>
-                <Typography variant="h4" fontWeight={700} color="#D32F2F">{stats.par_role.admin}</Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {warningUserNotifications.length > 0 ? `${warningUserNotifications.length} alerte(s) admin` : 'accès complet'}
-                </Typography>
-              </CardContent>
-            </Card>
+            <GradientWidget
+              title="Administrateurs"
+              value={stats.par_role.admin.toLocaleString('fr-FR')}
+              icon={<GoogleIcon name="admin_panel_settings" size={36} />}
+              trend={{ value: warningUserNotifications.length, direction: warningUserNotifications.length > 0 ? 'down' : 'up', period: warningUserNotifications.length > 0 ? 'alertes admin' : 'accès complet' }}
+              color="danger"
+            />
           </Grid>
         </Grid>
       )}
 
       {/* Barre de recherche et actions */}
-      <Paper sx={{ p: 2, mb: 3, borderRadius: 2 }}>
+      <Paper sx={moduleGridStyles.filterPanel}>
         <Grid container spacing={2} alignItems="center">
           <Grid size={{ xs: 12, md: 6 }}>
             <TextField

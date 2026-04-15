@@ -23,6 +23,7 @@ import {
 import { MapContainer, TileLayer, CircleMarker, Tooltip, Popup, ZoomControl } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import GoogleIcon from '../../components/common/GoogleIcon';
+import { GradientWidget } from '../../components/common/Widget/GradientWidget';
 
 interface ProvincePoint {
   id: string;
@@ -191,6 +192,10 @@ export const CartographiePage: React.FC = () => {
     const matchProvince = filterProvince === 'Toutes' || s.province === filterProvince;
     return matchType && matchProvince;
   });
+  const totalBeneficiaires = provinces.reduce((sum, province) => sum + province.beneficiaires, 0);
+  const totalProduction = provinces.reduce((sum, province) => sum + province.production_tonnes, 0);
+  const avgTauxRealisation = Math.round(provinces.reduce((sum, province) => sum + province.taux_realisation, 0) / provinces.length);
+  const totalRisquesCritiques = provinces.reduce((sum, province) => sum + province.risques_critiques, 0);
 
   if (loading) {
     return (
@@ -210,6 +215,45 @@ export const CartographiePage: React.FC = () => {
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
         Visualisation géographique des activités, infrastructures et indicateurs du programme
       </Typography>
+
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <GradientWidget
+            title="Bénéficiaires cartographiés"
+            value={totalBeneficiaires.toLocaleString('fr-FR')}
+            icon={<GoogleIcon name="groups" size={36} />}
+            trend={{ value: provinces.length, direction: 'up', period: 'provinces suivies' }}
+            color="primary"
+          />
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <GradientWidget
+            title="Production suivie"
+            value={`${totalProduction.toLocaleString('fr-FR')} t`}
+            icon={<GoogleIcon name="agriculture" size={36} />}
+            trend={{ value: Math.round(totalProduction / provinces.length), direction: 'up', period: 'moyenne provinciale' }}
+            color="success"
+          />
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <GradientWidget
+            title="Taux de réalisation moyen"
+            value={`${avgTauxRealisation}%`}
+            icon={<GoogleIcon name="trending_up" size={36} />}
+            trend={{ value: avgTauxRealisation, direction: 'up', period: 'moyenne nationale' }}
+            color="info"
+          />
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <GradientWidget
+            title="Risques critiques"
+            value={totalRisquesCritiques.toLocaleString('fr-FR')}
+            icon={<GoogleIcon name="warning" size={36} />}
+            trend={{ value: totalRisquesCritiques, direction: totalRisquesCritiques > 0 ? 'down' : 'up', period: totalRisquesCritiques > 0 ? 'à surveiller' : 'aucune alerte' }}
+            color="warning"
+          />
+        </Grid>
+      </Grid>
 
       <Grid container spacing={3}>
         {/* Panneau gauche : contrôles + détail province */}

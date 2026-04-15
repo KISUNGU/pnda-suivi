@@ -29,6 +29,7 @@ export interface IndicateurCadre {
   unite: string;
   frequence: string;
   source_donnees: string;
+  methodologie_collecte?: string | null;
   responsable: string;
   annees: {
     '2023': AnneeCadre;
@@ -37,6 +38,7 @@ export interface IndicateurCadre {
     '2026': AnneeCadre;
   };
   final_prevu: number | null;
+  final_realise?: number | null;
 }
 
 export interface CadreStats {

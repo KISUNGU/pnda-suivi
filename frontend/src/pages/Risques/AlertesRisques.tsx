@@ -10,12 +10,11 @@ import {
   CircularProgress,
   Stack,
   Avatar,
-  Card,
-  CardContent,
   Divider,
   Badge,
 } from '@mui/material';
 import { GoogleIcon } from '../../components/common/GoogleIcon';
+import { GradientWidget } from '../../components/common/Widget/GradientWidget';
 import { ExportToolbar } from '../../components/common/ExportToolbar/ExportToolbar';
 import { useNotifications } from '../../context/NotificationsContext';
 import type { NotificationItem } from '../../services/notifications.service';
@@ -106,63 +105,42 @@ export const AlertesRisques: React.FC = () => {
       </Box>
 
       {/* Statistiques */}
-      <Grid container spacing={2} sx={{ mb: 4 }}>
+      <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card sx={{ borderRadius: 2 }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                <Badge badgeContent={nonLues} color="error">
-                  <Avatar sx={{ bgcolor: '#E3F2FD', width: 32, height: 32 }}>
-                    <GoogleIcon name="notifications" size={18} sx={{ color: '#1976D2' }} />
-                  </Avatar>
-                </Badge>
-                <Typography variant="caption" color="text.secondary">Total alertes</Typography>
-              </Box>
-              <Typography variant="h3" fontWeight={700}>{alertes.length}</Typography>
-              <Typography variant="caption" color="error.main">{nonLues} non lue(s)</Typography>
-            </CardContent>
-          </Card>
+          <GradientWidget
+            title="Total alertes"
+            value={alertes.length.toLocaleString('fr-FR')}
+            icon={<Badge badgeContent={nonLues} color="error"><GoogleIcon name="notifications" size={36} /></Badge>}
+            trend={{ value: nonLues, direction: nonLues > 0 ? 'down' : 'up', period: nonLues > 0 ? 'non lues' : 'toutes lues' }}
+            color="primary"
+          />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card sx={{ borderRadius: 2, borderLeft: '4px solid #F44336' }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                <Avatar sx={{ bgcolor: '#FFEBEE', width: 32, height: 32 }}>
-                  <GoogleIcon name="error" size={18} sx={{ color: '#F44336' }} />
-                </Avatar>
-                <Typography variant="caption" color="text.secondary">Critiques</Typography>
-              </Box>
-              <Typography variant="h3" fontWeight={700} color="error.main">{critiques}</Typography>
-            </CardContent>
-          </Card>
+          <GradientWidget
+            title="Critiques"
+            value={critiques.toLocaleString('fr-FR')}
+            icon={<GoogleIcon name="error" size={36} />}
+            trend={{ value: alertes.length > 0 ? Math.round((critiques / alertes.length) * 100) : 0, direction: 'down', period: 'du total' }}
+            color="danger"
+          />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card sx={{ borderRadius: 2, borderLeft: '4px solid #FF9800' }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                <Avatar sx={{ bgcolor: '#FFF3E0', width: 32, height: 32 }}>
-                  <GoogleIcon name="warning" size={18} sx={{ color: '#FF9800' }} />
-                </Avatar>
-                <Typography variant="caption" color="text.secondary">Avertissements</Typography>
-              </Box>
-              <Typography variant="h3" fontWeight={700} color="warning.main">{avertissements}</Typography>
-            </CardContent>
-          </Card>
+          <GradientWidget
+            title="Avertissements"
+            value={avertissements.toLocaleString('fr-FR')}
+            icon={<GoogleIcon name="warning" size={36} />}
+            trend={{ value: alertes.length > 0 ? Math.round((avertissements / alertes.length) * 100) : 0, direction: 'up', period: 'du total' }}
+            color="warning"
+          />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card sx={{ borderRadius: 2, borderLeft: '4px solid #4CAF50' }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                <Avatar sx={{ bgcolor: '#E8F5E9', width: 32, height: 32 }}>
-                  <GoogleIcon name="mark_email_read" size={18} sx={{ color: '#4CAF50' }} />
-                </Avatar>
-                <Typography variant="caption" color="text.secondary">Lues</Typography>
-              </Box>
-              <Typography variant="h3" fontWeight={700} color="success.main">
-                {alertes.length - nonLues}
-              </Typography>
-            </CardContent>
-          </Card>
+          <GradientWidget
+            title="Lues"
+            value={(alertes.length - nonLues).toLocaleString('fr-FR')}
+            icon={<GoogleIcon name="mark_email_read" size={36} />}
+            trend={{ value: alertes.length > 0 ? Math.round(((alertes.length - nonLues) / alertes.length) * 100) : 0, direction: 'up', period: 'du total' }}
+            color="success"
+          />
         </Grid>
       </Grid>
 

@@ -43,6 +43,7 @@ Notes :
 - Le frontend cible par defaut `http://localhost:3000/api`.
 - Si MySQL tourne en local sur Windows, `127.0.0.1` est plus fiable que `localhost` en cas de resolution IPv6.
 - Le backend renvoie `GET /api/health` pour verifier rapidement que l'API repond.
+- La table `cadre_resultats` est creee et initialisee automatiquement au premier appel des endpoints `/api/cadre-resultats` et `/api/cadre-resultats/stats`.
 
 ## Demarrage en developpement
 
@@ -83,13 +84,11 @@ npm run build
 
 ## Comptes de demonstration
 
-Le backend embarque des utilisateurs de test pour faciliter la connexion en environnement local :
+L'authentification backend s'appuie maintenant sur la table MySQL `utilisateur`.
 
-- `admin@pnda.cd` / `admin123`
-- `uncp@pnda.cd` / `uncp123`
-- `upep@pnda.cd` / `upep123`
-- `ot1@pnda.cd` / `ot123`
-- `partenaire@fao.org` / `fao123`
+- Utiliser un email existant dans `utilisateur`.
+- Plusieurs lignes fournies utilisent `password123` comme mot de passe initial.
+- Lors d'une connexion reussie avec un mot de passe en clair, le backend le re-hache automatiquement avec `bcrypt`.
 
 ## Stack technique
 

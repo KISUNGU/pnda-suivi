@@ -6,15 +6,106 @@ import compression from 'compression';
 import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
+import { RowDataPacket } from 'mysql2/promise';
 import {
+  authenticateUtilisateur,
+  changeUtilisateurPassword,
+  createActivite,
+  createFournisseur,
+  createOrganisation,
+  createOTActivite,
+  createOTRapport,
+  createPlainte,
+  createRisque,
+  createRisqueAction,
+  createUtilisateur,
+  deleteActivite,
+  deleteFournisseur,
+  deleteOrganisation,
+  deletePlainte,
+  deleteRisque,
+  deleteUtilisateur,
+  getActiviteById,
+  getActivites,
+  getActivitesStats,
+  getAgriculteursDashboardOverview,
   getAgriculteursSummary,
   getBeneficiaireById,
+  getCartesAgriculteurs,
+  getCartesAgriculteursStats,
+  getBeneficiairesDatabaseStats,
   getBeneficiaireStats,
   getBeneficiaires,
-  isDatabaseConnectivityError,
+  getCadreResultats,
+  getCadreResultatsStats,
+  getFournisseurById,
+  getFournisseurs,
+  getFournisseursStats,
+  getGrmServices,
+  getIndicateurDatabaseById,
+  getIndicateursDashboardData,
+  getIndicateursDatabase,
+  getIndicateursDatabaseStats,
+  getLegacyHistorique,
+  getLegacyIndicateurById,
+  getLegacyIndicateurByCode,
+  getLegacyIndicateurs,
+  getOrganisationById,
+  getOrganisations,
+  getOrganisationsStats,
+  getOTActivites,
+  getOTData,
+  getOTEquipiers,
+  getOTRapports,
+  getPlainteById,
+  getPlaintes,
+  getPlainteStats,
+  getPowerBIDashboardById,
+  getPowerBIDashboards,
+  getPowerBIReportById,
+  getPowerBIReports,
+  getPowerBIReportsByCategory,
+  getProvinceById,
+  getProvinceClassement,
+  getProvinceComparaison,
+  getProvinceEvolution,
+  getProvinces,
   getReadNotificationIds,
+  getRisqueActions,
+  getRisqueAlertes,
+  getRisqueById,
+  getRisques,
+  getRisquesStats,
+  getSuiviMissions,
+  getSuiviStats,
+  getUtilisateurById,
+  getUtilisateurProfile,
+  getUtilisateurs,
+  getUtilisateursStats,
+  getVentesSemences,
+  getVentesSemencesStats,
+  isDatabaseConnectivityError,
   markNotificationAsRead,
   markNotificationsAsRead,
+  markRisqueAlerteAsRead,
+  resetUtilisateurPassword,
+  SqlCarteAgriculteur,
+  updateActivite,
+  updateFournisseur,
+  updateIndicateurValeur,
+  updateOrganisation,
+  updateOTActivite,
+  updatePlainte,
+  updateRisque,
+  updateRisqueAction,
+  updateUtilisateur,
+  updateUtilisateurProfile,
+  updateUtilisateurStatut,
+  SqlActivite,
+  SqlBeneficiaire,
+  SqlPlainte,
+  SqlVenteSemence,
+  getDbPool,
 } from './db';
 
 dotenv.config();
@@ -25,6 +116,10 @@ const JWT_SECRET = process.env.JWT_SECRET || 'pnda_secret_key_2026';
 
 interface AuthenticatedRequest extends Request {
   user?: unknown;
+}
+
+interface CountRow extends RowDataPacket {
+  total: number;
 }
 
 interface Risque {
@@ -71,136 +166,6 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 
 // ==================== DONNÉES MOCKÉES ====================
 
-// Utilisateurs
-const users = [
-  {
-    id: 1,
-    nom: 'MUKENDI',
-    prenom: 'Jean',
-    email: 'admin@pnda.cd',
-    password: bcrypt.hashSync('admin123', 10),
-    role: 'admin',
-    province: null,
-  },
-  {
-    id: 2,
-    nom: 'KABEYA',
-    prenom: 'Marie',
-    email: 'uncp@pnda.cd',
-    password: bcrypt.hashSync('uncp123', 10),
-    role: 'uncp',
-    province: null,
-  },
-  {
-    id: 3,
-    nom: 'TSHIBOLA',
-    prenom: 'Pierre',
-    email: 'upep@pnda.cd',
-    password: bcrypt.hashSync('upep123', 10),
-    role: 'upep',
-    province: 'Kwilu',
-  },
-  {
-    id: 4,
-    nom: 'LUBALA',
-    prenom: 'Sandrine',
-    email: 'ot1@pnda.cd',
-    password: bcrypt.hashSync('ot123', 10),
-    role: 'ot',
-    province: 'Kasaï',
-  },
-  {
-    id: 5,
-    nom: 'MWAMBA',
-    prenom: 'Alice',
-    email: 'partenaire@fao.org',
-    password: bcrypt.hashSync('fao123', 10),
-    role: 'partenaire',
-    province: null,
-  },
-  {
-    id: 6,
-    nom: 'NKONGOLO',
-    prenom: 'Patrick',
-    email: 'upep.kongo@pnda.cd',
-    password: bcrypt.hashSync('upep456', 10),
-    role: 'upep',
-    province: 'Kongo Central',
-  },
-  {
-    id: 7,
-    nom: 'BILONDA',
-    prenom: 'Christine',
-    email: 'upep.kasai@pnda.cd',
-    password: bcrypt.hashSync('upep789', 10),
-    role: 'upep',
-    province: 'Kasaï',
-  },
-  {
-    id: 8,
-    nom: 'TSHOMBA',
-    prenom: 'François',
-    email: 'ot.kwilu@pnda.cd',
-    password: bcrypt.hashSync('ot456', 10),
-    role: 'ot',
-    province: 'Kwilu',
-  },
-  {
-    id: 9,
-    nom: 'MBUYI',
-    prenom: 'Espérance',
-    email: 'ot.tanganyika@pnda.cd',
-    password: bcrypt.hashSync('ot789', 10),
-    role: 'ot',
-    province: 'Tanganyika',
-  },
-  {
-    id: 10,
-    nom: 'KALOMBO',
-    prenom: 'Robert',
-    email: 'partenaire@banquemondiale.org',
-    password: bcrypt.hashSync('bm123', 10),
-    role: 'partenaire',
-    province: null,
-  },
-  {
-    id: 11,
-    nom: 'DIALLO',
-    prenom: 'Fatou',
-    email: 'partenaire@unicef.org',
-    password: bcrypt.hashSync('unicef123', 10),
-    role: 'partenaire',
-    province: null,
-  },
-  {
-    id: 12,
-    nom: 'NGANDU',
-    prenom: 'Sylvie',
-    email: 'upep.hlomami@pnda.cd',
-    password: bcrypt.hashSync('upep321', 10),
-    role: 'upep',
-    province: 'Haut-Lomami',
-  },
-];
-
-// Bénéficiaires mockés
-const beneficiaires = [
-  { id: 1, rna_id: 'RNA-00123', nom: 'MUKENDI', prenom: 'Joseph', sexe: 'M', date_naissance: '1985-03-15', telephone: '+243812345678', province: 'Kwilu', territoire: 'Idiofa', commune: '', village: 'Masi-Manimba', type_exploitant: 'agriculteur', est_jeune: false, created_at: '2024-01-15' },
-  { id: 2, rna_id: 'RNA-00124', nom: 'KABEYA', prenom: 'Marie', sexe: 'F', date_naissance: '1990-07-22', telephone: '+243823456789', province: 'Kasaï', territoire: 'Tshikapa', commune: '', village: 'Kananga', type_exploitant: 'eleveur', est_jeune: true, created_at: '2024-02-20' },
-  { id: 3, rna_id: 'RNA-00125', nom: 'TSHIBOLA', prenom: 'Albert', sexe: 'M', date_naissance: '1995-11-10', telephone: '+243834567890', province: 'Kinshasa', territoire: 'Mont Ngafula', commune: 'Selembao', village: '', type_exploitant: 'pisciculteur', est_jeune: true, created_at: '2024-03-10' },
-  { id: 4, rna_id: 'RNA-00126', nom: 'LUBALA', prenom: 'Pauline', sexe: 'F', date_naissance: '1988-05-03', telephone: '+243845678901', province: 'Kongo Central', territoire: 'Matadi', commune: '', village: 'Boma', type_exploitant: 'mixte', est_jeune: false, created_at: '2024-01-05' },
-  { id: 5, rna_id: 'RNA-00127', nom: 'KALONJI', prenom: 'David', sexe: 'M', date_naissance: '1992-09-18', telephone: '+243856789012', province: 'Haut-Lomami', territoire: 'Kamina', commune: '', village: 'Malemba', type_exploitant: 'agriculteur', est_jeune: true, created_at: '2024-02-28' },
-];
-
-// Plaintes mockées
-const plaintes = [
-  { id: 1, numero_plainte: 'PL-2026-001', type: 'Technique', description: 'Non-livraison des semences améliorées', province: 'Kwilu', territoire: 'Idiofa', village: 'Masi-Manimba', beneficiaire_nom: 'Joseph Mukendi', beneficiaire_rna: 'RNA-00123', date_reception: '2026-03-15T10:00:00Z', statut: 'traitee', delai_traite: 8, resolution: 'Semences livrées le 23/03/2026', est_confidentiel: false },
-  { id: 2, numero_plainte: 'PL-2026-002', type: 'VBG', description: "Cas d'exploitation sexuelle par agent de terrain", province: 'Kasaï', territoire: 'Tshikapa', village: 'Kananga', beneficiaire_nom: 'Marie Kabeya', beneficiaire_rna: 'RNA-00124', date_reception: '2026-03-18T14:30:00Z', statut: 'en_cours', est_confidentiel: true },
-  { id: 3, numero_plainte: 'PL-2026-003', type: 'Environnemental', description: 'Déforestation excessive lors des travaux', province: 'Kongo Central', territoire: 'Matadi', village: 'Boma', date_reception: '2026-03-20T09:15:00Z', statut: 'referee', prise_en_charge: 'Inspection Environnementale', est_confidentiel: false },
-  { id: 4, numero_plainte: 'PL-2026-004', type: 'Administratif', description: 'Retard dans le versement des subventions', province: 'Kinshasa', territoire: 'Mont Ngafula', village: 'Selembao', beneficiaire_nom: 'Albert Tshibola', beneficiaire_rna: 'RNA-00125', date_reception: '2026-03-22T11:00:00Z', statut: 'en_cours', est_confidentiel: false },
-  { id: 5, numero_plainte: 'PL-2026-005', type: 'EAS', description: 'Cas de harcèlement sexuel', province: 'Haut-Lomami', territoire: 'Kamina', village: 'Malemba', beneficiaire_nom: 'David Kalonji', beneficiaire_rna: 'RNA-00127', date_reception: '2026-03-25T08:45:00Z', statut: 'recue', est_confidentiel: true },
-];
-
 // ==================== MIDDLEWARE D'AUTHENTIFICATION ====================
 
 const authenticateToken = (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
@@ -219,6 +184,101 @@ const authenticateToken = (req: AuthenticatedRequest, res: Response, next: NextF
     return res.status(403).json({ message: 'Token invalide ou expiré' });
   }
 };
+
+const splitBeneficiaireName = (nomComplet: string) => {
+  const parts = nomComplet.trim().split(/\s+/).filter(Boolean);
+  return {
+    nom: parts[0] ?? nomComplet,
+    prenom: parts.slice(1).join(' '),
+  };
+};
+
+const inferBeneficiaireType = (beneficiaire: SqlBeneficiaire): 'agriculteur' | 'eleveur' | 'pisciculteur' | 'mixte' => {
+  const source = `${beneficiaire.ptech} ${beneficiaire.saison}`.toLowerCase();
+
+  if (source.includes('pisc')) {
+    return 'pisciculteur';
+  }
+
+  if (source.includes('elev')) {
+    return 'eleveur';
+  }
+
+  if (source.includes('mix')) {
+    return 'mixte';
+  }
+
+  return 'agriculteur';
+};
+
+const mapBeneficiaireToDatabaseRecord = (beneficiaire: SqlBeneficiaire) => {
+  const { nom, prenom } = splitBeneficiaireName(beneficiaire.nom_complet);
+  const typeExploitant = inferBeneficiaireType(beneficiaire);
+  const technologies = beneficiaire.ptech
+    .split(/[;,]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  return {
+    id: beneficiaire.id,
+    rna_id: beneficiaire.rna_id,
+    nom,
+    prenom,
+    sexe: beneficiaire.sexe,
+    date_naissance: '',
+    age: 0,
+    telephone: '',
+    province: beneficiaire.province,
+    territoire: beneficiaire.territoire,
+    commune: '',
+    village: beneficiaire.village,
+    type_exploitant: typeExploitant,
+    est_jeune: false,
+    superficie_totale: 0,
+    superficie_cultivee: 0,
+    principales_cultures: beneficiaire.saison ? [beneficiaire.saison] : [],
+    technologies_adoptees: technologies,
+    est_beneficiaire_subvention: false,
+    date_adhesion: beneficiaire.created_at.split('T')[0] ?? '',
+    created_at: beneficiaire.created_at,
+    updated_at: beneficiaire.created_at,
+  };
+};
+
+const parseStringArrayBody = (value: unknown): string[] | undefined => {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  return value.map((item) => String(item)).map((item) => item.trim()).filter(Boolean);
+};
+
+const parseDocumentsBody = (value: unknown): Array<{ nom: string; url: string }> | undefined => {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  return value
+    .map((item) => {
+      if (!item || typeof item !== 'object') {
+        return null;
+      }
+
+      const nom = 'nom' in item ? String(item.nom ?? '').trim() : '';
+      const url = 'url' in item ? String(item.url ?? '').trim() : '';
+      if (!nom) {
+        return null;
+      }
+
+      return { nom, url };
+    })
+    .filter((item): item is { nom: string; url: string } => Boolean(item));
+};
+
+const mapRisqueToApi = (risque: Awaited<ReturnType<typeof getRisqueById>> extends infer T ? Exclude<T, null> : never) => ({
+  ...risque,
+  plan_atténuation: risque.plan_attenuation,
+});
 
 // ==================== ROUTES ====================
 
@@ -249,6 +309,27 @@ app.get('/api/dashboard/beneficiaires-summary', authenticateToken, async (_req: 
   }
 });
 
+app.get('/api/dashboard/rna-overview', authenticateToken, async (_req: Request, res: Response) => {
+  try {
+    return res.json(await getAgriculteursDashboardOverview());
+  } catch (error) {
+    console.error('GET /api/dashboard/rna-overview failed', error);
+
+    const message = error instanceof Error ? error.message : 'Erreur de connexion à la base de données';
+
+    if (message.startsWith('Database configuration is missing') || isDatabaseConnectivityError(error)) {
+      return res.status(503).json({
+        message: 'Connexion à la base de données indisponible pour le tableau de bord RNA',
+        details: message,
+      });
+    }
+
+    return res.status(500).json({
+      message: 'Erreur lors du chargement du tableau de bord RNA',
+    });
+  }
+});
+
 // ==================== AUTH ROUTES ====================
 
 app.post('/api/auth/login', async (req: Request, res: Response) => {
@@ -259,87 +340,33 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'Email et mot de passe requis' });
     }
 
-    const user = users.find(u => u.email === email);
+    const user = await authenticateUtilisateur(String(email).trim().toLowerCase(), String(password));
+
     if (!user) {
       return res.status(401).json({ message: 'Email ou mot de passe incorrect' });
     }
 
-    const isValidPassword = bcrypt.compareSync(password, user.password);
-    if (!isValidPassword) {
-      return res.status(401).json({ message: 'Email ou mot de passe incorrect' });
-    }
-
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role },
-      JWT_SECRET,
-      { expiresIn: '24h' }
-    );
-
-    res.json({
-      token,
-      user: {
+      {
         id: user.id,
-        nom: user.nom,
-        prenom: user.prenom,
         email: user.email,
         role: user.role,
         province: user.province,
       },
-    });
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    return res.json({ token, user });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: 'Erreur serveur' });
-  }
-});
 
-app.get('/api/auth/verify', authenticateToken, (req: AuthenticatedRequest, res: Response) => {
-  res.json({ valid: true, user: req.user });
-});
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
 
-app.get('/api/auth/profile', authenticateToken, (req: AuthenticatedRequest, res: Response) => {
-  const decoded = req.user as { id: number };
-  const user = users.find(u => u.id === decoded.id);
-  if (!user) return res.status(404).json({ message: 'Utilisateur non trouvé' });
-  const { password: _pw, ...safeUser } = user;
-  // Merge extra fields from utilisateursData if present
-  const extra = (utilisateursData as { id: number; telephone?: string }[]).find(u => u.id === decoded.id);
-  res.json({ ...safeUser, telephone: extra?.telephone ?? null });
-});
-
-app.put('/api/auth/profile', authenticateToken, (req: AuthenticatedRequest, res: Response) => {
-  const decoded = req.user as { id: number };
-  const index = users.findIndex(u => u.id === decoded.id);
-  if (index === -1) return res.status(404).json({ message: 'Utilisateur non trouvé' });
-  const { nom, prenom, telephone } = req.body;
-  if (nom) users[index].nom = String(nom).toUpperCase();
-  if (prenom) users[index].prenom = prenom;
-  // Also update utilisateursData
-  const extIdx = (utilisateursData as { id: number; telephone?: string; nom: string; prenom: string }[]).findIndex(u => u.id === decoded.id);
-  if (extIdx !== -1) {
-    if (nom) utilisateursData[extIdx].nom = String(nom).toUpperCase();
-    if (prenom) utilisateursData[extIdx].prenom = prenom;
-    if (telephone !== undefined) (utilisateursData[extIdx] as { telephone?: string }).telephone = telephone;
+    return res.status(500).json({ message: 'Erreur serveur' });
   }
-  const { password: _pw, ...safeUser } = users[index];
-  const extra = (utilisateursData as { id: number; telephone?: string }[]).find(u => u.id === decoded.id);
-  res.json({ ...safeUser, telephone: extra?.telephone ?? null });
-});
-
-app.put('/api/auth/password', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
-  const decoded = req.user as { id: number };
-  const index = users.findIndex(u => u.id === decoded.id);
-  if (index === -1) return res.status(404).json({ message: 'Utilisateur non trouvé' });
-  const { current_password, new_password } = req.body;
-  if (!current_password || !new_password) {
-    return res.status(400).json({ message: 'Mot de passe actuel et nouveau requis' });
-  }
-  if (new_password.length < 6) {
-    return res.status(400).json({ message: 'Le nouveau mot de passe doit contenir au moins 6 caractères' });
-  }
-  const valid = bcrypt.compareSync(current_password, users[index].password);
-  if (!valid) return res.status(401).json({ message: 'Mot de passe actuel incorrect' });
-  users[index].password = bcrypt.hashSync(new_password, 10);
-  res.json({ message: 'Mot de passe modifié avec succès' });
 });
 
 // ==================== BÉNÉFICIAIRES ROUTES ====================
@@ -381,6 +408,86 @@ app.get('/api/beneficiaires/stats', authenticateToken, async (_req, res) => {
   }
 });
 
+app.get('/api/beneficiaires/cartes', authenticateToken, async (req, res) => {
+  try {
+    const payload = await getCartesAgriculteurs({
+      search: req.query.search ? String(req.query.search) : undefined,
+      province: req.query.province ? String(req.query.province) : undefined,
+      statut: req.query.statut ? String(req.query.statut) as SqlCarteAgriculteur['statut_carte'] : undefined,
+      page: req.query.page ? Number(req.query.page) : 0,
+      limit: req.query.limit ? Number(req.query.limit) : 10,
+    });
+
+    res.json(payload);
+  } catch (error) {
+    console.error('GET /api/beneficiaires/cartes failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors du chargement des cartes agriculteurs' });
+  }
+});
+
+app.get('/api/beneficiaires/cartes/stats', authenticateToken, async (req, res) => {
+  try {
+    const stats = await getCartesAgriculteursStats({
+      search: req.query.search ? String(req.query.search) : undefined,
+      province: req.query.province ? String(req.query.province) : undefined,
+      statut: req.query.statut ? String(req.query.statut) as SqlCarteAgriculteur['statut_carte'] : undefined,
+    });
+
+    res.json(stats);
+  } catch (error) {
+    console.error('GET /api/beneficiaires/cartes/stats failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors du chargement des statistiques de cartes agriculteurs' });
+  }
+});
+
+app.get('/api/beneficiaires/ventes-semences', authenticateToken, async (req, res) => {
+  try {
+    const payload = await getVentesSemences({
+      search: req.query.search ? String(req.query.search) : undefined,
+      province: req.query.province ? String(req.query.province) : undefined,
+    });
+
+    res.json(payload);
+  } catch (error) {
+    console.error('GET /api/beneficiaires/ventes-semences failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors du chargement des ventes de semences' });
+  }
+});
+
+app.get('/api/beneficiaires/ventes-semences/stats', authenticateToken, async (req, res) => {
+  try {
+    const stats = await getVentesSemencesStats({
+      search: req.query.search ? String(req.query.search) : undefined,
+      province: req.query.province ? String(req.query.province) : undefined,
+    });
+
+    res.json(stats);
+  } catch (error) {
+    console.error('GET /api/beneficiaires/ventes-semences/stats failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors du chargement des statistiques des ventes de semences' });
+  }
+});
+
 app.get('/api/beneficiaires/:id', authenticateToken, async (req, res) => {
   try {
     const beneficiaire = await getBeneficiaireById(Number(req.params.id));
@@ -414,853 +521,545 @@ app.delete('/api/beneficiaires/:id', authenticateToken, (_req, res) => {
 
 // ==================== INDICATEURS ROUTES ====================
 
-const iodpIndicateurs = [
-  {
-    id: 1,
-    code: 'IODP1.1',
-    nom: 'Hausse des ventes de produits agricoles sur les marchés formels',
-    description: 'Augmentation en pourcentage des ventes des petits exploitants sur les marchés formels',
-    formule: "((Surplus à l'année t / Surplus à l'année 0) - 1) x 100",
-    unite: '%',
-    frequence: 'annuelle',
-    cible: 30,
-    valeur_actuelle: 15,
-    valeur_reference: 12,
-    progression: 50,
-    id_composante: 2,
-    est_iodp: true,
-  },
-  {
-    id: 2,
-    code: 'IODP2.1',
-    nom: 'Nombre de petits exploitants ayant adopté une technologie agricole améliorée',
-    description: 'Nombre cumulé de petits exploitants bénéficiaires ayant adopté une technologie améliorée',
-    formule: "Somme cumulée des petits exploitants bénéficiaires jusqu'à l'année t",
-    unite: 'nombre',
-    frequence: 'annuelle',
-    cible: 50000,
-    valeur_actuelle: 32450,
-    valeur_reference: 25000,
-    progression: 64.9,
-    id_composante: 1,
-    est_iodp: true,
-  },
-  {
-    id: 3,
-    code: 'IODP2.2',
-    nom: 'Nombre de femmes exploitantes ayant adopté une technologie améliorée',
-    description: 'Nombre cumulé de femmes bénéficiaires ayant adopté une technologie améliorée',
-    formule: "Somme cumulée des femmes bénéficiaires jusqu'à l'année t",
-    unite: 'nombre',
-    frequence: 'annuelle',
-    cible: 22500,
-    valeur_actuelle: 14600,
-    valeur_reference: 11200,
-    progression: 64.9,
-    id_composante: 1,
-    est_iodp: true,
-  },
-  {
-    id: 4,
-    code: 'IODP2.3',
-    nom: 'Hausse du rendement de maïs à travers les pratiques AIC',
-    description: 'Augmentation en pourcentage du rendement de maïs grâce aux technologies intelligentes face au climat',
-    formule: "((Rendement maïs année t - Rendement maïs année 0) / Rendement maïs année 0) x 100",
-    unite: '%',
-    frequence: 'annuelle',
-    cible: 30,
-    valeur_actuelle: 23,
-    valeur_reference: 18,
-    progression: 76.7,
-    id_composante: 1,
-    est_iodp: true,
-  },
-  {
-    id: 5,
-    code: 'IODP2.4',
-    nom: 'Hausse du rendement de manioc à travers les pratiques AIC',
-    description: 'Augmentation en pourcentage du rendement de manioc grâce aux technologies intelligentes face au climat',
-    formule: "((Rendement manioc année t - Rendement manioc année 0) / Rendement manioc année 0) x 100",
-    unite: '%',
-    frequence: 'annuelle',
-    cible: 25,
-    valeur_actuelle: 18,
-    valeur_reference: 15,
-    progression: 72,
-    id_composante: 1,
-    est_iodp: true,
-  },
-  {
-    id: 6,
-    code: 'IODP2.5',
-    nom: "Hausse du rendement d'arachide à travers les pratiques AIC",
-    description: "Augmentation en pourcentage du rendement d'arachide grâce aux technologies intelligentes face au climat",
-    formule: "((Rendement arachide année t - Rendement arachide année 0) / Rendement arachide année 0) x 100",
-    unite: '%',
-    frequence: 'annuelle',
-    cible: 25,
-    valeur_actuelle: 22,
-    valeur_reference: 18,
-    progression: 88,
-    id_composante: 1,
-    est_iodp: true,
-  },
-  {
-    id: 7,
-    code: 'IODP2.6',
-    nom: 'Réduction du taux de mortalité animale',
-    description: 'Réduction en pourcentage du taux de mortalité animale chez les petits exploitants',
-    formule: "(1 - (Taux mortalité année 0 / Taux mortalité année t)) x 100",
-    unite: '%',
-    frequence: 'annuelle',
-    cible: 40,
-    valeur_actuelle: 28,
-    valeur_reference: 25,
-    progression: 70,
-    id_composante: 1,
-    est_iodp: true,
-  },
-  {
-    id: 8,
-    code: 'IODP3.1',
-    nom: 'Plans de contingence pour risques agricoles',
-    description: 'Nombre de plans de contingence approuvés pour les risques liés au secteur agricole',
-    formule: 'Nombre cumulé de plans de contingence approuvés',
-    unite: 'nombre',
-    frequence: 'annuelle',
-    cible: 8,
-    valeur_actuelle: 5,
-    valeur_reference: 3,
-    progression: 62.5,
-    id_composante: 3,
-    est_iodp: true,
-  },
-  {
-    id: 9,
-    code: 'IODP3.2',
-    nom: 'Provinces ayant soumis des plans de maintenance routière',
-    description: 'Nombre de provinces ayant soumis des plans annuels de maintenance des routes',
-    formule: 'Somme des provinces ayant soumis les plans',
-    unite: 'nombre',
-    frequence: 'annuelle',
-    cible: 12,
-    valeur_actuelle: 8,
-    valeur_reference: 5,
-    progression: 66.7,
-    id_composante: 2,
-    est_iodp: true,
-  },
-  {
-    id: 10,
-    code: 'IODP3.3',
-    nom: 'Bénéficiaires directs du projet',
-    description: 'Nombre total de bénéficiaires directs du programme (exploitants, entrepreneurs, etc.)',
-    formule: 'Somme cumulée de tous les bénéficiaires',
-    unite: 'nombre',
-    frequence: 'annuelle',
-    cible: 150000,
-    valeur_actuelle: 124530,
-    valeur_reference: 98000,
-    progression: 83,
-    id_composante: 3,
-    est_iodp: true,
-  },
-  {
-    id: 11,
-    code: 'IODP3.4',
-    nom: 'Femmes bénéficiaires directes du projet',
-    description: 'Nombre de femmes bénéficiaires directes du programme',
-    formule: 'Somme cumulée des femmes bénéficiaires',
-    unite: 'nombre',
-    frequence: 'annuelle',
-    cible: 67500,
-    valeur_actuelle: 56038,
-    valeur_reference: 44100,
-    progression: 83,
-    id_composante: 3,
-    est_iodp: true,
-  },
-];
-
-const irIndicateurs = [
-  { id: 101, code: 'IR1.1.1', nom: 'Petits exploitants atteints par des actifs agricoles', description: 'Nombre de petits exploitants ayant reçu des actifs ou services agricoles', formule: 'Somme cumulée des bénéficiaires', unite: 'nombre', frequence: 'semestrielle', cible: 150000, valeur_actuelle: 124530, valeur_reference: 98000, progression: 83, id_composante: 1, est_iodp: false },
-  { id: 102, code: 'IR1.1.2', nom: 'Femmes exploitantes atteintes', description: 'Nombre de femmes petits exploitants ayant bénéficié d\'actifs agricoles', formule: 'Somme cumulée des femmes bénéficiaires', unite: 'nombre', frequence: 'semestrielle', cible: 67500, valeur_actuelle: 56038, valeur_reference: 44100, progression: 83, id_composante: 1, est_iodp: false },
-  { id: 103, code: 'IR1.1.3', nom: 'Fournisseurs de technologies AIC/AIN', description: 'Nombre de fournisseurs offrant des technologies intelligentes face au climat', formule: 'Nombre de prestataires enregistrés', unite: 'nombre', frequence: 'semestrielle', cible: 50, valeur_actuelle: 38, valeur_reference: 25, progression: 76, id_composante: 1, est_iodp: false },
-  { id: 104, code: 'IR1.1.4', nom: 'Exploitants enregistrés dans le RNA', description: 'Nombre de petits exploitants inscrits au Registre National', formule: 'Somme cumulée des inscriptions', unite: 'nombre', frequence: 'semestrielle', cible: 200000, valeur_actuelle: 156780, valeur_reference: 120000, progression: 78.4, id_composante: 1, est_iodp: false },
-  { id: 105, code: 'IR1.1.6', nom: 'Superficie sous pratiques AIC', description: 'Superficie totale cultivée avec des pratiques intelligentes face au climat', formule: 'Somme des superficies emblavées', unite: 'ha', frequence: 'semestrielle', cible: 50000, valeur_actuelle: 32500, valeur_reference: 20000, progression: 65, id_composante: 1, est_iodp: false },
-  { id: 201, code: 'IR2.1.1', nom: 'Kilomètres de routes réhabilitées', description: 'Total des routes réhabilitées par le programme', formule: 'Somme des km de routes', unite: 'km', frequence: 'annuelle', cible: 500, valeur_actuelle: 300, valeur_reference: 150, progression: 60, id_composante: 2, est_iodp: false },
-  { id: 202, code: 'IR2.1.4', nom: 'CLER fonctionnels', description: "Comités Locaux d'Entretien des Routes opérationnels", formule: 'Nombre de CLER fonctionnels', unite: 'nombre', frequence: 'annuelle', cible: 20, valeur_actuelle: 15, valeur_reference: 8, progression: 75, id_composante: 2, est_iodp: false },
-  { id: 203, code: 'IR2.2.1', nom: 'Bénéficiaires de services financiers', description: 'Nombre d\'exploitants ayant accès aux services financiers', formule: 'Somme cumulée des bénéficiaires financiers', unite: 'nombre', frequence: 'annuelle', cible: 30000, valeur_actuelle: 18750, valeur_reference: 12000, progression: 62.5, id_composante: 2, est_iodp: false },
-  { id: 204, code: 'IR2.2.2', nom: 'Femmes bénéficiaires de services financiers', description: 'Nombre de femmes ayant accès aux services financiers', formule: 'Pourcentage de femmes bénéficiaires', unite: '%', frequence: 'annuelle', cible: 45, valeur_actuelle: 38, valeur_reference: 30, progression: 84.4, id_composante: 2, est_iodp: false },
-  { id: 205, code: 'IR2.2.7', nom: 'Personnes avec méso-assurance', description: 'Nombre d\'exploitants couverts par une méso-assurance', formule: 'Somme cumulée des assurés', unite: 'nombre', frequence: 'annuelle', cible: 20000, valeur_actuelle: 12450, valeur_reference: 8000, progression: 62.3, id_composante: 2, est_iodp: false },
-  { id: 301, code: 'IR3.1.1', nom: 'Campagnes de vaccination animale', description: 'Nombre de campagnes de vaccination réalisées', formule: 'Nombre de campagnes', unite: 'nombre', frequence: 'annuelle', cible: 10, valeur_actuelle: 7, valeur_reference: 4, progression: 70, id_composante: 3, est_iodp: false },
-  { id: 302, code: 'IR3.1.2', nom: 'Programmes de R&D agricole', description: 'Programmes de recherche sur les variétés AIC/AIN', formule: 'Nombre de programmes', unite: 'nombre', frequence: 'annuelle', cible: 8, valeur_actuelle: 5, valeur_reference: 3, progression: 62.5, id_composante: 3, est_iodp: false },
-  { id: 303, code: 'IR3.1.4', nom: 'Traitement des réclamations GRM', description: 'Pourcentage des plaintes traitées dans les délais', formule: '(Plaintes traitées / Plaintes reçues) x 100', unite: '%', frequence: 'annuelle', cible: 90, valeur_actuelle: 78, valeur_reference: 65, progression: 86.7, id_composante: 3, est_iodp: false },
-  { id: 304, code: 'IR3.1.7', nom: 'Fermiers satisfaits des technologies', description: 'Pourcentage de fermiers satisfaits des technologies adoptées', formule: '(Fermiers satisfaits / Total) x 100', unite: '%', frequence: 'annuelle', cible: 85, valeur_actuelle: 72, valeur_reference: 60, progression: 84.7, id_composante: 3, est_iodp: false },
-  { id: 401, code: 'IR4.1', nom: 'Plans de contingence préparés', description: 'Plans de réponse aux urgences agricoles approuvés', formule: 'Nombre de plans approuvés', unite: 'nombre', frequence: 'annuelle', cible: 8, valeur_actuelle: 5, valeur_reference: 2, progression: 62.5, id_composante: 4, est_iodp: false },
-];
-
-app.get('/api/indicateurs/iodp', authenticateToken, (req, res) => {
-  console.log('GET /api/indicateurs/iodp - Récupération des indicateurs IODP');
-  res.json(iodpIndicateurs);
-});
-
-app.get('/api/indicateurs/ir', authenticateToken, (req, res) => {
-  console.log('GET /api/indicateurs/ir - Récupération des indicateurs IR');
-  res.json(irIndicateurs);
-});
-
-app.get('/api/indicateurs', authenticateToken, (req, res) => {
-  console.log('GET /api/indicateurs - Récupération de tous les indicateurs');
-  const tousIndicateurs = [...iodpIndicateurs, ...irIndicateurs];
-  res.json(tousIndicateurs);
-});
-
-app.get('/api/indicateurs/composante/:composanteId', authenticateToken, (req, res) => {
-  const composanteId = Number.parseInt(req.params.composanteId, 10);
-  console.log(`GET /api/indicateurs/composante/${composanteId}`);
-  const indicateurs = [...iodpIndicateurs, ...irIndicateurs].filter((indicateur) => indicateur.id_composante === composanteId);
-  res.json(indicateurs);
-});
-
-app.post('/api/indicateurs/:indicateurId/calculer', authenticateToken, (req, res) => {
-  const indicateurId = Number.parseInt(req.params.indicateurId, 10);
-  const { valeur } = req.body;
-  console.log(`POST /api/indicateurs/${indicateurId}/calculer`, req.body);
-
-  let resultat = 0;
-  let progression = 0;
-
-  if (valeur !== undefined && valeur !== null && valeur !== '') {
-    resultat = Number.parseFloat(String(valeur));
-    const indicateur = [...iodpIndicateurs, ...irIndicateurs].find((item) => item.id === indicateurId);
-    if (indicateur) {
-      progression = (resultat / indicateur.cible) * 100;
+app.get('/api/indicateurs/iodp', authenticateToken, async (_req, res) => {
+  try {
+    res.json(await getLegacyIndicateurs({ type: 'iodp' }));
+  } catch (error) {
+    console.error('GET /api/indicateurs/iodp failed', error);
+    const message = error instanceof Error ? error.message : 'Erreur de connexion a la base de donnees';
+    if (message.startsWith('Database configuration is missing') || isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message });
     }
-  } else {
-    resultat = Math.random() * 100;
-    progression = Math.random() * 100;
+    return res.status(500).json({ message: 'Impossible de recuperer les indicateurs IODP' });
   }
-
-  res.json({ valeur: resultat, progression });
 });
 
-app.put('/api/indicateurs/:indicateurId/valeur', authenticateToken, (req, res) => {
-  const { indicateurId } = req.params;
-  const { valeur, periode } = req.body;
-  console.log(`PUT /api/indicateurs/${indicateurId}/valeur`, { valeur, periode });
-
-  res.json({
-    message: `Indicateur ${indicateurId} mis à jour avec la valeur ${valeur} pour la période ${periode}`,
-    success: true,
-  });
+app.get('/api/indicateurs/ir', authenticateToken, async (_req, res) => {
+  try {
+    res.json(await getLegacyIndicateurs({ type: 'ir' }));
+  } catch (error) {
+    console.error('GET /api/indicateurs/ir failed', error);
+    const message = error instanceof Error ? error.message : 'Erreur de connexion a la base de donnees';
+    if (message.startsWith('Database configuration is missing') || isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message });
+    }
+    return res.status(500).json({ message: 'Impossible de recuperer les indicateurs IR' });
+  }
 });
 
-app.get('/api/indicateurs/:indicateurId/historique', authenticateToken, (req, res) => {
-  const { indicateurId } = req.params;
-  console.log(`GET /api/indicateurs/${indicateurId}/historique`);
-
-  const historique = [
-    { periode: 'T1 2025', valeur: 12 },
-    { periode: 'T2 2025', valeur: 18 },
-    { periode: 'T3 2025', valeur: 22 },
-    { periode: 'T4 2025', valeur: 25 },
-    { periode: 'T1 2026', valeur: 28 },
-    { periode: 'T2 2026', valeur: 32 },
-  ];
-
-  res.json(historique);
+app.get('/api/indicateurs', authenticateToken, async (_req, res) => {
+  try {
+    res.json(await getLegacyIndicateurs());
+  } catch (error) {
+    console.error('GET /api/indicateurs failed', error);
+    const message = error instanceof Error ? error.message : 'Erreur de connexion a la base de donnees';
+    if (message.startsWith('Database configuration is missing') || isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message });
+    }
+    return res.status(500).json({ message: 'Impossible de recuperer les indicateurs' });
+  }
 });
 
-app.get('/api/indicateurs/dashboard', authenticateToken, (req, res) => {
-  console.log('GET /api/indicateurs/dashboard');
-  res.json({
-    iodp1: { current: 15, target: 30, trend: 2.1 },
-    iodp2: { current: 23, target: 40, trend: 5.3 },
-    iodp3: { current: 63, target: 100, trend: 8.2 },
-    evolution: [
-      { month: 'Jan', iodp1: 12, iodp2: 18, iodp3: 55 },
-      { month: 'Fév', iodp1: 13, iodp2: 19, iodp3: 58 },
-      { month: 'Mar', iodp1: 15, iodp2: 23, iodp3: 63 },
-      { month: 'Avr', iodp1: 16, iodp2: 25, iodp3: 67 },
-      { month: 'Mai', iodp1: 17, iodp2: 27, iodp3: 70 },
-      { month: 'Juin', iodp1: 18, iodp2: 29, iodp3: 73 },
-    ],
-  });
+app.get('/api/indicateurs/composante/:composanteId', authenticateToken, async (req, res) => {
+  try {
+    const composanteId = Number.parseInt(req.params.composanteId, 10);
+    res.json(await getLegacyIndicateurs({ composanteId }));
+  } catch (error) {
+    console.error('GET /api/indicateurs/composante failed', error);
+    const message = error instanceof Error ? error.message : 'Erreur de connexion a la base de donnees';
+    if (message.startsWith('Database configuration is missing') || isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message });
+    }
+    return res.status(500).json({ message: 'Impossible de recuperer les indicateurs par composante' });
+  }
+});
+
+app.get('/api/indicateurs/:indicateurId(\\d+)', authenticateToken, async (req, res) => {
+  try {
+    const indicateurId = Number.parseInt(req.params.indicateurId, 10);
+    const indicateur = await getLegacyIndicateurById(indicateurId);
+    if (!indicateur) {
+      return res.status(404).json({ message: 'Indicateur non trouve' });
+    }
+    return res.json(indicateur);
+  } catch (error) {
+    console.error('GET /api/indicateurs/:indicateurId failed', error);
+    const message = error instanceof Error ? error.message : 'Erreur de connexion a la base de donnees';
+    if (message.startsWith('Database configuration is missing') || isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message });
+    }
+    return res.status(500).json({ message: 'Impossible de recuperer cet indicateur' });
+  }
+});
+
+app.post('/api/indicateurs/:indicateurId(\\d+)/calculer', authenticateToken, async (req, res) => {
+  try {
+    const indicateurId = Number.parseInt(req.params.indicateurId, 10);
+    const { valeur } = req.body;
+    const indicateur = await getLegacyIndicateurById(indicateurId);
+    if (!indicateur) {
+      return res.status(404).json({ message: 'Indicateur non trouve' });
+    }
+
+    const resultat = valeur !== undefined && valeur !== null && valeur !== ''
+      ? Number.parseFloat(String(valeur))
+      : 0;
+    const progression = indicateur.cible > 0 ? (resultat / indicateur.cible) * 100 : 0;
+
+    return res.json({ valeur: resultat, progression });
+  } catch (error) {
+    console.error('POST /api/indicateurs/:indicateurId/calculer failed', error);
+    const message = error instanceof Error ? error.message : 'Erreur de connexion a la base de donnees';
+    if (message.startsWith('Database configuration is missing') || isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message });
+    }
+    return res.status(500).json({ message: 'Impossible de calculer cet indicateur' });
+  }
+});
+
+app.put('/api/indicateurs/:indicateurId(\\d+)/valeur', authenticateToken, async (req, res) => {
+  try {
+    const indicateurId = Number.parseInt(req.params.indicateurId, 10);
+    const { valeur, periode } = req.body;
+    const indicateur = await updateIndicateurValeur(indicateurId, Number(valeur), periode);
+
+    if (!indicateur) {
+      return res.status(404).json({ message: 'Indicateur non trouve' });
+    }
+
+    return res.json({
+      message: `Indicateur ${indicateurId} mis a jour avec la valeur ${valeur} pour la periode ${periode ?? '2025'}`,
+      success: true,
+    });
+  } catch (error) {
+    console.error('PUT /api/indicateurs/:indicateurId/valeur failed', error);
+    const message = error instanceof Error ? error.message : 'Erreur de connexion a la base de donnees';
+    if (message.startsWith('Database configuration is missing') || isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message });
+    }
+    return res.status(500).json({ message: 'Impossible de mettre a jour la valeur de l\'indicateur' });
+  }
+});
+
+app.get('/api/indicateurs/:indicateurId(\\d+)/historique', authenticateToken, async (req, res) => {
+  try {
+    const indicateurId = Number.parseInt(req.params.indicateurId, 10);
+    res.json(await getLegacyHistorique(indicateurId));
+  } catch (error) {
+    console.error('GET /api/indicateurs/:indicateurId/historique failed', error);
+    const message = error instanceof Error ? error.message : 'Erreur de connexion a la base de donnees';
+    if (message.startsWith('Database configuration is missing') || isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message });
+    }
+    return res.status(500).json({ message: 'Impossible de recuperer l\'historique de l\'indicateur' });
+  }
+});
+
+app.get('/api/indicateurs/dashboard', authenticateToken, async (_req, res) => {
+  try {
+    res.json(await getIndicateursDashboardData());
+  } catch (error) {
+    console.error('GET /api/indicateurs/dashboard failed', error);
+    const message = error instanceof Error ? error.message : 'Erreur de connexion a la base de donnees';
+    if (message.startsWith('Database configuration is missing') || isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message });
+    }
+    return res.status(500).json({ message: 'Impossible de recuperer le dashboard des indicateurs' });
+  }
 });
 
 // ==================== GRM ROUTES ====================
 
-app.get('/api/grm/plaintes', authenticateToken, (req, res) => {
-  const { search, type, province, statut, page = 0, limit = 10 } = req.query;
-  
-  let filtered = [...plaintes];
-  
-  if (search) {
-    const searchStr = String(search).toLowerCase();
-    filtered = filtered.filter(p => 
-      p.numero_plainte.toLowerCase().includes(searchStr) || 
-      p.description.toLowerCase().includes(searchStr)
-    );
+app.get('/api/grm/plaintes', authenticateToken, async (req, res) => {
+  try {
+    const payload = await getPlaintes({
+      search: req.query.search ? String(req.query.search) : undefined,
+      type: req.query.type ? String(req.query.type) : undefined,
+      province: req.query.province ? String(req.query.province) : undefined,
+      statut: req.query.statut ? String(req.query.statut) : undefined,
+      date_debut: req.query.date_debut ? String(req.query.date_debut) : undefined,
+      date_fin: req.query.date_fin ? String(req.query.date_fin) : undefined,
+      page: req.query.page ? Number(req.query.page) : 0,
+      limit: req.query.limit ? Number(req.query.limit) : 10,
+    });
+
+    return res.json(payload);
+  } catch (error) {
+    console.error('GET /api/grm/plaintes failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors du chargement des plaintes' });
   }
-  
-  if (type) {
-    filtered = filtered.filter(p => p.type === type);
-  }
-  
-  if (province) {
-    filtered = filtered.filter(p => p.province === province);
-  }
-  
-  if (statut) {
-    filtered = filtered.filter(p => p.statut === statut);
-  }
-  
-  const start = Number(page) * Number(limit);
-  const end = start + Number(limit);
-  const paginated = filtered.slice(start, end);
-  
-  res.json({
-    data: paginated,
-    total: filtered.length,
-    page: Number(page),
-    totalPages: Math.ceil(filtered.length / Number(limit)),
-  });
 });
 
-app.get('/api/grm/stats', authenticateToken, (req, res) => {
-  res.json({
-    total: plaintes.length,
-    en_cours: plaintes.filter(p => p.statut === 'en_cours').length,
-    traitees: plaintes.filter(p => p.statut === 'traitee').length,
-    sensibles: plaintes.filter(p => p.est_confidentiel).length,
-  });
-});
+app.get('/api/grm/stats', authenticateToken, async (_req, res) => {
+  try {
+    return res.json(await getPlainteStats());
+  } catch (error) {
+    console.error('GET /api/grm/stats failed', error);
 
-app.get('/api/grm/plaintes/:id', authenticateToken, (req, res) => {
-  const plainte = plaintes.find(p => p.id === Number(req.params.id));
-  if (!plainte) {
-    return res.status(404).json({ message: 'Plainte non trouvée' });
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors du chargement des statistiques GRM' });
   }
-  res.json(plainte);
 });
 
-app.get('/api/grm/services', authenticateToken, (req, res) => {
-  res.json([
-    { id: 1, nom: 'Centre de santé de Tshikapa', type: 'médical', province: 'Kasaï' },
-    { id: 2, nom: 'Inspection Environnementale', type: 'environnement', province: 'Kongo Central' },
-    { id: 3, nom: 'Commission VBG provinciale', type: 'social', province: 'Kwilu' },
-  ]);
+app.get('/api/grm/plaintes/:id', authenticateToken, async (req, res) => {
+  try {
+    const plainte = await getPlainteById(Number(req.params.id));
+    if (!plainte) {
+      return res.status(404).json({ message: 'Plainte non trouvée' });
+    }
+
+    return res.json(plainte);
+  } catch (error) {
+    console.error('GET /api/grm/plaintes/:id failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors du chargement de la plainte' });
+  }
+});
+
+app.get('/api/grm/services', authenticateToken, async (_req, res) => {
+  try {
+    return res.json(await getGrmServices());
+  } catch (error) {
+    console.error('GET /api/grm/services failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors du chargement des services GRM' });
+  }
 });
 
 
 // Dans backend/src/app.ts, ajouter après les routes GRM
 
 // ==================== RISQUES ROUTES ====================
+app.get('/api/risques', authenticateToken, async (req, res) => {
+  try {
+    const search = req.query.search ? String(req.query.search).toLowerCase() : '';
+    const categorie = req.query.categorie ? String(req.query.categorie) : undefined;
+    const statut = req.query.statut ? String(req.query.statut) : undefined;
+    const province = req.query.province ? String(req.query.province) : undefined;
+    const niveau = req.query.niveau ? String(req.query.niveau) : undefined;
 
-const risquesData: Risque[] = [
-  {
-    id: 1,
-    code: 'RISK-001',
-    nom: 'Retard dans la distribution des intrants',
-    description: 'Les intrants agricoles ne sont pas distribués dans les délais impartis',
-    categorie: 'gestion',
-    probabilite: 4,
-    impact: 3,
-    niveau: 'Élevé',
-    statut: 'en_cours',
-    plan_atténuation: 'Renforcer la logistique et suivre quotidiennement les livraisons',
-    responsable: 'UNCP',
-    date_identification: '2026-01-15',
-    province: 'Kwilu',
-  },
-  // ... autres risques
-];
+    const risques = (await getRisques()).filter((risque) => {
+      if (search) {
+        const source = `${risque.code} ${risque.nom} ${risque.description} ${risque.responsable}`.toLowerCase();
+        if (!source.includes(search)) {
+          return false;
+        }
+      }
 
-app.get('/api/risques', authenticateToken, (req, res) => {
-  res.json(risquesData);
+      if (categorie && risque.categorie !== categorie) {
+        return false;
+      }
+      if (statut && risque.statut !== statut) {
+        return false;
+      }
+      if (province && risque.province !== province) {
+        return false;
+      }
+      if (niveau && risque.niveau !== niveau) {
+        return false;
+      }
+
+      return true;
+    });
+
+    return res.json(risques.map(mapRisqueToApi));
+  } catch (error) {
+    console.error('GET /api/risques failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors du chargement des risques' });
+  }
 });
 
-app.get('/api/risques/stats', authenticateToken, (req, res) => {
-  res.json({
-    total: risquesData.length,
-    critiques: risquesData.filter(r => r.niveau === 'Critique').length,
-    eleves: risquesData.filter(r => r.niveau === 'Élevé').length,
-    attenues: risquesData.filter(r => r.statut === 'atténue' || r.statut === 'cloture').length,
-  });
+app.get('/api/risques/stats', authenticateToken, async (_req, res) => {
+  try {
+    return res.json(await getRisquesStats());
+  } catch (error) {
+    console.error('GET /api/risques/stats failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors du chargement des statistiques risques' });
+  }
 });
 
-const alertesData: AlerteRisque[] = [
-  {
-    id: 1,
-    id_risque: 1,
-    message: 'Risque RISK-001 : niveau Élevé — aucune action de mitigation depuis 30 jours',
-    date_alerte: new Date().toISOString().split('T')[0],
-    est_lue: false,
-    niveau: 'warning',
-  },
-  {
-    id: 2,
-    id_risque: 1,
-    message: 'Nouveau risque identifié dans la province du Kwilu nécessitant une réponse rapide',
-    date_alerte: new Date().toISOString().split('T')[0],
-    est_lue: false,
-    niveau: 'danger',
-  },
-];
+app.get('/api/risques/alertes', authenticateToken, async (_req, res) => {
+  try {
+    return res.json(await getRisqueAlertes());
+  } catch (error) {
+    console.error('GET /api/risques/alertes failed', error);
 
-app.get('/api/risques/alertes', authenticateToken, (req, res) => {
-  res.json(alertesData);
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors du chargement des alertes risques' });
+  }
 });
 
-app.put('/api/risques/alertes/:id/lue', authenticateToken, (req, res) => {
-  const alerte = alertesData.find(a => a.id === parseInt(req.params.id));
-  if (!alerte) return res.status(404).json({ message: 'Alerte non trouvée' });
-  alerte.est_lue = true;
-  res.json(alerte);
+app.put('/api/risques/alertes/:id/lue', authenticateToken, async (req, res) => {
+  try {
+    const alerte = await markRisqueAlerteAsRead(Number(req.params.id));
+    if (!alerte) {
+      return res.status(404).json({ message: 'Alerte non trouvée' });
+    }
+
+    return res.json(alerte);
+  } catch (error) {
+    console.error('PUT /api/risques/alertes/:id/lue failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors de la mise à jour de l\'alerte' });
+  }
 });
 
-app.get('/api/risques/:id', authenticateToken, (req, res) => {
-  const risque = risquesData.find(r => r.id === parseInt(req.params.id));
-  if (!risque) return res.status(404).json({ message: 'Risque non trouvé' });
-  res.json(risque);
+app.get('/api/risques/:id/actions', authenticateToken, async (req, res) => {
+  try {
+    const risque = await getRisqueById(Number(req.params.id));
+    if (!risque) {
+      return res.status(404).json({ message: 'Risque non trouvé' });
+    }
+
+    return res.json(await getRisqueActions(risque.id));
+  } catch (error) {
+    console.error('GET /api/risques/:id/actions failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors du chargement des actions d\'atténuation' });
+  }
 });
 
-app.post('/api/risques', authenticateToken, (req, res) => {
-  const newRisque = {
-    id: risquesData.length + 1,
-    code: `RISK-${String(risquesData.length + 1).padStart(3, '0')}`,
-    ...req.body,
-    date_identification: new Date().toISOString().split('T')[0],
-  };
-  risquesData.push(newRisque);
-  res.status(201).json(newRisque);
+app.post('/api/risques/:id/actions', authenticateToken, async (req, res) => {
+  try {
+    const action = await createRisqueAction(Number(req.params.id), {
+      action: req.body.action ? String(req.body.action) : undefined,
+      responsable: req.body.responsable ? String(req.body.responsable) : undefined,
+      date_debut: req.body.date_debut ? String(req.body.date_debut) : undefined,
+      date_fin: req.body.date_fin ? String(req.body.date_fin) : undefined,
+      statut: req.body.statut ? String(req.body.statut) : undefined,
+      resultat: req.body.resultat === null ? null : req.body.resultat ? String(req.body.resultat) : undefined,
+    });
+
+    if (!action) {
+      return res.status(404).json({ message: 'Risque non trouvé' });
+    }
+
+    return res.status(201).json(action);
+  } catch (error) {
+    console.error('POST /api/risques/:id/actions failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors de la création de l\'action d\'atténuation' });
+  }
 });
 
-app.put('/api/risques/:id', authenticateToken, (req, res) => {
-  const index = risquesData.findIndex(r => r.id === parseInt(req.params.id));
-  if (index === -1) return res.status(404).json({ message: 'Risque non trouvé' });
-  risquesData[index] = { ...risquesData[index], ...req.body };
-  res.json(risquesData[index]);
+app.put('/api/risques/:risqueId/actions/:actionId', authenticateToken, async (req, res) => {
+  try {
+    const action = await updateRisqueAction(Number(req.params.risqueId), Number(req.params.actionId), {
+      action: req.body.action !== undefined ? String(req.body.action) : undefined,
+      responsable: req.body.responsable !== undefined ? String(req.body.responsable) : undefined,
+      date_debut: req.body.date_debut !== undefined ? String(req.body.date_debut) : undefined,
+      date_fin: req.body.date_fin !== undefined ? String(req.body.date_fin) : undefined,
+      statut: req.body.statut !== undefined ? String(req.body.statut) : undefined,
+      resultat: req.body.resultat === null ? null : req.body.resultat !== undefined ? String(req.body.resultat) : undefined,
+    });
+
+    if (!action) {
+      return res.status(404).json({ message: 'Action non trouvée' });
+    }
+
+    return res.json(action);
+  } catch (error) {
+    console.error('PUT /api/risques/:risqueId/actions/:actionId failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors de la mise à jour de l\'action d\'atténuation' });
+  }
 });
 
-app.delete('/api/risques/:id', authenticateToken, (req, res) => {
-  const index = risquesData.findIndex(r => r.id === parseInt(req.params.id));
-  if (index === -1) return res.status(404).json({ message: 'Risque non trouvé' });
-  risquesData.splice(index, 1);
-  res.json({ message: 'Risque supprimé avec succès' });
+app.get('/api/risques/:id', authenticateToken, async (req, res) => {
+  try {
+    const risque = await getRisqueById(Number(req.params.id));
+    if (!risque) {
+      return res.status(404).json({ message: 'Risque non trouvé' });
+    }
+
+    return res.json(mapRisqueToApi(risque));
+  } catch (error) {
+    console.error('GET /api/risques/:id failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors du chargement du risque' });
+  }
+});
+
+app.post('/api/risques', authenticateToken, async (req, res) => {
+  try {
+    const risque = await createRisque({
+      code: req.body.code ? String(req.body.code) : undefined,
+      nom: req.body.nom ? String(req.body.nom) : undefined,
+      description: req.body.description ? String(req.body.description) : undefined,
+      categorie: req.body.categorie ? String(req.body.categorie) : undefined,
+      probabilite: req.body.probabilite !== undefined ? Number(req.body.probabilite) : undefined,
+      impact: req.body.impact !== undefined ? Number(req.body.impact) : undefined,
+      niveau: req.body.niveau ? String(req.body.niveau) : undefined,
+      statut: req.body.statut ? String(req.body.statut) : undefined,
+      plan_attenuation: req.body.plan_atténuation ? String(req.body.plan_atténuation) : req.body.plan_attenuation ? String(req.body.plan_attenuation) : undefined,
+      responsable: req.body.responsable ? String(req.body.responsable) : undefined,
+      date_identification: req.body.date_identification ? String(req.body.date_identification) : undefined,
+      date_cloture: req.body.date_cloture === null ? null : req.body.date_cloture ? String(req.body.date_cloture) : undefined,
+      province: req.body.province === null ? null : req.body.province ? String(req.body.province) : undefined,
+      actions_prevues: parseStringArrayBody(req.body.actions_prevues),
+      indicateurs_surveillance: parseStringArrayBody(req.body.indicateurs_surveillance),
+      dernier_suivi: req.body.dernier_suivi === null ? null : req.body.dernier_suivi ? String(req.body.dernier_suivi) : undefined,
+    });
+
+    return res.status(201).json(mapRisqueToApi(risque));
+  } catch (error) {
+    console.error('POST /api/risques failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors de la création du risque' });
+  }
+});
+
+app.put('/api/risques/:id', authenticateToken, async (req, res) => {
+  try {
+    const risque = await updateRisque(Number(req.params.id), {
+      code: req.body.code !== undefined ? String(req.body.code) : undefined,
+      nom: req.body.nom !== undefined ? String(req.body.nom) : undefined,
+      description: req.body.description !== undefined ? String(req.body.description) : undefined,
+      categorie: req.body.categorie !== undefined ? String(req.body.categorie) : undefined,
+      probabilite: req.body.probabilite !== undefined ? Number(req.body.probabilite) : undefined,
+      impact: req.body.impact !== undefined ? Number(req.body.impact) : undefined,
+      niveau: req.body.niveau !== undefined ? String(req.body.niveau) : undefined,
+      statut: req.body.statut !== undefined ? String(req.body.statut) : undefined,
+      plan_attenuation: req.body.plan_atténuation !== undefined ? String(req.body.plan_atténuation) : req.body.plan_attenuation !== undefined ? String(req.body.plan_attenuation) : undefined,
+      responsable: req.body.responsable !== undefined ? String(req.body.responsable) : undefined,
+      date_identification: req.body.date_identification !== undefined ? String(req.body.date_identification) : undefined,
+      date_cloture: req.body.date_cloture === null ? null : req.body.date_cloture !== undefined ? String(req.body.date_cloture) : undefined,
+      province: req.body.province === null ? null : req.body.province !== undefined ? String(req.body.province) : undefined,
+      actions_prevues: req.body.actions_prevues !== undefined ? parseStringArrayBody(req.body.actions_prevues) : undefined,
+      indicateurs_surveillance: req.body.indicateurs_surveillance !== undefined ? parseStringArrayBody(req.body.indicateurs_surveillance) : undefined,
+      dernier_suivi: req.body.dernier_suivi === null ? null : req.body.dernier_suivi !== undefined ? String(req.body.dernier_suivi) : undefined,
+    });
+
+    if (!risque) {
+      return res.status(404).json({ message: 'Risque non trouvé' });
+    }
+
+    return res.json(mapRisqueToApi(risque));
+  } catch (error) {
+    console.error('PUT /api/risques/:id failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors de la mise à jour du risque' });
+  }
+});
+
+app.delete('/api/risques/:id', authenticateToken, async (req, res) => {
+  try {
+    const deleted = await deleteRisque(Number(req.params.id));
+    if (!deleted) {
+      return res.status(404).json({ message: 'Risque non trouvé' });
+    }
+
+    return res.json({ message: 'Risque supprimé avec succès' });
+  } catch (error) {
+    console.error('DELETE /api/risques/:id failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors de la suppression du risque' });
+  }
 });
 
 // ==================== CADRE DES RÉSULTATS ====================
 
-interface AnneeCadre {
-  prevu: number | null;
-  realise: number | null;
-}
+app.get('/api/cadre-resultats', authenticateToken, async (req, res) => {
+  try {
+    const composante = typeof req.query.composante === 'string' ? req.query.composante : undefined;
+    const odp = req.query.odp === 'true' ? true : req.query.odp === 'false' ? false : undefined;
+    const data = await getCadreResultats({ composante, odp });
 
-interface IndicateurCadre {
-  id: number;
-  code: string;
-  nom: string;
-  composante: string;
-  sous_composante: string;
-  est_odp: boolean;
-  reference: string;
-  unite: string;
-  frequence: string;
-  source_donnees: string;
-  responsable: string;
-  annees: {
-    '2023': AnneeCadre;
-    '2024': AnneeCadre;
-    '2025': AnneeCadre;
-    '2026': AnneeCadre;
-  };
-  final_prevu: number | null;
-}
+    res.json(data);
+  } catch (error) {
+    console.error('GET /api/cadre-resultats failed', error);
 
-const cadreResultatsData: IndicateurCadre[] = [
-  // ─── Indicateurs ODP ───
-  {
-    id: 1, code: 'ODP-1', est_odp: true,
-    nom: 'Augmentation des ventes de produits agricoles et alimentaires par les petits exploitants',
-    composante: 'ODP', sous_composante: 'Améliorer l\'accès au marché',
-    reference: '0', unite: '%', frequence: 'Annuelle',
-    source_donnees: 'Rapport Opérateur Technique', responsable: 'UNCP',
-    annees: { '2023': { prevu: 0, realise: null }, '2024': { prevu: 5, realise: null }, '2025': { prevu: 10, realise: 70 }, '2026': { prevu: 20, realise: null } },
-    final_prevu: 30,
-  },
-  {
-    id: 2, code: 'ODP-2', est_odp: true,
-    nom: 'Agriculteurs adoptant une technologie agricole améliorée (CRI)',
-    composante: 'ODP', sous_composante: 'Augmenter la productivité agricole',
-    reference: '0', unite: 'Nombre', frequence: 'Annuelle',
-    source_donnees: 'Rapport Opérateur Technique', responsable: 'UNCP',
-    annees: { '2023': { prevu: 0, realise: null }, '2024': { prevu: 20000, realise: 18391 }, '2025': { prevu: 130000, realise: 79605 }, '2026': { prevu: 240000, realise: null } },
-    final_prevu: 300000,
-  },
-  {
-    id: 3, code: 'ODP-2F', est_odp: true,
-    nom: 'Agriculteurs adoptant une technologie améliorée — Femmes (CRI)',
-    composante: 'ODP', sous_composante: 'Augmenter la productivité agricole',
-    reference: '0', unite: 'Nombre', frequence: 'Annuelle',
-    source_donnees: 'Rapport Opérateur Technique', responsable: 'UNCP',
-    annees: { '2023': { prevu: 0, realise: null }, '2024': { prevu: 10000, realise: 9848 }, '2025': { prevu: 65000, realise: 43030 }, '2026': { prevu: 120000, realise: null } },
-    final_prevu: 150000,
-  },
-  {
-    id: 4, code: 'ODP-3', est_odp: true,
-    nom: 'Rendement Maïs ≥ 0,5 T/ha',
-    composante: 'ODP', sous_composante: 'Rendement cultures vivrières (AIC/AIN)',
-    reference: '0,5 T/ha', unite: '%', frequence: 'Annuelle',
-    source_donnees: 'Rapport Opérateur Technique', responsable: 'UNCP',
-    annees: { '2023': { prevu: 0, realise: null }, '2024': { prevu: 30, realise: 30 }, '2025': { prevu: 60, realise: 50 }, '2026': { prevu: 80, realise: null } },
-    final_prevu: 100,
-  },
-  {
-    id: 5, code: 'ODP-4', est_odp: true,
-    nom: 'Rendement Manioc ≥ 7 T/ha',
-    composante: 'ODP', sous_composante: 'Rendement cultures vivrières (AIC/AIN)',
-    reference: '7 T/ha', unite: '%', frequence: 'Annuelle',
-    source_donnees: 'Rapport Opérateur Technique', responsable: 'UNCP',
-    annees: { '2023': { prevu: 0, realise: null }, '2024': { prevu: 0, realise: null }, '2025': { prevu: 25, realise: null }, '2026': { prevu: 40, realise: null } },
-    final_prevu: 50,
-  },
-  {
-    id: 6, code: 'ODP-5', est_odp: true,
-    nom: 'Réduction du taux de mortalité animale chez les petits exploitants',
-    composante: 'ODP', sous_composante: 'Rendement cultures vivrières (AIC/AIN)',
-    reference: '0', unite: '%', frequence: 'Annuelle',
-    source_donnees: 'Rapport Opérateur Technique', responsable: 'UNCP',
-    annees: { '2023': { prevu: 0, realise: null }, '2024': { prevu: 0, realise: null }, '2025': { prevu: 30, realise: null }, '2026': { prevu: 40, realise: null } },
-    final_prevu: 50,
-  },
-  {
-    id: 7, code: 'ODP-6', est_odp: true,
-    nom: 'Provinces ciblées soumettant des plans de maintenance annuelle des routes',
-    composante: 'ODP', sous_composante: 'Renforcer la capacité du secteur public',
-    reference: '0', unite: 'Nombre', frequence: 'Annuelle',
-    source_donnees: 'Rapport OVDA', responsable: 'OVDA',
-    annees: { '2023': { prevu: 0, realise: null }, '2024': { prevu: 0, realise: null }, '2025': { prevu: 0, realise: null }, '2026': { prevu: 4, realise: null } },
-    final_prevu: 4,
-  },
-  {
-    id: 8, code: 'ODP-7', est_odp: true,
-    nom: 'Bénéficiaires directs du projet',
-    composante: 'ODP', sous_composante: '',
-    reference: '0', unite: 'Nombre', frequence: 'Annuelle',
-    source_donnees: 'Rapport Opérateur Technique', responsable: 'UNCP',
-    annees: { '2023': { prevu: 0, realise: null }, '2024': { prevu: 20000, realise: 23368 }, '2025': { prevu: 180000, realise: 142622 }, '2026': { prevu: 420000, realise: null } },
-    final_prevu: 600000,
-  },
-  {
-    id: 9, code: 'ODP-7F', est_odp: true,
-    nom: 'Bénéficiaires directs du projet — Femmes',
-    composante: 'ODP', sous_composante: '',
-    reference: '0', unite: 'Nombre', frequence: 'Annuelle',
-    source_donnees: 'Rapport Opérateur Technique', responsable: 'UNCP',
-    annees: { '2023': { prevu: 0, realise: null }, '2024': { prevu: 10000, realise: 11917 }, '2025': { prevu: 90000, realise: 77059 }, '2026': { prevu: 210000, realise: null } },
-    final_prevu: 300000,
-  },
-  // ─── Composante 1 ───
-  {
-    id: 10, code: 'IR-1.1.1', est_odp: false,
-    nom: 'Agriculteurs atteints avec des actifs ou des services agricoles (CRI)',
-    composante: 'Composante 1', sous_composante: 'Sous-composante 1.1 : Appui aux petits exploitants',
-    reference: '0', unite: 'Nombre', frequence: 'Semestrielle',
-    source_donnees: 'Rapport Opérateur Technique', responsable: 'UNCP',
-    annees: { '2023': { prevu: 0, realise: null }, '2024': { prevu: 20000, realise: 23368 }, '2025': { prevu: 130000, realise: 142622 }, '2026': { prevu: 300000, realise: null } },
-    final_prevu: 300000,
-  },
-  {
-    id: 11, code: 'IR-1.1.1F', est_odp: false,
-    nom: 'Agriculteurs atteints avec des actifs ou des services agricoles — Femmes (CRI)',
-    composante: 'Composante 1', sous_composante: 'Sous-composante 1.1 : Appui aux petits exploitants',
-    reference: '0', unite: 'Nombre', frequence: 'Semestrielle',
-    source_donnees: 'Rapport Opérateur Technique', responsable: 'UNCP',
-    annees: { '2023': { prevu: 0, realise: null }, '2024': { prevu: 10000, realise: 11917 }, '2025': { prevu: 65000, realise: 77059 }, '2026': { prevu: 150000, realise: null } },
-    final_prevu: 150000,
-  },
-  {
-    id: 12, code: 'IR-1.1.2', est_odp: false,
-    nom: 'Fournisseurs d\'intrants et de services agricoles proposant des technologies AIC/AIN',
-    composante: 'Composante 1', sous_composante: 'Sous-composante 1.1 : Appui aux petits exploitants',
-    reference: '0', unite: 'Nombre', frequence: 'Semestrielle',
-    source_donnees: 'Rapport Opérateur Technique', responsable: 'UNCP',
-    annees: { '2023': { prevu: 0, realise: null }, '2024': { prevu: 0, realise: 14 }, '2025': { prevu: 10, realise: 78 }, '2026': { prevu: 20, realise: null } },
-    final_prevu: 25,
-  },
-  {
-    id: 13, code: 'IR-1.1.3', est_odp: false,
-    nom: 'Petits exploitants agricoles inscrits au registre national d\'agriculteurs (RNA)',
-    composante: 'Composante 1', sous_composante: 'Sous-composante 1.1 : Appui aux petits exploitants',
-    reference: '0', unite: 'Nombre', frequence: 'Semestrielle',
-    source_donnees: 'Registre National des Agriculteurs (RNA)', responsable: 'UNCP',
-    annees: { '2023': { prevu: 0, realise: null }, '2024': { prevu: 20000, realise: 30002 }, '2025': { prevu: 130000, realise: 294355 }, '2026': { prevu: 300000, realise: null } },
-    final_prevu: 300000,
-  },
-  {
-    id: 14, code: 'IR-1.1.3F', est_odp: false,
-    nom: 'Petits exploitants inscrits au RNA — Femmes',
-    composante: 'Composante 1', sous_composante: 'Sous-composante 1.1 : Appui aux petits exploitants',
-    reference: '0', unite: 'Nombre', frequence: 'Semestrielle',
-    source_donnees: 'Registre National des Agriculteurs (RNA)', responsable: 'UNCP',
-    annees: { '2023': { prevu: 0, realise: null }, '2024': { prevu: 10000, realise: 15301 }, '2025': { prevu: 65000, realise: 161895 }, '2026': { prevu: 150000, realise: null } },
-    final_prevu: 150000,
-  },
-  {
-    id: 15, code: 'IR-1.1.4', est_odp: false,
-    nom: 'Superficie sous pratiques agricoles intelligentes face au climat dans les provinces ciblées',
-    composante: 'Composante 1', sous_composante: 'Sous-composante 1.1 : Appui aux petits exploitants',
-    reference: '0', unite: 'Ha', frequence: 'Semestrielle',
-    source_donnees: 'Registre Foncier + RNA', responsable: 'UNCP',
-    annees: { '2023': { prevu: 0, realise: null }, '2024': { prevu: 10000, realise: 1650 }, '2025': { prevu: 65000, realise: 42787 }, '2026': { prevu: 150000, realise: null } },
-    final_prevu: 150000,
-  },
-  // ─── Composante 2 ───
-  {
-    id: 16, code: 'IR-2.1.1', est_odp: false,
-    nom: 'Routes réhabilitées rurales et non rurales (CRI)',
-    composante: 'Composante 2', sous_composante: 'Sous-composante 2.1 : Infrastructures rurales',
-    reference: '0', unite: 'Km', frequence: 'Annuelle',
-    source_donnees: 'Rapport OVDA', responsable: 'OVDA/UNCP',
-    annees: { '2023': { prevu: 0, realise: null }, '2024': { prevu: 0, realise: null }, '2025': { prevu: 0, realise: null }, '2026': { prevu: 0, realise: null } },
-    final_prevu: 400,
-  },
-  {
-    id: 17, code: 'IR-2.1.2', est_odp: false,
-    nom: 'Nombre de CLER fonctionnels',
-    composante: 'Composante 2', sous_composante: 'Sous-composante 2.1 : Infrastructures rurales',
-    reference: '0', unite: 'Nombre', frequence: 'Annuelle',
-    source_donnees: 'Rapport OVDA', responsable: 'OVDA/UNCP',
-    annees: { '2023': { prevu: 0, realise: null }, '2024': { prevu: 0, realise: null }, '2025': { prevu: 0, realise: null }, '2026': { prevu: 0, realise: null } },
-    final_prevu: 16,
-  },
-  {
-    id: 18, code: 'IR-2.1.3', est_odp: false,
-    nom: 'Provinces sélectionnées soumettant des plans annuels d\'entretien routier au FONER',
-    composante: 'Composante 2', sous_composante: 'Sous-composante 2.1 : Infrastructures rurales',
-    reference: '0', unite: 'Nombre', frequence: 'Annuelle',
-    source_donnees: 'Rapport OVDA', responsable: 'OVDA/UNCP',
-    annees: { '2023': { prevu: 0, realise: null }, '2024': { prevu: 0, realise: null }, '2025': { prevu: 0, realise: null }, '2026': { prevu: 0, realise: null } },
-    final_prevu: 4,
-  },
-  {
-    id: 19, code: 'IR-2.1.4', est_odp: false,
-    nom: 'Superficie équipée avec l\'infrastructure d\'irrigation',
-    composante: 'Composante 2', sous_composante: 'Sous-composante 2.1 : Infrastructures rurales',
-    reference: '0', unite: 'Ha', frequence: 'Annuelle',
-    source_donnees: 'Rapport OVDA', responsable: 'OVDA/UNCP',
-    annees: { '2023': { prevu: 0, realise: null }, '2024': { prevu: 0, realise: null }, '2025': { prevu: 0, realise: null }, '2026': { prevu: 0, realise: null } },
-    final_prevu: 300,
-  },
-  {
-    id: 20, code: 'IR-2.2.1', est_odp: false,
-    nom: 'PME ayant un prêt ou une marge de crédit (CRI)',
-    composante: 'Composante 2', sous_composante: 'Sous-composante 2.2 : Inclusion dans les chaînes de valeur',
-    reference: '0', unite: 'Nombre', frequence: 'Semestrielle',
-    source_donnees: 'Rapport BCC', responsable: 'Gestionnaire BCC/UNCP',
-    annees: { '2023': { prevu: 0, realise: null }, '2024': { prevu: 0, realise: 10 }, '2025': { prevu: 20, realise: null }, '2026': { prevu: 30, realise: null } },
-    final_prevu: 50,
-  },
-  {
-    id: 21, code: 'IR-2.2.1F', est_odp: false,
-    nom: 'PME ayant un prêt ou une marge de crédit — dirigées par des femmes (%)',
-    composante: 'Composante 2', sous_composante: 'Sous-composante 2.2 : Inclusion dans les chaînes de valeur',
-    reference: '0', unite: '%', frequence: 'Semestrielle',
-    source_donnees: 'Rapport BCC', responsable: 'Gestionnaire BCC/UNCP',
-    annees: { '2023': { prevu: 0, realise: null }, '2024': { prevu: 50, realise: null }, '2025': { prevu: 50, realise: null }, '2026': { prevu: 50, realise: null } },
-    final_prevu: 50,
-  },
-  {
-    id: 22, code: 'IR-2.2.2', est_odp: false,
-    nom: 'Personnes avec les polices de méso-assurance (CRI)',
-    composante: 'Composante 2', sous_composante: 'Sous-composante 2.2 : Inclusion dans les chaînes de valeur',
-    reference: '0', unite: 'Nombre', frequence: 'Annuelle',
-    source_donnees: 'Rapport Opérateur Technique', responsable: 'UNCP',
-    annees: { '2023': { prevu: 0, realise: null }, '2024': { prevu: 20000, realise: 0 }, '2025': { prevu: 130000, realise: 110000 }, '2026': { prevu: 300000, realise: null } },
-    final_prevu: 300000,
-  },
-  {
-    id: 23, code: 'IR-2.2.2F', est_odp: false,
-    nom: 'Personnes avec les polices de méso-assurance — Femmes (CRI)',
-    composante: 'Composante 2', sous_composante: 'Sous-composante 2.2 : Inclusion dans les chaînes de valeur',
-    reference: '0', unite: 'Nombre', frequence: 'Annuelle',
-    source_donnees: 'Rapport Opérateur Technique', responsable: 'UNCP',
-    annees: { '2023': { prevu: 0, realise: null }, '2024': { prevu: 25124, realise: 10000 }, '2025': { prevu: 65000, realise: 59400 }, '2026': { prevu: 150000, realise: null } },
-    final_prevu: 150000,
-  },
-  {
-    id: 24, code: 'IR-2.2.3', est_odp: false,
-    nom: 'Organisations ayant mis en place un plan d\'affaires',
-    composante: 'Composante 2', sous_composante: 'Sous-composante 2.2 : Inclusion dans les chaînes de valeur',
-    reference: '0', unite: 'Nombre', frequence: 'Annuelle',
-    source_donnees: 'Rapport Opérateur Technique', responsable: 'UNCP',
-    annees: { '2023': { prevu: 0, realise: null }, '2024': { prevu: 0, realise: 50 }, '2025': { prevu: 100, realise: null }, '2026': { prevu: 200, realise: null } },
-    final_prevu: 300,
-  },
-  {
-    id: 25, code: 'IR-2.2.4', est_odp: false,
-    nom: 'Volume de prêts via lignes de crédit aux provinces ciblées (USD)',
-    composante: 'Composante 2', sous_composante: 'Sous-composante 2.2 : Inclusion dans les chaînes de valeur',
-    reference: '0', unite: 'USD', frequence: 'Annuelle',
-    source_donnees: 'Rapport BCC', responsable: 'UNCP',
-    annees: { '2023': { prevu: 0, realise: null }, '2024': { prevu: 0, realise: 0 }, '2025': { prevu: 3000000, realise: null }, '2026': { prevu: 0, realise: null } },
-    final_prevu: 4000000,
-  },
-  // ─── Composante 3 ───
-  {
-    id: 26, code: 'IR-3.1.1', est_odp: false,
-    nom: 'Campagnes de vaccination animale dans les provinces ciblées',
-    composante: 'Composante 3', sous_composante: 'Sous-composante 3.1 : Renforcement des capacités',
-    reference: '0', unite: 'Nombre', frequence: 'Annuelle',
-    source_donnees: 'Rapports Opérateur Technique', responsable: 'UNCP',
-    annees: { '2023': { prevu: 0, realise: null }, '2024': { prevu: 0, realise: null }, '2025': { prevu: 0, realise: null }, '2026': { prevu: 1, realise: null } },
-    final_prevu: 2,
-  },
-  {
-    id: 27, code: 'IR-3.1.2', est_odp: false,
-    nom: 'Traitement des réclamations GRM dans les délais requis (%)',
-    composante: 'Composante 3', sous_composante: 'Sous-composante 3.1 : Renforcement des capacités',
-    reference: '0', unite: '%', frequence: 'Semestrielle',
-    source_donnees: 'Rapports OT/UNCP/UPEP', responsable: 'OT/UNCP/UPEP',
-    annees: { '2023': { prevu: 0, realise: null }, '2024': { prevu: 100, realise: 100 }, '2025': { prevu: 100, realise: 100 }, '2026': { prevu: 100, realise: null } },
-    final_prevu: 100,
-  },
-  {
-    id: 28, code: 'IR-3.1.3', est_odp: false,
-    nom: 'Cas d\'exploitation et d\'abus sexuels / harcèlement sexuel traités au service (%)',
-    composante: 'Composante 3', sous_composante: 'Sous-composante 3.1 : Renforcement des capacités',
-    reference: '100', unite: '%', frequence: 'Annuelle',
-    source_donnees: 'Rapports OT/UNCP/UPEP', responsable: 'OT/UNCP/UPEP',
-    annees: { '2023': { prevu: 100, realise: null }, '2024': { prevu: 100, realise: 100 }, '2025': { prevu: 100, realise: 100 }, '2026': { prevu: 100, realise: null } },
-    final_prevu: 100,
-  },
-  // ─── Composante 4 ───
-  {
-    id: 29, code: 'IR-4.1', est_odp: false,
-    nom: 'Plans de contingence des risques agricoles préparés et approuvés',
-    composante: 'Composante 4', sous_composante: 'Intervention d\'urgence agricole',
-    reference: 'Nombre', unite: 'Nombre', frequence: 'Annuelle',
-    source_donnees: 'Rapport UNCP', responsable: 'UNCP/UPEP',
-    annees: { '2023': { prevu: 1, realise: 1 }, '2024': { prevu: 2, realise: 1 }, '2025': { prevu: 4, realise: 2 }, '2026': { prevu: 3, realise: null } },
-    final_prevu: 10,
-  },
-];
+    const message = error instanceof Error ? error.message : 'Erreur de connexion a la base de donnees';
 
-app.get('/api/cadre-resultats', authenticateToken, (req, res) => {
-  const { composante, odp } = req.query;
-  let data = [...cadreResultatsData];
-  if (odp === 'true') data = data.filter(i => i.est_odp);
-  if (composante) data = data.filter(i => i.composante === composante);
-  res.json(data);
+    if (message.startsWith('Database configuration is missing') || isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message });
+    }
+
+    return res.status(500).json({ message: 'Impossible de recuperer le cadre des resultats' });
+  }
 });
 
-app.get('/api/cadre-resultats/stats', authenticateToken, (req, res) => {
-  const annee = '2025';
-  const avecRealise = cadreResultatsData.filter(i => {
-    const a = i.annees[annee as keyof typeof i.annees];
-    return a && a.realise !== null && a.prevu !== null && a.prevu > 0;
-  });
-  const performances = avecRealise.map(i => {
-    const a = i.annees[annee as keyof typeof i.annees];
-    return (a!.realise! / a!.prevu!) * 100;
-  });
-  const enRetard = performances.filter(p => p < 70).length;
-  const enCours = performances.filter(p => p >= 70 && p < 100).length;
-  const atteint = performances.filter(p => p >= 100).length;
-  const moyennePerf = performances.length ? Math.round(performances.reduce((a, b) => a + b, 0) / performances.length) : 0;
-  res.json({
-    total: cadreResultatsData.length,
-    odp_count: cadreResultatsData.filter(i => i.est_odp).length,
-    avec_donnees_2025: avecRealise.length,
-    en_retard: enRetard,
-    en_cours: enCours,
-    atteint: atteint,
-    moyenne_performance: moyennePerf,
-    composantes: ['Composante 1', 'Composante 2', 'Composante 3', 'Composante 4'].map(c => ({
-      nom: c,
-      count: cadreResultatsData.filter(i => i.composante === c).length,
-    })),
-  });
+app.get('/api/cadre-resultats/stats', authenticateToken, async (_req, res) => {
+  try {
+    const stats = await getCadreResultatsStats('2025');
+    res.json(stats);
+  } catch (error) {
+    console.error('GET /api/cadre-resultats/stats failed', error);
+
+    const message = error instanceof Error ? error.message : 'Erreur de connexion a la base de donnees';
+
+    if (message.startsWith('Database configuration is missing') || isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message });
+    }
+
+    return res.status(500).json({ message: 'Impossible de calculer les statistiques du cadre des resultats' });
+  }
 });
 
 // backend/src/app.ts - Ajouter après les routes risques
 
 // ==================== POWER BI ROUTES ====================
-
-// Configuration Power BI (à remplacer par vos valeurs réelles)
-const POWERBI_CONFIG = {
-  workspaceId: 'your-workspace-id',
-  clientId: 'your-client-id',
-  clientSecret: 'your-client-secret',
-  tenantId: 'your-tenant-id',
-};
-
-// Rapports mockés
-const powerBIReports = [
-  {
-    id: '1',
-    name: 'Tableau de bord exécutif',
-    description: 'Vue d\'ensemble des indicateurs clés du programme',
-    embedUrl: 'https://app.powerbi.com/reportEmbed',
-    reportId: 'report-exec-001',
-    datasetId: 'dataset-exec-001',
-    category: 'dashboard',
-    thumbnailUrl: 'https://placehold.co/300x200/2E7D32/FFFFFF?text=Dashboard',
-    created_at: '2026-01-15',
-    updated_at: '2026-03-28',
-  },
-  {
-    id: '2',
-    name: 'Suivi des indicateurs IODP',
-    description: 'Performance des objectifs de développement du programme',
-    embedUrl: 'https://app.powerbi.com/reportEmbed',
-    reportId: 'report-iodp-001',
-    datasetId: 'dataset-iodp-001',
-    category: 'indicateurs',
-    thumbnailUrl: 'https://placehold.co/300x200/4CAF50/FFFFFF?text=IODP',
-    created_at: '2026-01-20',
-    updated_at: '2026-03-25',
-  },
-  {
-    id: '3',
-    name: 'Analyse des bénéficiaires',
-    description: 'Distribution géographique et démographique des bénéficiaires',
-    embedUrl: 'https://app.powerbi.com/reportEmbed',
-    reportId: 'report-benef-001',
-    datasetId: 'dataset-benef-001',
-    category: 'beneficiaires',
-    thumbnailUrl: 'https://placehold.co/300x200/81C784/FFFFFF?text=Beneficiaires',
-    created_at: '2026-02-01',
-    updated_at: '2026-03-20',
-  },
-  {
-    id: '4',
-    name: 'Matrice des risques',
-    description: 'Évaluation et suivi des risques du programme',
-    embedUrl: 'https://app.powerbi.com/reportEmbed',
-    reportId: 'report-risks-001',
-    datasetId: 'dataset-risks-001',
-    category: 'risques',
-    thumbnailUrl: 'https://placehold.co/300x200/FFC107/FFFFFF?text=Risques',
-    created_at: '2026-02-15',
-    updated_at: '2026-03-22',
-  },
-  {
-    id: '5',
-    name: 'Gestion des plaintes GRM',
-    description: 'Suivi des plaintes VBG/EAS/HS et délais de traitement',
-    embedUrl: 'https://app.powerbi.com/reportEmbed',
-    reportId: 'report-grm-001',
-    datasetId: 'dataset-grm-001',
-    category: 'grm',
-    thumbnailUrl: 'https://placehold.co/300x200/D32F2F/FFFFFF?text=GRM',
-    created_at: '2026-02-20',
-    updated_at: '2026-03-28',
-  },
-];
-
 // Token d'embed mocké
 const generateMockToken = (reportId: string) => {
   return {
@@ -1269,64 +1068,159 @@ const generateMockToken = (reportId: string) => {
   };
 };
 
-app.get('/api/powerbi/reports', authenticateToken, (req, res) => {
-  console.log('GET /api/powerbi/reports');
-  res.json(powerBIReports);
-});
+app.get('/api/powerbi/reports', authenticateToken, async (_req, res) => {
+  try {
+    return res.json(await getPowerBIReports());
+  } catch (error) {
+    console.error('GET /api/powerbi/reports failed', error);
 
-app.get('/api/powerbi/reports/:id', authenticateToken, (req, res) => {
-  const report = powerBIReports.find(r => r.id === req.params.id);
-  if (!report) {
-    return res.status(404).json({ message: 'Rapport non trouvé' });
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors du chargement des rapports Power BI' });
   }
-  res.json(report);
 });
 
-app.get('/api/powerbi/reports/category/:category', authenticateToken, (req, res) => {
-  const reports = powerBIReports.filter(r => r.category === req.params.category);
-  res.json(reports);
-});
+app.get('/api/powerbi/reports/:id', authenticateToken, async (req, res) => {
+  try {
+    const report = await getPowerBIReportById(req.params.id);
+    if (!report) {
+      return res.status(404).json({ message: 'Rapport non trouvé' });
+    }
 
-app.get('/api/powerbi/embed/:reportId', authenticateToken, (req, res) => {
-  const { reportId } = req.params;
-  const report = powerBIReports.find(r => r.reportId === reportId);
-  
-  if (!report) {
-    return res.status(404).json({ message: 'Rapport non trouvé' });
+    return res.json(report);
+  } catch (error) {
+    console.error('GET /api/powerbi/reports/:id failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors du chargement du rapport Power BI' });
   }
-  
-  const token = generateMockToken(reportId);
-  
-  res.json({
-    reportId: report.reportId,
-    reportName: report.name,
-    embedUrl: report.embedUrl,
-    token: token.token,
-    expiration: token.expiration,
-  });
 });
 
-app.post('/api/powerbi/token/:reportId', authenticateToken, (req, res) => {
-  const { reportId } = req.params;
-  const token = generateMockToken(reportId);
-  res.json(token);
+app.get('/api/powerbi/reports/category/:category', authenticateToken, async (req, res) => {
+  try {
+    return res.json(await getPowerBIReportsByCategory(req.params.category));
+  } catch (error) {
+    console.error('GET /api/powerbi/reports/category/:category failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors du chargement des rapports par catégorie' });
+  }
 });
 
-app.post('/api/powerbi/refresh/:datasetId', authenticateToken, (req, res) => {
-  const { datasetId } = req.params;
-  console.log(`POST /api/powerbi/refresh/${datasetId}`);
-  
-  res.json({ 
-    message: `Rafraîchissement du dataset ${datasetId} initié`,
-    status: 'processing',
-  });
+app.get('/api/powerbi/dashboards', authenticateToken, async (_req, res) => {
+  try {
+    return res.json(await getPowerBIDashboards());
+  } catch (error) {
+    console.error('GET /api/powerbi/dashboards failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors du chargement des dashboards Power BI' });
+  }
 });
 
-app.post('/api/powerbi/export/:reportId', authenticateToken, (req, res) => {
-  const { reportId } = req.params;
-  const { format } = req.body;
-  
-  // Simulation d'export
+app.get('/api/powerbi/dashboards/:id', authenticateToken, async (req, res) => {
+  try {
+    const dashboard = await getPowerBIDashboardById(req.params.id);
+    if (!dashboard) {
+      return res.status(404).json({ message: 'Dashboard non trouvé' });
+    }
+
+    return res.json(dashboard);
+  } catch (error) {
+    console.error('GET /api/powerbi/dashboards/:id failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors du chargement du dashboard Power BI' });
+  }
+});
+
+app.get('/api/powerbi/embed/:reportId', authenticateToken, async (req, res) => {
+  try {
+    const report = await getPowerBIReportById(req.params.reportId);
+    if (!report) {
+      return res.status(404).json({ message: 'Rapport non trouvé' });
+    }
+
+    const token = generateMockToken(report.reportId);
+
+    return res.json({
+      reportId: report.reportId,
+      reportName: report.name,
+      embedUrl: report.embedUrl,
+      token: token.token,
+      expiration: token.expiration,
+    });
+  } catch (error) {
+    console.error('GET /api/powerbi/embed/:reportId failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors de la génération de la configuration d\'embed' });
+  }
+});
+
+app.post('/api/powerbi/token/:reportId', authenticateToken, async (req, res) => {
+  try {
+    const report = await getPowerBIReportById(req.params.reportId);
+    if (!report) {
+      return res.status(404).json({ message: 'Rapport non trouvé' });
+    }
+
+    return res.json(generateMockToken(report.reportId));
+  } catch (error) {
+    console.error('POST /api/powerbi/token/:reportId failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors de la génération du token Power BI' });
+  }
+});
+
+app.post('/api/powerbi/refresh/:datasetId', authenticateToken, async (req, res) => {
+  try {
+    const report = await getPowerBIReportById(req.params.datasetId);
+    const datasetId = report?.datasetId ?? req.params.datasetId;
+
+    return res.json({
+      message: `Rafraîchissement du dataset ${datasetId} initié`,
+      status: 'processing',
+    });
+  } catch (error) {
+    console.error('POST /api/powerbi/refresh/:datasetId failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors du rafraîchissement du dataset Power BI' });
+  }
+});
+
+app.post('/api/powerbi/export/:reportId', authenticateToken, async (req, res) => {
+  try {
+    const report = await getPowerBIReportById(req.params.reportId);
+    if (!report) {
+      return res.status(404).json({ message: 'Rapport non trouvé' });
+    }
+
   const pdfContent = `%PDF-1.4
   1 0 obj
   << /Type /Catalog /Pages 2 0 R >>
@@ -1340,7 +1234,7 @@ app.post('/api/powerbi/export/:reportId', authenticateToken, (req, res) => {
   4 0 obj
   << /Length 44 >>
   stream
-  BT /F1 24 Tf 100 700 Td (Rapport PNDA - ${reportId}) Tj ET
+  BT /F1 24 Tf 100 700 Td (Rapport PNDA - ${report.reportId}) Tj ET
   endstream
   endobj
   xref
@@ -1354,386 +1248,739 @@ app.post('/api/powerbi/export/:reportId', authenticateToken, (req, res) => {
   startxref
   299
   %%EOF`;
-  
+
   res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `attachment; filename=rapport_${reportId}.pdf`);
-  res.send(Buffer.from(pdfContent));
+  res.setHeader('Content-Disposition', `attachment; filename=rapport_${report.reportId}.pdf`);
+  return res.send(Buffer.from(pdfContent));
+  } catch (error) {
+    console.error('POST /api/powerbi/export/:reportId failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors de l\'export du rapport Power BI' });
+  }
 });
 
-app.post('/api/powerbi/export/:reportId/ppt', authenticateToken, (req, res) => {
-  const { reportId } = req.params;
-  
-  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
-  res.setHeader('Content-Disposition', `attachment; filename=rapport_${reportId}.pptx`);
-  res.send(Buffer.from('Mock PPT content'));
+app.post('/api/powerbi/export/:reportId/ppt', authenticateToken, async (req, res) => {
+  try {
+    const report = await getPowerBIReportById(req.params.reportId);
+    if (!report) {
+      return res.status(404).json({ message: 'Rapport non trouvé' });
+    }
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
+    res.setHeader('Content-Disposition', `attachment; filename=rapport_${report.reportId}.pptx`);
+    return res.send(Buffer.from('Mock PPT content'));
+  } catch (error) {
+    console.error('POST /api/powerbi/export/:reportId/ppt failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors de l\'export PPT du rapport Power BI' });
+  }
 });
 
-const provincesData = [
-  // Province 1: Kwilu
-  {
-    id: 'kwilu',
-    name: 'Kwilu',
-    code: 'KW',
-    region: 'Ouest',
-    population: 5000000,
-    beneficiaires: { total: 14250, femmes: 6412, hommes: 7838, jeunes: 3980, cible: 18000 },
-    progression: 72,
-    production: {
-      maïs: { actuel: 1850, cible: 2500, unite: 'tonnes' },
-      manioc: { actuel: 1250, cible: 2000, unite: 'tonnes' },
-      arachide: { actuel: 620, cible: 1000, unite: 'tonnes' },
-    },
-    infrastructures: {
-      routes: { rehabilitees: 52, prevues: 90, unite: 'km' },
-      cler: { fonctionnels: 4, total: 6 },
-      marches: { construits: 2, prevus: 4 },
-    },
-    indicateurs: {
-      iodp1: { actuel: 16, cible: 30, trend: 2.0 },
-      iodp2: { actuel: 28, cible: 40, trend: 3.5 },
-      iodp3: { actuel: 65, cible: 100, trend: 4.8 },
-    },
-    risques: { critiques: 1, eleves: 3, moderes: 3, faibles: 4 },
-    plaintes: { total: 15, traitees: 10, en_cours: 5, vbg: 3 },
-    dernier_suivi: '2026-03-29',
-    coordonnees: { lat: -5.0489, lng: 18.8203 },
-  },
-  // Province 2: Kasaï
-  {
-    id: 'kasai',
-    name: 'Kasaï',
-    code: 'KS',
-    region: 'Centre',
-    population: 6000000,
-    beneficiaires: { total: 16890, femmes: 7600, hommes: 9290, jeunes: 4850, cible: 22000 },
-    progression: 82,
-    production: {
-      maïs: { actuel: 2450, cible: 3500, unite: 'tonnes' },
-      manioc: { actuel: 1980, cible: 2800, unite: 'tonnes' },
-      arachide: { actuel: 890, cible: 1400, unite: 'tonnes' },
-    },
-    infrastructures: {
-      routes: { rehabilitees: 63, prevues: 100, unite: 'km' },
-      cler: { fonctionnels: 5, total: 7 },
-      marches: { construits: 3, prevus: 5 },
-    },
-    indicateurs: {
-      iodp1: { actuel: 20, cible: 30, trend: 2.8 },
-      iodp2: { actuel: 35, cible: 40, trend: 4.5 },
-      iodp3: { actuel: 72, cible: 100, trend: 5.5 },
-    },
-    risques: { critiques: 2, eleves: 4, moderes: 2, faibles: 3 },
-    plaintes: { total: 22, traitees: 14, en_cours: 8, vbg: 5 },
-    dernier_suivi: '2026-03-26',
-    coordonnees: { lat: -5.9443, lng: 22.4167 },
-  },
-  // Province 3: Kasaï Central
-  {
-    id: 'kasaicentral',
-    name: 'Kasaï Central',
-    code: 'KC',
-    region: 'Centre',
-    population: 3500000,
-    beneficiaires: { total: 12540, femmes: 5643, hommes: 6897, jeunes: 3510, cible: 16000 },
-    progression: 68,
-    production: {
-      maïs: { actuel: 1680, cible: 2400, unite: 'tonnes' },
-      manioc: { actuel: 1340, cible: 2000, unite: 'tonnes' },
-      arachide: { actuel: 580, cible: 900, unite: 'tonnes' },
-    },
-    infrastructures: {
-      routes: { rehabilitees: 48, prevues: 75, unite: 'km' },
-      cler: { fonctionnels: 3, total: 5 },
-      marches: { construits: 2, prevus: 3 },
-    },
-    indicateurs: {
-      iodp1: { actuel: 17, cible: 30, trend: 2.2 },
-      iodp2: { actuel: 29, cible: 40, trend: 3.6 },
-      iodp3: { actuel: 68, cible: 100, trend: 5.0 },
-    },
-    risques: { critiques: 1, eleves: 2, moderes: 4, faibles: 5 },
-    plaintes: { total: 10, traitees: 7, en_cours: 3, vbg: 2 },
-    dernier_suivi: '2026-03-25',
-    coordonnees: { lat: -5.8975, lng: 22.4500 },
-  },
-];
+app.get('/api/provinces', authenticateToken, async (_req, res) => {
+  try {
+    return res.json(await getProvinces());
+  } catch (error) {
+    console.error('GET /api/provinces failed', error);
 
-app.get('/api/provinces', authenticateToken, (req, res) => {
-  res.json(provincesData);
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors du chargement des provinces' });
+  }
 });
 
-app.get('/api/provinces/classement', authenticateToken, (_req, res) => {
-  const classement = [
-    { province: 'Kasaï', score: 82, rang: 1, progression: 8 },
-    { province: 'Kwilu', score: 72, rang: 2, progression: 3 },
-    { province: 'Kasaï Central', score: 68, rang: 3, progression: -2 },
-    { province: 'Kongo Central', score: 65, rang: 4, progression: 5 },
-    { province: 'Kinshasa', score: 61, rang: 5, progression: -1 },
-    { province: 'Tanganyika', score: 58, rang: 6, progression: 2 },
-  ];
-  res.json(classement);
+app.get('/api/provinces/classement', authenticateToken, async (_req, res) => {
+  try {
+    return res.json(await getProvinceClassement());
+  } catch (error) {
+    console.error('GET /api/provinces/classement failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors du chargement du classement provincial' });
+  }
 });
 
-app.get('/api/provinces/:id', authenticateToken, (req, res) => {
-  const province = provincesData.find(p => p.id === req.params.id);
-  if (!province) return res.status(404).json({ message: 'Province non trouvée' });
-  res.json(province);
+app.get('/api/provinces/comparaison', authenticateToken, async (_req, res) => {
+  try {
+    return res.json(await getProvinceComparaison());
+  } catch (error) {
+    console.error('GET /api/provinces/comparaison failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors du chargement de la comparaison provinciale' });
+  }
 });
 
-app.get('/api/provinces/:id/data', authenticateToken, (req, res) => {
-  const province = provincesData.find(p => p.id === req.params.id);
-  if (!province) return res.status(404).json({ message: 'Province non trouvée' });
-  res.json(province);
+app.get('/api/provinces/:id', authenticateToken, async (req, res) => {
+  try {
+    const province = await getProvinceById(req.params.id);
+    if (!province) {
+      return res.status(404).json({ message: 'Province non trouvée' });
+    }
+
+    return res.json(province);
+  } catch (error) {
+    console.error('GET /api/provinces/:id failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors du chargement de la province' });
+  }
 });
 
-app.get('/api/provinces/:id/evolution', authenticateToken, (_req, res) => {
-  const evolution = [
-    { mois: 'Jan', beneficiaires: 8500, production: 3200, routes: 45 },
-    { mois: 'Fév', beneficiaires: 9800, production: 3800, routes: 58 },
-    { mois: 'Mar', beneficiaires: 11200, production: 4200, routes: 72 },
-    { mois: 'Avr', beneficiaires: 12800, production: 4800, routes: 85 },
-    { mois: 'Mai', beneficiaires: 14200, production: 5200, routes: 95 },
-    { mois: 'Juin', beneficiaires: 15230, production: 5800, routes: 110 },
-  ];
-  res.json(evolution);
+app.get('/api/provinces/:id/data', authenticateToken, async (req, res) => {
+  try {
+    const province = await getProvinceById(req.params.id);
+    if (!province) {
+      return res.status(404).json({ message: 'Province non trouvée' });
+    }
+
+    return res.json(province);
+  } catch (error) {
+    console.error('GET /api/provinces/:id/data failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors du chargement des données provinciales' });
+  }
 });
 
-app.get('/api/provinces/:id/export', authenticateToken, (req, res) => {
-  const province = provincesData.find(p => p.id === req.params.id);
-  if (!province) return res.status(404).json({ message: 'Province non trouvée' });
-  
-  // Génération d'un CSV simple
-  const csvContent = [
-    ['Indicateur', 'Valeur'],
-    ['Province', province.name],
-    ['Bénéficiaires', province.beneficiaires.total],
-    ['Femmes bénéficiaires', province.beneficiaires.femmes],
-    ['Routes réhabilitées (km)', province.infrastructures.routes.rehabilitees],
-    ['IODP1 (%)', province.indicateurs.iodp1.actuel],
-    ['IODP2 (%)', province.indicateurs.iodp2.actuel],
-    ['IODP3 (%)', province.indicateurs.iodp3.actuel],
-  ].map(row => row.join(',')).join('\n');
-  
-  res.setHeader('Content-Type', 'text/csv');
-  res.setHeader('Content-Disposition', `attachment; filename=province_${province.id}.csv`);
-  res.send(csvContent);
+app.get('/api/provinces/:id/evolution', authenticateToken, async (req, res) => {
+  try {
+    const province = await getProvinceById(req.params.id);
+    if (!province) {
+      return res.status(404).json({ message: 'Province non trouvée' });
+    }
+
+    return res.json(await getProvinceEvolution(req.params.id));
+  } catch (error) {
+    console.error('GET /api/provinces/:id/evolution failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors du chargement de l\'évolution provinciale' });
+  }
+});
+
+app.get('/api/provinces/:id/export', authenticateToken, async (req, res) => {
+  try {
+    const province = await getProvinceById(req.params.id);
+    if (!province) {
+      return res.status(404).json({ message: 'Province non trouvée' });
+    }
+
+    const csvContent = [
+      ['Indicateur', 'Valeur'],
+      ['Province', province.name],
+      ['Bénéficiaires', province.beneficiaires.total],
+      ['Femmes bénéficiaires', province.beneficiaires.femmes],
+      ['Routes réhabilitées (km)', province.infrastructures.routes.rehabilitees],
+      ['Production maïs', province.production['maïs'].actuel],
+      ['IODP1 (%)', province.indicateurs.iodp1.actuel],
+      ['IODP2 (%)', province.indicateurs.iodp2.actuel],
+      ['IODP3 (%)', province.indicateurs.iodp3.actuel],
+    ].map((row) => row.join(',')).join('\n');
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename=province_${province.id}.csv`);
+    return res.send(csvContent);
+  } catch (error) {
+    console.error('GET /api/provinces/:id/export failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors de l\'export provincial' });
+  }
 });
 
 // ==================== FOURNISSEURS ROUTES ====================
 
-const fournisseursData = [
-  { id: 1, nom: 'AgroSemences Congo', sigle: 'ASC', type: 'Semences', province: 'Kinshasa', territoire: 'Mont-Ngafula', responsable: 'Jean-Claude Mbaya', telephone: '+243 81 234 5678', email: 'asc@agrosemences.cd', statut: 'Agréé', stock_disponible: 4500, stock_total: 6000, beneficiaires_servis: 1240, montant_contrat: 185000, taux_livraison: 87, date_contrat: '2026-01-15', intrants: ['Maïs hybride', 'Manioc amélioré', 'Haricot'] },
-  { id: 2, nom: 'Engrais du Congo SARL', sigle: 'EC', type: 'Engrais', province: 'Kongo Central', territoire: 'Matadi', responsable: 'Marie-Thérèse Lufutu', telephone: '+243 82 345 6789', email: 'ec@engraiscongo.cd', statut: 'Agréé', stock_disponible: 2800, stock_total: 5000, beneficiaires_servis: 890, montant_contrat: 245000, taux_livraison: 75, date_contrat: '2026-01-20', intrants: ['NPK 17-17-17', 'Urée 46%', 'Sulfate d\'ammonium'] },
-  { id: 3, nom: 'AgriEquip Kwilu', sigle: 'AEK', type: 'Équipements', province: 'Kwilu', territoire: 'Bandundu', responsable: 'Patrick Niangadou', telephone: '+243 84 456 7890', statut: 'En cours', stock_disponible: 320, stock_total: 500, beneficiaires_servis: 450, montant_contrat: 98000, taux_livraison: 64, date_contrat: '2026-02-01', intrants: ['Houes améliorées', 'Pulvérisateurs', 'Brouettes'] },
-  { id: 4, nom: 'PhytoProtect SA', sigle: 'PP', type: 'Pesticides', province: 'Haut-Lomami', territoire: 'Kamina', responsable: 'Alphonse Kasongo', telephone: '+243 85 567 8901', statut: 'Suspendu', stock_disponible: 0, stock_total: 1200, beneficiaires_servis: 230, montant_contrat: 67000, taux_livraison: 30, date_contrat: '2025-12-10', intrants: ['Herbicides', 'Insecticides bio'] },
-  { id: 5, nom: 'Congo Agri Services', sigle: 'CAS', type: 'Mixte', province: 'Kasaï', territoire: 'Tshikapa', responsable: 'Sandrine Mukeba', telephone: '+243 86 678 9012', email: 'cas@congoas.cd', statut: 'Agréé', stock_disponible: 3100, stock_total: 4200, beneficiaires_servis: 1680, montant_contrat: 312000, taux_livraison: 92, date_contrat: '2026-01-10', intrants: ['Semences maïs', 'Engrais NPK', 'Outils de récolte'] },
-];
+app.get('/api/fournisseurs', authenticateToken, async (req, res) => {
+  try {
+    const payload = await getFournisseurs({
+      search: req.query.search ? String(req.query.search) : undefined,
+      type: req.query.type ? String(req.query.type) : undefined,
+      province: req.query.province ? String(req.query.province) : undefined,
+      statut: req.query.statut ? String(req.query.statut) : undefined,
+      page: req.query.page ? Number(req.query.page) : 0,
+      limit: req.query.limit ? Number(req.query.limit) : 10,
+    });
 
-app.get('/api/fournisseurs', authenticateToken, (req, res) => {
-  const { search, type, province, statut, page = 0, limit = 10 } = req.query;
-  let filtered = [...fournisseursData];
-  if (search) { const s = String(search).toLowerCase(); filtered = filtered.filter(f => f.nom.toLowerCase().includes(s) || f.responsable.toLowerCase().includes(s)); }
-  if (type) filtered = filtered.filter(f => f.type === type);
-  if (province) filtered = filtered.filter(f => f.province === province);
-  if (statut) filtered = filtered.filter(f => f.statut === statut);
-  const start = Number(page) * Number(limit);
-  res.json({ data: filtered.slice(start, start + Number(limit)), total: filtered.length, page: Number(page), totalPages: Math.ceil(filtered.length / Number(limit)) });
+    return res.json(payload);
+  } catch (error) {
+    console.error('GET /api/fournisseurs failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors du chargement des fournisseurs' });
+  }
 });
 
-app.get('/api/fournisseurs/stats', authenticateToken, (_req, res) => {
-  res.json({ total: fournisseursData.length, agrees: fournisseursData.filter(f => f.statut === 'Agréé').length, en_cours: fournisseursData.filter(f => f.statut === 'En cours').length, suspendus: fournisseursData.filter(f => f.statut === 'Suspendu').length });
+app.get('/api/fournisseurs/stats', authenticateToken, async (_req, res) => {
+  try {
+    return res.json(await getFournisseursStats());
+  } catch (error) {
+    console.error('GET /api/fournisseurs/stats failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors du chargement des statistiques fournisseurs' });
+  }
 });
 
-app.get('/api/fournisseurs/:id', authenticateToken, (req, res) => {
-  const item = fournisseursData.find(f => f.id === Number(req.params.id));
-  if (!item) return res.status(404).json({ message: 'Fournisseur non trouvé' });
-  res.json(item);
+app.get('/api/fournisseurs/:id', authenticateToken, async (req, res) => {
+  try {
+    const item = await getFournisseurById(Number(req.params.id));
+    if (!item) {
+      return res.status(404).json({ message: 'Fournisseur non trouvé' });
+    }
+
+    return res.json(item);
+  } catch (error) {
+    console.error('GET /api/fournisseurs/:id failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors du chargement du fournisseur' });
+  }
 });
 
-app.post('/api/fournisseurs', authenticateToken, (req, res) => {
-  const newItem = { id: fournisseursData.length + 1, ...req.body, date_contrat: new Date().toISOString().split('T')[0], beneficiaires_servis: 0, taux_livraison: 0 };
-  fournisseursData.push(newItem);
-  res.status(201).json(newItem);
+app.post('/api/fournisseurs', authenticateToken, async (req, res) => {
+  try {
+    const fournisseur = await createFournisseur({
+      nom: req.body.nom ? String(req.body.nom) : undefined,
+      sigle: req.body.sigle === null ? null : req.body.sigle ? String(req.body.sigle) : undefined,
+      type: req.body.type ? String(req.body.type) : undefined,
+      province: req.body.province ? String(req.body.province) : undefined,
+      territoire: req.body.territoire ? String(req.body.territoire) : undefined,
+      responsable: req.body.responsable ? String(req.body.responsable) : undefined,
+      telephone: req.body.telephone ? String(req.body.telephone) : undefined,
+      email: req.body.email === null ? null : req.body.email ? String(req.body.email) : undefined,
+      statut: req.body.statut ? String(req.body.statut) : undefined,
+      stock_disponible: req.body.stock_disponible !== undefined ? Number(req.body.stock_disponible) : undefined,
+      stock_total: req.body.stock_total !== undefined ? Number(req.body.stock_total) : undefined,
+      beneficiaires_servis: req.body.beneficiaires_servis !== undefined ? Number(req.body.beneficiaires_servis) : 0,
+      montant_contrat: req.body.montant_contrat !== undefined ? Number(req.body.montant_contrat) : 0,
+      taux_livraison: req.body.taux_livraison !== undefined ? Number(req.body.taux_livraison) : 0,
+      date_contrat: req.body.date_contrat ? String(req.body.date_contrat) : undefined,
+      intrants: Array.isArray(req.body.intrants) ? req.body.intrants.map((item: unknown) => String(item)) : undefined,
+    });
+
+    return res.status(201).json(fournisseur);
+  } catch (error) {
+    console.error('POST /api/fournisseurs failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors de la création du fournisseur' });
+  }
 });
 
-app.put('/api/fournisseurs/:id', authenticateToken, (req, res) => {
-  const index = fournisseursData.findIndex(f => f.id === Number(req.params.id));
-  if (index === -1) return res.status(404).json({ message: 'Fournisseur non trouvé' });
-  fournisseursData[index] = { ...fournisseursData[index], ...req.body };
-  res.json(fournisseursData[index]);
+app.put('/api/fournisseurs/:id', authenticateToken, async (req, res) => {
+  try {
+    const fournisseur = await updateFournisseur(Number(req.params.id), {
+      nom: req.body.nom !== undefined ? String(req.body.nom) : undefined,
+      sigle: req.body.sigle === null ? null : req.body.sigle !== undefined ? String(req.body.sigle) : undefined,
+      type: req.body.type !== undefined ? String(req.body.type) : undefined,
+      province: req.body.province !== undefined ? String(req.body.province) : undefined,
+      territoire: req.body.territoire !== undefined ? String(req.body.territoire) : undefined,
+      responsable: req.body.responsable !== undefined ? String(req.body.responsable) : undefined,
+      telephone: req.body.telephone !== undefined ? String(req.body.telephone) : undefined,
+      email: req.body.email === null ? null : req.body.email !== undefined ? String(req.body.email) : undefined,
+      statut: req.body.statut !== undefined ? String(req.body.statut) : undefined,
+      stock_disponible: req.body.stock_disponible !== undefined ? Number(req.body.stock_disponible) : undefined,
+      stock_total: req.body.stock_total !== undefined ? Number(req.body.stock_total) : undefined,
+      beneficiaires_servis: req.body.beneficiaires_servis !== undefined ? Number(req.body.beneficiaires_servis) : undefined,
+      montant_contrat: req.body.montant_contrat !== undefined ? Number(req.body.montant_contrat) : undefined,
+      taux_livraison: req.body.taux_livraison !== undefined ? Number(req.body.taux_livraison) : undefined,
+      date_contrat: req.body.date_contrat !== undefined ? String(req.body.date_contrat) : undefined,
+      intrants: req.body.intrants !== undefined && Array.isArray(req.body.intrants)
+        ? req.body.intrants.map((item: unknown) => String(item))
+        : undefined,
+    });
+
+    if (!fournisseur) {
+      return res.status(404).json({ message: 'Fournisseur non trouvé' });
+    }
+
+    return res.json(fournisseur);
+  } catch (error) {
+    console.error('PUT /api/fournisseurs/:id failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors de la mise à jour du fournisseur' });
+  }
 });
 
-app.delete('/api/fournisseurs/:id', authenticateToken, (req, res) => {
-  const index = fournisseursData.findIndex(f => f.id === Number(req.params.id));
-  if (index === -1) return res.status(404).json({ message: 'Fournisseur non trouvé' });
-  fournisseursData.splice(index, 1);
-  res.json({ message: 'Fournisseur supprimé' });
+app.delete('/api/fournisseurs/:id', authenticateToken, async (req, res) => {
+  try {
+    const deleted = await deleteFournisseur(Number(req.params.id));
+    if (!deleted) {
+      return res.status(404).json({ message: 'Fournisseur non trouvé' });
+    }
+
+    return res.json({ message: 'Fournisseur supprimé' });
+  } catch (error) {
+    console.error('DELETE /api/fournisseurs/:id failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors de la suppression du fournisseur' });
+  }
 });
 
 // ==================== ORGANISATIONS ROUTES ====================
 
-const organisationsData = [
-  { id: 1, code: 'ORG-001', nom: 'UNCP', sigle: 'UNCP', nom_complet: 'Unité Nationale de Coordination du Programme', type: 'gouvernemental', province: 'Kinshasa', responsable: 'Jean Mukendi', telephone: '+243 81 000 0001', email: 'uncp@pnda.cd', role: 'Coordination nationale', beneficiaires_couverts: 124530, budget_alloue: 5200000, taux_execution: 78, statut: 'Actif', date_creation: '2023-01-01', membres: { total: 48, femmes: 22, hommes: 26, jeunes: 15 } },
-  { id: 2, code: 'ORG-002', nom: 'OVDA', sigle: 'OVDA', nom_complet: 'Office des Voiries et Drainage Agricole', type: 'gouvernemental', province: 'Kinshasa', responsable: 'Pierre Kabeya', telephone: '+243 81 000 0002', email: 'ovda@pnda.cd', role: 'Infrastructures rurales', beneficiaires_couverts: 45000, budget_alloue: 3100000, taux_execution: 62, statut: 'Actif', date_creation: '2023-01-15', membres: { total: 32, femmes: 12, hommes: 20, jeunes: 8 } },
-  { id: 3, code: 'ORG-003', nom: 'Banque Mondiale', sigle: 'BM', nom_complet: 'Banque Internationale pour la Reconstruction et le Développement', type: 'partenaire_financier', province: 'Kinshasa', responsable: 'Sophie Laurent', telephone: '+243 81 000 0003', email: 'bm@worldbank.org', role: 'Bailleur principal', beneficiaires_couverts: 0, budget_alloue: 150000000, taux_execution: 65, statut: 'Actif', date_creation: '2023-01-01', membres: { total: 12, femmes: 5, hommes: 7, jeunes: 2 } },
-  { id: 4, code: 'ORG-004', nom: 'ONG Agri-RDC', sigle: 'AGRIRDC', nom_complet: 'Organisation Non Gouvernementale pour l\'Agriculture en RDC', type: 'ong', province: 'Kwilu', responsable: 'Alice Mwamba', telephone: '+243 82 111 2222', email: 'agrirdc@ong.cd', role: 'Appui terrain', beneficiaires_couverts: 12500, budget_alloue: 450000, taux_execution: 85, statut: 'Actif', date_creation: '2023-03-01', membres: { total: 85, femmes: 48, hommes: 37, jeunes: 32 } },
-  { id: 5, code: 'ORG-005', nom: 'FAO-RDC', sigle: 'FAO', nom_complet: 'Organisation des Nations Unies pour l\'Alimentation et l\'Agriculture — RDC', type: 'partenaire_technique', province: 'Kinshasa', responsable: 'Dr. Carlos Meza', telephone: '+243 81 222 3333', email: 'fao-rdc@fao.org', role: 'Appui technique', beneficiaires_couverts: 0, budget_alloue: 2800000, taux_execution: 71, statut: 'Actif', date_creation: '2023-02-01', membres: { total: 18, femmes: 8, hommes: 10, jeunes: 4 } },
-];
+app.get('/api/organisations', authenticateToken, async (req, res) => {
+  try {
+    const payload = await getOrganisations({
+      search: req.query.search ? String(req.query.search) : undefined,
+      type: req.query.type ? String(req.query.type) : undefined,
+      province: req.query.province ? String(req.query.province) : undefined,
+      statut: req.query.statut ? String(req.query.statut) : undefined,
+      page: req.query.page ? Number(req.query.page) : 0,
+      limit: req.query.limit ? Number(req.query.limit) : 10,
+    });
 
-app.get('/api/organisations', authenticateToken, (req, res) => {
-  const { search, type, province, statut, page = 0, limit = 10 } = req.query;
-  let filtered = [...organisationsData];
-  if (search) { const s = String(search).toLowerCase(); filtered = filtered.filter(o => o.nom.toLowerCase().includes(s) || o.nom_complet.toLowerCase().includes(s)); }
-  if (type) filtered = filtered.filter(o => o.type === type);
-  if (province) filtered = filtered.filter(o => o.province === province);
-  if (statut) filtered = filtered.filter(o => o.statut === statut);
-  const start = Number(page) * Number(limit);
-  res.json({ data: filtered.slice(start, start + Number(limit)), total: filtered.length, page: Number(page), totalPages: Math.ceil(filtered.length / Number(limit)) });
+    return res.json(payload);
+  } catch (error) {
+    console.error('GET /api/organisations failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors du chargement des organisations' });
+  }
 });
 
-app.get('/api/organisations/stats', authenticateToken, (_req, res) => {
-  const total = organisationsData.length;
-  const actives = organisationsData.filter(o => o.statut === 'Actif').length;
-  const total_membres = organisationsData.reduce((s, o) => s + o.membres.total, 0);
-  const femmes_membres = organisationsData.reduce((s, o) => s + o.membres.femmes, 0);
-  const hommes_membres = organisationsData.reduce((s, o) => s + o.membres.hommes, 0);
-  const jeunes_membres = organisationsData.reduce((s, o) => s + o.membres.jeunes, 0);
-  res.json({
-    total,
-    total_membres,
-    femmes_membres,
-    hommes_membres,
-    jeunes_membres,
-    par_statut: { active: actives, inactive: total - actives },
-    gouvernementaux: organisationsData.filter(o => o.type === 'gouvernemental').length,
-    ong: organisationsData.filter(o => o.type === 'ong').length,
-    partenaires: organisationsData.filter(o => o.type.startsWith('partenaire')).length,
-  });
+app.get('/api/organisations/stats', authenticateToken, async (_req, res) => {
+  try {
+    return res.json(await getOrganisationsStats());
+  } catch (error) {
+    console.error('GET /api/organisations/stats failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors du chargement des statistiques organisations' });
+  }
 });
 
-app.get('/api/organisations/:id', authenticateToken, (req, res) => {
-  const item = organisationsData.find(o => o.id === Number(req.params.id));
-  if (!item) return res.status(404).json({ message: 'Organisation non trouvée' });
-  res.json(item);
+app.get('/api/organisations/:id', authenticateToken, async (req, res) => {
+  try {
+    const item = await getOrganisationById(Number(req.params.id));
+    if (!item) {
+      return res.status(404).json({ message: 'Organisation non trouvée' });
+    }
+
+    return res.json(item);
+  } catch (error) {
+    console.error('GET /api/organisations/:id failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors du chargement de l\'organisation' });
+  }
 });
 
-app.post('/api/organisations', authenticateToken, (req, res) => {
-  const newItem = { id: organisationsData.length + 1, ...req.body, taux_execution: 0, beneficiaires_couverts: 0, date_creation: new Date().toISOString().split('T')[0] };
-  organisationsData.push(newItem);
-  res.status(201).json(newItem);
+app.post('/api/organisations', authenticateToken, async (req, res) => {
+  try {
+    const organisation = await createOrganisation({
+      code: req.body.code ? String(req.body.code) : undefined,
+      nom: req.body.nom ? String(req.body.nom) : undefined,
+      sigle: req.body.sigle ? String(req.body.sigle) : undefined,
+      nom_complet: req.body.nom_complet ? String(req.body.nom_complet) : undefined,
+      type: req.body.type ? String(req.body.type) : undefined,
+      source_type: req.body.source_type ? String(req.body.source_type) : undefined,
+      date_creation: req.body.date_creation ? String(req.body.date_creation) : undefined,
+      date_agrement: req.body.date_agrement === null ? null : req.body.date_agrement ? String(req.body.date_agrement) : undefined,
+      province: req.body.province ? String(req.body.province) : undefined,
+      territoire: req.body.territoire ? String(req.body.territoire) : undefined,
+      commune: req.body.commune ? String(req.body.commune) : undefined,
+      adresse: req.body.adresse ? String(req.body.adresse) : undefined,
+      contacts: req.body.contacts ? {
+        responsable: req.body.contacts.responsable ? String(req.body.contacts.responsable) : undefined,
+        telephone: req.body.contacts.telephone ? String(req.body.contacts.telephone) : undefined,
+        email: req.body.contacts.email ? String(req.body.contacts.email) : undefined,
+      } : undefined,
+      membres: req.body.membres ? {
+        total: req.body.membres.total !== undefined ? Number(req.body.membres.total) : undefined,
+        femmes: req.body.membres.femmes !== undefined ? Number(req.body.membres.femmes) : undefined,
+        hommes: req.body.membres.hommes !== undefined ? Number(req.body.membres.hommes) : undefined,
+        jeunes: req.body.membres.jeunes !== undefined ? Number(req.body.membres.jeunes) : undefined,
+      } : undefined,
+      productions: Array.isArray(req.body.productions) ? req.body.productions.map((item: unknown) => String(item)) : undefined,
+      statut: req.body.statut ? String(req.body.statut) : undefined,
+      role: req.body.role ? String(req.body.role) : undefined,
+      beneficiaires_couverts: req.body.beneficiaires_couverts !== undefined ? Number(req.body.beneficiaires_couverts) : 0,
+      budget_alloue: req.body.budget_alloue !== undefined ? Number(req.body.budget_alloue) : 0,
+      taux_execution: req.body.taux_execution !== undefined ? Number(req.body.taux_execution) : 0,
+    });
+
+    return res.status(201).json(organisation);
+  } catch (error) {
+    console.error('POST /api/organisations failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors de la création de l\'organisation' });
+  }
 });
 
-app.put('/api/organisations/:id', authenticateToken, (req, res) => {
-  const index = organisationsData.findIndex(o => o.id === Number(req.params.id));
-  if (index === -1) return res.status(404).json({ message: 'Organisation non trouvée' });
-  organisationsData[index] = { ...organisationsData[index], ...req.body };
-  res.json(organisationsData[index]);
+app.put('/api/organisations/:id', authenticateToken, async (req, res) => {
+  try {
+    const organisation = await updateOrganisation(Number(req.params.id), {
+      code: req.body.code !== undefined ? String(req.body.code) : undefined,
+      nom: req.body.nom !== undefined ? String(req.body.nom) : undefined,
+      sigle: req.body.sigle !== undefined ? String(req.body.sigle) : undefined,
+      nom_complet: req.body.nom_complet !== undefined ? String(req.body.nom_complet) : undefined,
+      type: req.body.type !== undefined ? String(req.body.type) : undefined,
+      source_type: req.body.source_type !== undefined ? String(req.body.source_type) : undefined,
+      date_creation: req.body.date_creation !== undefined ? String(req.body.date_creation) : undefined,
+      date_agrement: req.body.date_agrement === null ? null : req.body.date_agrement !== undefined ? String(req.body.date_agrement) : undefined,
+      province: req.body.province !== undefined ? String(req.body.province) : undefined,
+      territoire: req.body.territoire !== undefined ? String(req.body.territoire) : undefined,
+      commune: req.body.commune !== undefined ? String(req.body.commune) : undefined,
+      adresse: req.body.adresse !== undefined ? String(req.body.adresse) : undefined,
+      contacts: req.body.contacts ? {
+        responsable: req.body.contacts.responsable !== undefined ? String(req.body.contacts.responsable) : undefined,
+        telephone: req.body.contacts.telephone !== undefined ? String(req.body.contacts.telephone) : undefined,
+        email: req.body.contacts.email !== undefined ? String(req.body.contacts.email) : undefined,
+      } : undefined,
+      membres: req.body.membres ? {
+        total: req.body.membres.total !== undefined ? Number(req.body.membres.total) : undefined,
+        femmes: req.body.membres.femmes !== undefined ? Number(req.body.membres.femmes) : undefined,
+        hommes: req.body.membres.hommes !== undefined ? Number(req.body.membres.hommes) : undefined,
+        jeunes: req.body.membres.jeunes !== undefined ? Number(req.body.membres.jeunes) : undefined,
+      } : undefined,
+      productions: req.body.productions !== undefined && Array.isArray(req.body.productions)
+        ? req.body.productions.map((item: unknown) => String(item))
+        : undefined,
+      statut: req.body.statut !== undefined ? String(req.body.statut) : undefined,
+      role: req.body.role !== undefined ? String(req.body.role) : undefined,
+      beneficiaires_couverts: req.body.beneficiaires_couverts !== undefined ? Number(req.body.beneficiaires_couverts) : undefined,
+      budget_alloue: req.body.budget_alloue !== undefined ? Number(req.body.budget_alloue) : undefined,
+      taux_execution: req.body.taux_execution !== undefined ? Number(req.body.taux_execution) : undefined,
+    });
+
+    if (!organisation) {
+      return res.status(404).json({ message: 'Organisation non trouvée' });
+    }
+
+    return res.json(organisation);
+  } catch (error) {
+    console.error('PUT /api/organisations/:id failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors de la mise à jour de l\'organisation' });
+  }
 });
 
-app.delete('/api/organisations/:id', authenticateToken, (req, res) => {
-  const index = organisationsData.findIndex(o => o.id === Number(req.params.id));
-  if (index === -1) return res.status(404).json({ message: 'Organisation non trouvée' });
-  organisationsData.splice(index, 1);
-  res.json({ message: 'Organisation supprimée' });
+app.delete('/api/organisations/:id', authenticateToken, async (req, res) => {
+  try {
+    const deleted = await deleteOrganisation(Number(req.params.id));
+    if (!deleted) {
+      return res.status(404).json({ message: 'Organisation non trouvée' });
+    }
+
+    return res.json({ message: 'Organisation supprimée' });
+  } catch (error) {
+    console.error('DELETE /api/organisations/:id failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors de la suppression de l\'organisation' });
+  }
 });
 
 // ==================== ACTIVITÉS ROUTES ====================
 
-const activitesData = [
-  { id: 1, code: 'ACT-001', titre: 'Distribution de semences améliorées - Kwilu', type: 'Distribution intrants', composante: 'Composante 1', province: 'Kwilu', territoire: 'Idiofa', responsable: 'UNCP', beneficiaires_cibles: 2500, beneficiaires_atteints: 2300, budget_prevu: 185000, budget_execute: 162000, statut: 'Terminé', date_debut: '2026-01-10', date_fin: '2026-02-28', taux_execution: 88, objectifs: ['Distribuer 2500 kits semences', 'Former les agriculteurs'], created_at: '2026-01-05' },
-  { id: 2, code: 'ACT-002', titre: 'Formation AIC - Techniques de conservation', type: 'Formation', composante: 'Composante 1', province: 'Kasaï', territoire: 'Tshikapa', responsable: 'ONG Agri-RDC', beneficiaires_cibles: 1200, beneficiaires_atteints: 980, budget_prevu: 95000, budget_execute: 71000, statut: 'En cours', date_debut: '2026-02-01', date_fin: '2026-04-30', taux_execution: 65, objectifs: ['Former 1200 agriculteurs aux techniques AIC'], created_at: '2026-01-20' },
-  { id: 3, code: 'ACT-003', titre: 'Réhabilitation route Bandundu-Kikwit (45 km)', type: 'Infrastructure', composante: 'Composante 2', province: 'Kwilu', territoire: 'Bandundu', responsable: 'OVDA', beneficiaires_cibles: 15000, beneficiaires_atteints: 0, budget_prevu: 4500000, budget_execute: 1350000, statut: 'En cours', date_debut: '2025-11-01', date_fin: '2026-06-30', taux_execution: 30, objectifs: ['Réhabiliter 45 km de route rurale', 'Installer 3 ponts'], created_at: '2025-10-15' },
-  { id: 4, code: 'ACT-004', titre: 'Enregistrement RNA - Phase 3 Haut-Lomami', type: 'Enregistrement', composante: 'Composante 1', province: 'Haut-Lomami', territoire: 'Kamina', responsable: 'UNCP', beneficiaires_cibles: 8500, beneficiaires_atteints: 7230, budget_prevu: 52000, budget_execute: 48000, statut: 'Terminé', date_debut: '2026-01-15', date_fin: '2026-03-15', taux_execution: 95, objectifs: ['Enregistrer 8500 agriculteurs dans le RNA'], created_at: '2026-01-10' },
-  { id: 5, code: 'ACT-005', titre: 'Campagne vaccination bovins - Tanganyika', type: 'Santé animale', composante: 'Composante 1', province: 'Tanganyika', territoire: 'Kalemie', responsable: 'UNCP', beneficiaires_cibles: 3200, beneficiaires_atteints: 1800, budget_prevu: 78000, budget_execute: 43000, statut: 'En cours', date_debut: '2026-03-01', date_fin: '2026-05-31', taux_execution: 55, objectifs: ['Vacciner 12000 bovins', 'Former 50 para-vétérinaires'], created_at: '2026-02-20' },
-];
+app.get('/api/activites', authenticateToken, async (req, res) => {
+  try {
+    const payload = await getActivites({
+      search: req.query.search ? String(req.query.search) : undefined,
+      type: req.query.type ? String(req.query.type) : undefined,
+      composante: req.query.composante ? String(req.query.composante) : undefined,
+      province: req.query.province ? String(req.query.province) : undefined,
+      statut: req.query.statut ? String(req.query.statut) : undefined,
+      responsable: req.query.responsable ? String(req.query.responsable) : undefined,
+      date_debut: req.query.date_debut ? String(req.query.date_debut) : undefined,
+      date_fin: req.query.date_fin ? String(req.query.date_fin) : undefined,
+      page: req.query.page ? Number(req.query.page) : 0,
+      limit: req.query.limit ? Number(req.query.limit) : 10,
+    });
 
-app.get('/api/activites', authenticateToken, (req, res) => {
-  const { search, type, composante, province, statut, page = 0, limit = 10 } = req.query;
-  let filtered = [...activitesData];
-  if (search) { const s = String(search).toLowerCase(); filtered = filtered.filter(a => a.titre.toLowerCase().includes(s) || a.code.toLowerCase().includes(s)); }
-  if (type) filtered = filtered.filter(a => a.type === type);
-  if (composante) filtered = filtered.filter(a => a.composante === composante);
-  if (province) filtered = filtered.filter(a => a.province === province);
-  if (statut) filtered = filtered.filter(a => a.statut === statut);
-  const start = Number(page) * Number(limit);
-  res.json({ data: filtered.slice(start, start + Number(limit)), total: filtered.length, page: Number(page), totalPages: Math.ceil(filtered.length / Number(limit)) });
+    return res.json(payload);
+  } catch (error) {
+    console.error('GET /api/activites failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors du chargement des activités' });
+  }
 });
 
-app.get('/api/activites/stats', authenticateToken, (_req, res) => {
-  const total = activitesData.length;
-  const budget_total = activitesData.reduce((s, a) => s + a.budget_prevu, 0);
-  const budget_execute = activitesData.reduce((s, a) => s + a.budget_execute, 0);
-  res.json({ total, terminees: activitesData.filter(a => a.statut === 'Terminé').length, en_cours: activitesData.filter(a => a.statut === 'En cours').length, planifiees: activitesData.filter(a => a.statut === 'Planifié').length, budget_total, budget_execute, taux_execution_moyen: Math.round(activitesData.reduce((s, a) => s + a.taux_execution, 0) / total) });
+app.get('/api/activites/stats', authenticateToken, async (_req, res) => {
+  try {
+    return res.json(await getActivitesStats());
+  } catch (error) {
+    console.error('GET /api/activites/stats failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors du chargement des statistiques activités' });
+  }
 });
 
-app.get('/api/activites/:id', authenticateToken, (req, res) => {
-  const item = activitesData.find(a => a.id === Number(req.params.id));
-  if (!item) return res.status(404).json({ message: 'Activité non trouvée' });
-  res.json(item);
+app.get('/api/activites/:id', authenticateToken, async (req, res) => {
+  try {
+    const item = await getActiviteById(Number(req.params.id));
+    if (!item) {
+      return res.status(404).json({ message: 'Activité non trouvée' });
+    }
+
+    return res.json(item);
+  } catch (error) {
+    console.error('GET /api/activites/:id failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors du chargement de l\'activité' });
+  }
 });
 
-app.post('/api/activites', authenticateToken, (req, res) => {
-  const newItem = { id: activitesData.length + 1, code: `ACT-${String(activitesData.length + 1).padStart(3, '0')}`, ...req.body, beneficiaires_atteints: 0, budget_execute: 0, taux_execution: 0, created_at: new Date().toISOString().split('T')[0] };
-  activitesData.push(newItem);
-  res.status(201).json(newItem);
+app.post('/api/activites', authenticateToken, async (req, res) => {
+  try {
+    const activite = await createActivite({
+      code: req.body.code ? String(req.body.code) : undefined,
+      titre: req.body.titre ? String(req.body.titre) : undefined,
+      description: req.body.description ? String(req.body.description) : undefined,
+      type: req.body.type ? String(req.body.type) : undefined,
+      composante: req.body.composante ? String(req.body.composante) : undefined,
+      statut: req.body.statut ? String(req.body.statut) : undefined,
+      priorite: req.body.priorite ? String(req.body.priorite) : undefined,
+      date_debut: req.body.date_debut ? String(req.body.date_debut) : undefined,
+      date_fin: req.body.date_fin ? String(req.body.date_fin) : undefined,
+      lieu: req.body.lieu ? String(req.body.lieu) : undefined,
+      province: req.body.province ? String(req.body.province) : undefined,
+      territoire: req.body.territoire ? String(req.body.territoire) : undefined,
+      commune: req.body.commune === null ? null : req.body.commune ? String(req.body.commune) : undefined,
+      village: req.body.village === null ? null : req.body.village ? String(req.body.village) : undefined,
+      responsable: req.body.responsable ? String(req.body.responsable) : undefined,
+      responsable_contact: req.body.responsable_contact === null ? null : req.body.responsable_contact ? String(req.body.responsable_contact) : undefined,
+      equipe: parseStringArrayBody(req.body.equipe),
+      participants_prevus: req.body.participants_prevus !== undefined ? Number(req.body.participants_prevus) : undefined,
+      participants_reels: req.body.participants_reels !== undefined ? Number(req.body.participants_reels) : undefined,
+      budget_prevu: req.body.budget_prevu !== undefined ? Number(req.body.budget_prevu) : undefined,
+      budget_reel: req.body.budget_reel !== undefined ? Number(req.body.budget_reel) : undefined,
+      objectifs: parseStringArrayBody(req.body.objectifs),
+      resultats_attendus: parseStringArrayBody(req.body.resultats_attendus),
+      resultats_obtenus: req.body.resultats_obtenus === null ? null : req.body.resultats_obtenus ? String(req.body.resultats_obtenus) : undefined,
+      difficultes: req.body.difficultes === null ? null : req.body.difficultes ? String(req.body.difficultes) : undefined,
+      lecons_apprises: req.body.lecons_apprises === null ? null : req.body.lecons_apprises ? String(req.body.lecons_apprises) : undefined,
+      documents: parseDocumentsBody(req.body.documents),
+      photos: parseStringArrayBody(req.body.photos),
+      created_by: req.body.created_by ? String(req.body.created_by) : undefined,
+      beneficiaires_cibles: req.body.beneficiaires_cibles !== undefined ? Number(req.body.beneficiaires_cibles) : undefined,
+      beneficiaires_atteints: req.body.beneficiaires_atteints !== undefined ? Number(req.body.beneficiaires_atteints) : undefined,
+      taux_execution: req.body.taux_execution !== undefined ? Number(req.body.taux_execution) : undefined,
+    });
+
+    return res.status(201).json(activite);
+  } catch (error) {
+    console.error('POST /api/activites failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors de la création de l\'activité' });
+  }
 });
 
-app.put('/api/activites/:id', authenticateToken, (req, res) => {
-  const index = activitesData.findIndex(a => a.id === Number(req.params.id));
-  if (index === -1) return res.status(404).json({ message: 'Activité non trouvée' });
-  activitesData[index] = { ...activitesData[index], ...req.body };
-  res.json(activitesData[index]);
+app.put('/api/activites/:id', authenticateToken, async (req, res) => {
+  try {
+    const activite = await updateActivite(Number(req.params.id), {
+      code: req.body.code !== undefined ? String(req.body.code) : undefined,
+      titre: req.body.titre !== undefined ? String(req.body.titre) : undefined,
+      description: req.body.description !== undefined ? String(req.body.description) : undefined,
+      type: req.body.type !== undefined ? String(req.body.type) : undefined,
+      composante: req.body.composante !== undefined ? String(req.body.composante) : undefined,
+      statut: req.body.statut !== undefined ? String(req.body.statut) : undefined,
+      priorite: req.body.priorite !== undefined ? String(req.body.priorite) : undefined,
+      date_debut: req.body.date_debut !== undefined ? String(req.body.date_debut) : undefined,
+      date_fin: req.body.date_fin !== undefined ? String(req.body.date_fin) : undefined,
+      lieu: req.body.lieu !== undefined ? String(req.body.lieu) : undefined,
+      province: req.body.province !== undefined ? String(req.body.province) : undefined,
+      territoire: req.body.territoire !== undefined ? String(req.body.territoire) : undefined,
+      commune: req.body.commune === null ? null : req.body.commune !== undefined ? String(req.body.commune) : undefined,
+      village: req.body.village === null ? null : req.body.village !== undefined ? String(req.body.village) : undefined,
+      responsable: req.body.responsable !== undefined ? String(req.body.responsable) : undefined,
+      responsable_contact: req.body.responsable_contact === null ? null : req.body.responsable_contact !== undefined ? String(req.body.responsable_contact) : undefined,
+      equipe: req.body.equipe !== undefined ? parseStringArrayBody(req.body.equipe) : undefined,
+      participants_prevus: req.body.participants_prevus !== undefined ? Number(req.body.participants_prevus) : undefined,
+      participants_reels: req.body.participants_reels !== undefined ? Number(req.body.participants_reels) : undefined,
+      budget_prevu: req.body.budget_prevu !== undefined ? Number(req.body.budget_prevu) : undefined,
+      budget_reel: req.body.budget_reel !== undefined ? Number(req.body.budget_reel) : undefined,
+      objectifs: req.body.objectifs !== undefined ? parseStringArrayBody(req.body.objectifs) : undefined,
+      resultats_attendus: req.body.resultats_attendus !== undefined ? parseStringArrayBody(req.body.resultats_attendus) : undefined,
+      resultats_obtenus: req.body.resultats_obtenus === null ? null : req.body.resultats_obtenus !== undefined ? String(req.body.resultats_obtenus) : undefined,
+      difficultes: req.body.difficultes === null ? null : req.body.difficultes !== undefined ? String(req.body.difficultes) : undefined,
+      lecons_apprises: req.body.lecons_apprises === null ? null : req.body.lecons_apprises !== undefined ? String(req.body.lecons_apprises) : undefined,
+      documents: req.body.documents !== undefined ? parseDocumentsBody(req.body.documents) : undefined,
+      photos: req.body.photos !== undefined ? parseStringArrayBody(req.body.photos) : undefined,
+      created_by: req.body.created_by !== undefined ? String(req.body.created_by) : undefined,
+      beneficiaires_cibles: req.body.beneficiaires_cibles !== undefined ? Number(req.body.beneficiaires_cibles) : undefined,
+      beneficiaires_atteints: req.body.beneficiaires_atteints !== undefined ? Number(req.body.beneficiaires_atteints) : undefined,
+      taux_execution: req.body.taux_execution !== undefined ? Number(req.body.taux_execution) : undefined,
+    });
+
+    if (!activite) {
+      return res.status(404).json({ message: 'Activité non trouvée' });
+    }
+
+    return res.json(activite);
+  } catch (error) {
+    console.error('PUT /api/activites/:id failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors de la mise à jour de l\'activité' });
+  }
 });
 
-app.delete('/api/activites/:id', authenticateToken, (req, res) => {
-  const index = activitesData.findIndex(a => a.id === Number(req.params.id));
-  if (index === -1) return res.status(404).json({ message: 'Activité non trouvée' });
-  activitesData.splice(index, 1);
-  res.json({ message: 'Activité supprimée' });
+app.delete('/api/activites/:id', authenticateToken, async (req, res) => {
+  try {
+    const deleted = await deleteActivite(Number(req.params.id));
+    if (!deleted) {
+      return res.status(404).json({ message: 'Activité non trouvée' });
+    }
+
+    return res.json({ message: 'Activité supprimée' });
+  } catch (error) {
+    console.error('DELETE /api/activites/:id failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors de la suppression de l\'activité' });
+  }
 });
 
 // ==================== UTILISATEURS ROUTES ====================
 
-const utilisateursData = [
-  { id: 1, nom: 'MUKENDI', prenom: 'Jean', email: 'admin@pnda.cd', role: 'admin', role_label: 'Administrateur', niveau: 100, province: null, telephone: '+243 81 000 0001', statut: 'actif', derniere_connexion: new Date().toISOString(), date_creation: '2023-01-01', created_by: 'Système', permissions: ['*'] },
-  { id: 2, nom: 'KABEYA', prenom: 'Marie', email: 'uncp@pnda.cd', role: 'uncp', role_label: 'UNCP', niveau: 80, province: null, telephone: '+243 81 000 0002', statut: 'actif', derniere_connexion: new Date().toISOString(), date_creation: '2023-01-15', created_by: 'admin@pnda.cd', permissions: ['dashboard', 'indicateurs', 'beneficiaires', 'collecte', 'rapports', 'admin'] },
-  { id: 3, nom: 'TSHIBOLA', prenom: 'Pierre', email: 'upep@pnda.cd', role: 'upep', role_label: 'UPEP', niveau: 60, province: 'Kwilu', telephone: '+243 81 000 0003', statut: 'actif', derniere_connexion: new Date().toISOString(), date_creation: '2023-02-01', created_by: 'uncp@pnda.cd', permissions: ['dashboard', 'indicateurs', 'beneficiaires', 'collecte'] },
-  { id: 4, nom: 'LUBALA', prenom: 'Sandrine', email: 'ot1@pnda.cd', role: 'ot', role_label: 'Opérateur Technique', niveau: 50, province: 'Kasaï', telephone: '+243 82 111 1111', statut: 'actif', derniere_connexion: '2026-03-30T10:00:00Z', date_creation: '2023-03-01', created_by: 'uncp@pnda.cd', permissions: ['collecte', 'beneficiaires'] },
-  { id: 5, nom: 'MWAMBA', prenom: 'Alice', email: 'partenaire@fao.org', role: 'partenaire', role_label: 'Partenaire', niveau: 40, province: null, telephone: '+243 81 222 3333', statut: 'actif', derniere_connexion: '2026-03-28T14:30:00Z', date_creation: '2023-04-01', created_by: 'admin@pnda.cd', permissions: ['dashboard', 'rapports'] },
-  { id: 6, nom: 'NKONGOLO', prenom: 'Patrick', email: 'upep.kongo@pnda.cd', role: 'upep', role_label: 'UPEP', niveau: 60, province: 'Kongo Central', telephone: '+243 84 555 6666', statut: 'actif', derniere_connexion: '2026-03-29T08:00:00Z', date_creation: '2023-06-15', created_by: 'uncp@pnda.cd', permissions: ['dashboard', 'indicateurs', 'beneficiaires', 'collecte'] },
-  { id: 7, nom: 'BILONDA', prenom: 'Christine', email: 'upep.kasai@pnda.cd', role: 'upep', role_label: 'UPEP', niveau: 60, province: 'Kasaï', telephone: '+243 85 777 8888', statut: 'actif', derniere_connexion: '2026-03-31T07:45:00Z', date_creation: '2023-07-01', created_by: 'uncp@pnda.cd', permissions: ['dashboard', 'indicateurs', 'beneficiaires', 'collecte'] },
-  { id: 8, nom: 'TSHOMBA', prenom: 'François', email: 'ot.kwilu@pnda.cd', role: 'ot', role_label: 'Opérateur Technique', niveau: 50, province: 'Kwilu', telephone: '+243 83 444 5555', statut: 'actif', derniere_connexion: '2026-03-30T16:20:00Z', date_creation: '2023-08-01', created_by: 'upep@pnda.cd', permissions: ['collecte', 'beneficiaires', 'rapports_terrain'] },
-  { id: 9, nom: 'MBUYI', prenom: 'Espérance', email: 'ot.tanganyika@pnda.cd', role: 'ot', role_label: 'Opérateur Technique', niveau: 50, province: 'Tanganyika', telephone: '+243 82 333 4444', statut: 'actif', derniere_connexion: '2026-03-27T11:30:00Z', date_creation: '2023-09-01', created_by: 'upep@pnda.cd', permissions: ['collecte', 'beneficiaires', 'rapports_terrain'] },
-  { id: 10, nom: 'KALOMBO', prenom: 'Robert', email: 'partenaire@banquemondiale.org', role: 'partenaire', role_label: 'Partenaire', niveau: 40, province: null, telephone: '+243 81 999 0000', statut: 'actif', derniere_connexion: '2026-03-25T10:00:00Z', date_creation: '2024-01-15', created_by: 'admin@pnda.cd', permissions: ['dashboard', 'rapports'] },
-  { id: 11, nom: 'DIALLO', prenom: 'Fatou', email: 'partenaire@unicef.org', role: 'partenaire', role_label: 'Partenaire', niveau: 40, province: null, telephone: '+243 85 111 2222', statut: 'inactif', derniere_connexion: '2026-02-10T09:00:00Z', date_creation: '2024-02-01', created_by: 'admin@pnda.cd', permissions: ['dashboard', 'rapports'] },
-  { id: 12, nom: 'NGANDU', prenom: 'Sylvie', email: 'upep.hlomami@pnda.cd', role: 'upep', role_label: 'UPEP', niveau: 60, province: 'Haut-Lomami', telephone: '+243 84 666 7777', statut: 'actif', derniere_connexion: '2026-03-31T09:10:00Z', date_creation: '2024-03-01', created_by: 'uncp@pnda.cd', permissions: ['dashboard', 'indicateurs', 'beneficiaires', 'collecte'] },
-];
+app.get('/api/utilisateurs', authenticateToken, async (req, res) => {
+  try {
+    const payload = await getUtilisateurs({
+      search: req.query.search ? String(req.query.search) : undefined,
+      role: req.query.role ? String(req.query.role) : undefined,
+      province: req.query.province ? String(req.query.province) : undefined,
+      statut: req.query.statut ? String(req.query.statut) : undefined,
+      page: req.query.page ? Number(req.query.page) : 0,
+      limit: req.query.limit ? Number(req.query.limit) : 10,
+    });
 
-app.get('/api/utilisateurs', authenticateToken, (req, res) => {
-  const { search, role, province, statut, page = 0, limit = 10 } = req.query;
-  let filtered = utilisateursData.map(u => { const { ...rest } = u; return rest; });
-  if (search) { const s = String(search).toLowerCase(); filtered = filtered.filter(u => u.nom.toLowerCase().includes(s) || u.prenom.toLowerCase().includes(s) || u.email.toLowerCase().includes(s)); }
-  if (role) filtered = filtered.filter(u => u.role === role);
-  if (province) filtered = filtered.filter(u => u.province === province);
-  if (statut) filtered = filtered.filter(u => u.statut === statut);
-  const start = Number(page) * Number(limit);
-  res.json({ data: filtered.slice(start, start + Number(limit)), total: filtered.length, page: Number(page) });
+    return res.json({ ...payload, page: req.query.page ? Number(req.query.page) : 0 });
+  } catch (error) {
+    console.error(error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur serveur' });
+  }
 });
 
-app.get('/api/utilisateurs/stats', authenticateToken, (_req, res) => {
-  const par_role: Record<string, number> = {};
-  const par_statut: Record<string, number> = {};
-  const par_province: Record<string, number> = {};
-  for (const u of utilisateursData) {
-    par_role[u.role] = (par_role[u.role] ?? 0) + 1;
-    par_statut[u.statut] = (par_statut[u.statut] ?? 0) + 1;
-    if (u.province) par_province[u.province] = (par_province[u.province] ?? 0) + 1;
+app.get('/api/utilisateurs/:id', authenticateToken, async (req, res) => {
+  try {
+    const utilisateur = await getUtilisateurById(Number(req.params.id));
+
+    if (!utilisateur) {
+      return res.status(404).json({ message: 'Utilisateur non trouvé' });
+    }
+
+    return res.json(utilisateur);
+  } catch (error) {
+    console.error(error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur serveur' });
   }
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-  const actifs_30j = utilisateursData.filter(u => u.derniere_connexion && u.derniere_connexion > thirtyDaysAgo).length;
-  const firstOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
-  const nouveaux_mois = utilisateursData.filter(u => u.date_creation >= firstOfMonth).length;
-  res.json({ total: utilisateursData.length, par_role, par_statut, par_province, actifs_30j, nouveaux_mois });
+});
+
+app.get('/api/utilisateurs/stats', authenticateToken, async (_req, res) => {
+  try {
+    const stats = await getUtilisateursStats();
+    return res.json(stats);
+  } catch (error) {
+    console.error(error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur serveur' });
+  }
 });
 
 app.get('/api/utilisateurs/roles', authenticateToken, (_req, res) => {
@@ -1759,46 +2006,128 @@ app.get('/api/utilisateurs/permissions', authenticateToken, (_req, res) => {
   ]);
 });
 
-app.post('/api/utilisateurs', authenticateToken, (req, res) => {
-  const newUser = { id: utilisateursData.length + 1, ...req.body, statut: 'actif', derniere_connexion: null, date_creation: new Date().toISOString().split('T')[0] };
-  utilisateursData.push(newUser);
-  res.status(201).json(newUser);
+app.post('/api/utilisateurs', authenticateToken, async (req, res) => {
+  try {
+    const created = await createUtilisateur({
+      nom: req.body.nom,
+      prenom: req.body.prenom,
+      email: req.body.email,
+      telephone: req.body.telephone,
+      role: req.body.role,
+      statut: req.body.statut ?? 'Actif',
+      province: req.body.province,
+      territoire: req.body.territoire,
+      niveau: req.body.niveau,
+      composante: req.body.composante,
+      password: req.body.password,
+    });
+
+    return res.status(201).json(created);
+  } catch (error) {
+    console.error(error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur serveur' });
+  }
 });
 
-app.post('/api/utilisateurs/:id/reset-password', authenticateToken, (req, res) => {
-  const index = utilisateursData.findIndex(u => u.id === Number(req.params.id));
-  if (index === -1) return res.status(404).json({ message: 'Utilisateur non trouvé' });
-  const tempPassword = Math.random().toString(36).slice(-8);
-  res.json({ message: 'Mot de passe réinitialisé', temp_password: tempPassword });
+app.post('/api/utilisateurs/:id/reset-password', authenticateToken, async (req, res) => {
+  try {
+    const success = await resetUtilisateurPassword(Number(req.params.id));
+
+    if (!success) {
+      return res.status(404).json({ message: 'Utilisateur non trouvé' });
+    }
+
+    return res.json({ message: 'Mot de passe réinitialisé', temp_password: 'password123' });
+  } catch (error) {
+    console.error(error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur serveur' });
+  }
 });
 
-app.patch('/api/utilisateurs/:id/statut', authenticateToken, (req, res) => {
-  const index = utilisateursData.findIndex(u => u.id === Number(req.params.id));
-  if (index === -1) return res.status(404).json({ message: 'Utilisateur non trouvé' });
-  utilisateursData[index] = { ...utilisateursData[index], statut: req.body.statut };
-  res.json(utilisateursData[index]);
+app.patch('/api/utilisateurs/:id/statut', authenticateToken, async (req, res) => {
+  try {
+    const updated = await updateUtilisateurStatut(Number(req.params.id), String(req.body.statut ?? 'Actif'));
+
+    if (!updated) {
+      return res.status(404).json({ message: 'Utilisateur non trouvé' });
+    }
+
+    return res.json(updated);
+  } catch (error) {
+    console.error(error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur serveur' });
+  }
 });
 
-app.put('/api/utilisateurs/:id', authenticateToken, (req, res) => {
-  const index = utilisateursData.findIndex(u => u.id === Number(req.params.id));
-  if (index === -1) return res.status(404).json({ message: 'Utilisateur non trouvé' });
-  utilisateursData[index] = { ...utilisateursData[index], ...req.body };
-  res.json(utilisateursData[index]);
+app.put('/api/utilisateurs/:id', authenticateToken, async (req, res) => {
+  try {
+    const updated = await updateUtilisateur(Number(req.params.id), {
+      nom: req.body.nom,
+      prenom: req.body.prenom,
+      email: req.body.email,
+      telephone: req.body.telephone,
+      role: req.body.role,
+      statut: req.body.statut,
+      province: req.body.province,
+      territoire: req.body.territoire,
+      niveau: req.body.niveau,
+      composante: req.body.composante,
+    });
+
+    if (!updated) {
+      return res.status(404).json({ message: 'Utilisateur non trouvé' });
+    }
+
+    return res.json(updated);
+  } catch (error) {
+    console.error(error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur serveur' });
+  }
 });
 
-app.delete('/api/utilisateurs/:id', authenticateToken, (req, res) => {
-  const index = utilisateursData.findIndex(u => u.id === Number(req.params.id));
-  if (index === -1) return res.status(404).json({ message: 'Utilisateur non trouvé' });
-  utilisateursData.splice(index, 1);
-  res.json({ message: 'Utilisateur supprimé' });
+app.delete('/api/utilisateurs/:id', authenticateToken, async (req, res) => {
+  try {
+    const deleted = await deleteUtilisateur(Number(req.params.id));
+
+    if (!deleted) {
+      return res.status(404).json({ message: 'Utilisateur non trouvé' });
+    }
+
+    return res.json({ message: 'Utilisateur supprimé' });
+  } catch (error) {
+    console.error(error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur serveur' });
+  }
 });
 
 // ==================== NOTIFICATIONS ROUTES ====================
 
-type AppUser = (typeof users)[number];
-type PlainteRecord = (typeof plaintes)[number];
-type ActiviteRecord = (typeof activitesData)[number];
-type UtilisateurRecord = (typeof utilisateursData)[number];
+type AppUser = { id: number; role: string; province: string | null; email?: string };
 
 type NotificationSeverity = 'info' | 'success' | 'warning' | 'danger';
 type NotificationType = 'risk' | 'complaint' | 'activity' | 'user';
@@ -1827,13 +2156,18 @@ interface NotificationSeed extends Omit<AppNotification, 'read'> {
 const nationalRoles = new Set(['admin', 'uncp', 'partenaire']);
 
 function getRequestUser(req: AuthenticatedRequest): AppUser | null {
-  const decoded = req.user as { id?: number } | undefined;
+  const decoded = req.user as { id?: number; role?: string; province?: string | null; email?: string } | undefined;
 
   if (!decoded || typeof decoded.id !== 'number') {
     return null;
   }
 
-  return users.find((user) => user.id === decoded.id) ?? null;
+  return {
+    id: decoded.id,
+    role: typeof decoded.role === 'string' ? decoded.role : 'invite',
+    province: typeof decoded.province === 'string' ? decoded.province : null,
+    email: typeof decoded.email === 'string' ? decoded.email : undefined,
+  };
 }
 
 function toIsoDate(value?: string | null): string {
@@ -1865,7 +2199,7 @@ function canUserAccessNotification(currentUser: AppUser, notification: Notificat
   return currentUser.province === notification.province;
 }
 
-function getComplaintSeverity(plainte: PlainteRecord): NotificationSeverity {
+function getComplaintSeverity(plainte: SqlPlainte): NotificationSeverity {
   if (plainte.est_confidentiel || plainte.type === 'VBG' || plainte.type === 'EAS') {
     return 'danger';
   }
@@ -1881,7 +2215,7 @@ function getComplaintSeverity(plainte: PlainteRecord): NotificationSeverity {
   return 'info';
 }
 
-function getComplaintTitle(plainte: PlainteRecord): string {
+function getComplaintTitle(plainte: SqlPlainte): string {
   if (plainte.est_confidentiel || plainte.type === 'VBG' || plainte.type === 'EAS') {
     return 'Plainte sensible à traiter';
   }
@@ -1898,9 +2232,12 @@ function getComplaintTitle(plainte: PlainteRecord): string {
   }
 }
 
-function buildRiskNotificationSeeds(): NotificationSeed[] {
-  return alertesData.map((alerte) => {
-    const risque = risquesData.find((item) => item.id === alerte.id_risque);
+async function buildRiskNotificationSeeds(): Promise<NotificationSeed[]> {
+  const [alertes, risques] = await Promise.all([getRisqueAlertes(), getRisques()]);
+  const risqueById = new Map(risques.map((item) => [item.id, item]));
+
+  return alertes.map((alerte) => {
+    const risque = risqueById.get(alerte.id_risque);
     const titleByLevel: Record<AlerteRisque['niveau'], string> = {
       danger: 'Alerte risque critique',
       warning: 'Alerte risque élevée',
@@ -1925,7 +2262,9 @@ function buildRiskNotificationSeeds(): NotificationSeed[] {
   });
 }
 
-function buildComplaintNotificationSeeds(): NotificationSeed[] {
+async function buildComplaintNotificationSeeds(): Promise<NotificationSeed[]> {
+  const { data: plaintes } = await getPlaintes({ page: 0, limit: 10000 });
+
   return plaintes.map((plainte) => ({
     id: `complaint-${plainte.id}`,
     title: getComplaintTitle(plainte),
@@ -1944,11 +2283,16 @@ function buildComplaintNotificationSeeds(): NotificationSeed[] {
   }));
 }
 
-function buildActivityNotificationSeeds(): NotificationSeed[] {
+function getActivityCompletionDate(activite: SqlActivite): string {
+  return activite.date_fin || activite.updated_at || activite.created_at;
+}
+
+async function buildActivityNotificationSeeds(): Promise<NotificationSeed[]> {
+  const { data: activites } = await getActivites({ page: 0, limit: 10000 });
   const notifications: NotificationSeed[] = [];
 
-  for (const activite of activitesData) {
-    if (activite.statut === 'En cours' && activite.taux_execution < 60) {
+  for (const activite of activites) {
+    if (activite.statut === 'en_cours' && activite.taux_execution < 60) {
       notifications.push({
         id: `activity-progress-${activite.id}`,
         title: 'Activité à surveiller',
@@ -1956,7 +2300,7 @@ function buildActivityNotificationSeeds(): NotificationSeed[] {
         severity: 'warning',
         type: 'activity',
         category_label: 'Activités',
-        created_at: toIsoDate(activite.date_fin || activite.created_at),
+        created_at: toIsoDate(getActivityCompletionDate(activite)),
         action_url: '/suivi/activites',
         province: activite.province ?? null,
         entity_type: 'activite',
@@ -1965,7 +2309,7 @@ function buildActivityNotificationSeeds(): NotificationSeed[] {
       });
     }
 
-    if (activite.statut === 'Terminé') {
+    if (activite.statut === 'terminee') {
       notifications.push({
         id: `activity-complete-${activite.id}`,
         title: 'Activité terminée',
@@ -1973,7 +2317,7 @@ function buildActivityNotificationSeeds(): NotificationSeed[] {
         severity: 'success',
         type: 'activity',
         category_label: 'Activités',
-        created_at: toIsoDate(activite.date_fin || activite.created_at),
+        created_at: toIsoDate(getActivityCompletionDate(activite)),
         action_url: '/suivi/activites',
         province: activite.province ?? null,
         entity_type: 'activite',
@@ -1986,11 +2330,12 @@ function buildActivityNotificationSeeds(): NotificationSeed[] {
   return notifications;
 }
 
-function buildUserNotificationSeeds(): NotificationSeed[] {
+async function buildUserNotificationSeeds(): Promise<NotificationSeed[]> {
   const notifications: NotificationSeed[] = [];
   const fourteenDaysAgo = Date.now() - 14 * 24 * 60 * 60 * 1000;
+  const { data: utilisateurs } = await getUtilisateurs({ page: 0, limit: 1000 });
 
-  for (const utilisateur of utilisateursData) {
+  for (const utilisateur of utilisateurs) {
     if (utilisateur.statut === 'inactif') {
       notifications.push({
         id: `user-inactive-${utilisateur.id}`,
@@ -2032,10 +2377,10 @@ function buildUserNotificationSeeds(): NotificationSeed[] {
 
 async function buildNotificationsForUser(currentUser: AppUser): Promise<AppNotification[]> {
   const seeds = [
-    ...buildRiskNotificationSeeds(),
-    ...buildComplaintNotificationSeeds(),
-    ...buildActivityNotificationSeeds(),
-    ...buildUserNotificationSeeds(),
+    ...(await buildRiskNotificationSeeds()),
+    ...(await buildComplaintNotificationSeeds()),
+    ...(await buildActivityNotificationSeeds()),
+    ...(await buildUserNotificationSeeds()),
   ];
 
   const visibleSeeds = seeds
@@ -2177,30 +2522,84 @@ app.put('/api/notifications/:id/read', authenticateToken, async (req, res) => {
 
 // ==================== GRM PLAINTES ROUTES (CRUD complet) ====================
 
-app.post('/api/grm/plaintes', authenticateToken, (req, res) => {
-  const newPlainte = {
-    id: plaintes.length + 1,
-    numero_plainte: `PL-${new Date().getFullYear()}-${String(plaintes.length + 1).padStart(3, '0')}`,
-    ...req.body,
-    date_reception: new Date().toISOString(),
-    statut: 'recue',
-  };
-  plaintes.push(newPlainte);
-  res.status(201).json(newPlainte);
+app.post('/api/grm/plaintes', authenticateToken, async (req, res) => {
+  try {
+    const plainte = await createPlainte({
+      type: req.body.type ? String(req.body.type) : undefined,
+      description: req.body.description ? String(req.body.description) : undefined,
+      province: req.body.province ? String(req.body.province) : undefined,
+      territoire: req.body.territoire ? String(req.body.territoire) : undefined,
+      village: req.body.village ? String(req.body.village) : undefined,
+      beneficiaire_nom: req.body.beneficiaire_nom === null ? null : req.body.beneficiaire_nom ? String(req.body.beneficiaire_nom) : undefined,
+      beneficiaire_rna: req.body.beneficiaire_rna === null ? null : req.body.beneficiaire_rna ? String(req.body.beneficiaire_rna) : undefined,
+      est_confidentiel: Boolean(req.body.est_confidentiel),
+      prise_en_charge: req.body.prise_en_charge === null ? null : req.body.prise_en_charge ? String(req.body.prise_en_charge) : undefined,
+      resolution: req.body.resolution === null ? null : req.body.resolution ? String(req.body.resolution) : undefined,
+    });
+
+    return res.status(201).json(plainte);
+  } catch (error) {
+    console.error('POST /api/grm/plaintes failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors de la création de la plainte' });
+  }
 });
 
-app.put('/api/grm/plaintes/:id', authenticateToken, (req, res) => {
-  const index = plaintes.findIndex(p => p.id === Number(req.params.id));
-  if (index === -1) return res.status(404).json({ message: 'Plainte non trouvée' });
-  plaintes[index] = { ...plaintes[index], ...req.body };
-  res.json(plaintes[index]);
+app.put('/api/grm/plaintes/:id', authenticateToken, async (req, res) => {
+  try {
+    const plainte = await updatePlainte(Number(req.params.id), {
+      type: req.body.type !== undefined ? String(req.body.type) : undefined,
+      description: req.body.description !== undefined ? String(req.body.description) : undefined,
+      province: req.body.province !== undefined ? String(req.body.province) : undefined,
+      territoire: req.body.territoire !== undefined ? String(req.body.territoire) : undefined,
+      village: req.body.village !== undefined ? String(req.body.village) : undefined,
+      beneficiaire_nom: req.body.beneficiaire_nom === null ? null : req.body.beneficiaire_nom !== undefined ? String(req.body.beneficiaire_nom) : undefined,
+      beneficiaire_rna: req.body.beneficiaire_rna === null ? null : req.body.beneficiaire_rna !== undefined ? String(req.body.beneficiaire_rna) : undefined,
+      statut: req.body.statut !== undefined ? String(req.body.statut) : undefined,
+      date_traitement: req.body.date_traitement === null ? null : req.body.date_traitement !== undefined ? String(req.body.date_traitement) : undefined,
+      delai_traite: req.body.delai_traite !== undefined ? Number(req.body.delai_traite) : undefined,
+      prise_en_charge: req.body.prise_en_charge === null ? null : req.body.prise_en_charge !== undefined ? String(req.body.prise_en_charge) : undefined,
+      resolution: req.body.resolution === null ? null : req.body.resolution !== undefined ? String(req.body.resolution) : undefined,
+      est_confidentiel: req.body.est_confidentiel !== undefined ? Boolean(req.body.est_confidentiel) : undefined,
+    });
+
+    if (!plainte) {
+      return res.status(404).json({ message: 'Plainte non trouvée' });
+    }
+
+    return res.json(plainte);
+  } catch (error) {
+    console.error('PUT /api/grm/plaintes/:id failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors de la mise à jour de la plainte' });
+  }
 });
 
-app.delete('/api/grm/plaintes/:id', authenticateToken, (req, res) => {
-  const index = plaintes.findIndex(p => p.id === Number(req.params.id));
-  if (index === -1) return res.status(404).json({ message: 'Plainte non trouvée' });
-  plaintes.splice(index, 1);
-  res.json({ message: 'Plainte supprimée' });
+app.delete('/api/grm/plaintes/:id', authenticateToken, async (req, res) => {
+  try {
+    const deleted = await deletePlainte(Number(req.params.id));
+    if (!deleted) {
+      return res.status(404).json({ message: 'Plainte non trouvée' });
+    }
+
+    return res.json({ message: 'Plainte supprimée' });
+  } catch (error) {
+    console.error('DELETE /api/grm/plaintes/:id failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors de la suppression de la plainte' });
+  }
 });
 
 // ==================== CALCULATEUR ROUTES ====================
@@ -2208,20 +2607,59 @@ app.delete('/api/grm/plaintes/:id', authenticateToken, (req, res) => {
 const calculateurHistorique: unknown[] = [];
 
 app.get('/api/calculateur/indicateurs', authenticateToken, (_req, res) => {
-  const indicateurs = [...iodpIndicateurs, ...irIndicateurs].map(ind => ({
-    id: ind.id,
-    code: ind.code,
-    nom: ind.nom,
-    description: ind.description,
-    formule: ind.formule,
-    unite: ind.unite,
-    frequence: ind.frequence,
-    type: ind.est_iodp ? 'iodp' : 'ir',
-    composante: ind.id_composante === 1 ? 'Productivité agricole' : ind.id_composante === 2 ? 'Accès au marché' : 'Services publics agricoles',
-    cible: ind.cible,
-    champs: getChampsPourIndicateur(ind.code),
-  }));
-  res.json(indicateurs);
+  getLegacyIndicateurs()
+    .then((indicateurs) => {
+      res.json(indicateurs.map((ind) => ({
+        id: ind.id,
+        code: ind.code,
+        nom: ind.nom,
+        description: ind.description,
+        formule: ind.formule,
+        unite: ind.unite,
+        frequence: ind.frequence,
+        type: ind.est_iodp ? 'iodp' : 'ir',
+        composante: ind.id_composante === 1 ? 'Productivite agricole' : ind.id_composante === 2 ? 'Acces au marche' : ind.id_composante === 3 ? 'Services publics agricoles' : 'Intervention d\'urgence agricole',
+        cible: ind.cible,
+        champs: getChampsPourIndicateur(ind.code),
+      })));
+    })
+    .catch((error) => {
+      console.error('GET /api/calculateur/indicateurs failed', error);
+      const message = error instanceof Error ? error.message : 'Erreur de connexion a la base de donnees';
+      if (message.startsWith('Database configuration is missing') || isDatabaseConnectivityError(error)) {
+        return res.status(503).json({ message });
+      }
+      return res.status(500).json({ message: 'Impossible de recuperer le catalogue du calculateur' });
+    });
+});
+
+app.get('/api/calculateur/indicateurs/:code', authenticateToken, async (req, res) => {
+  try {
+    const indicateur = await getLegacyIndicateurByCode(req.params.code);
+    if (!indicateur) {
+      return res.status(404).json({ message: 'Indicateur non trouve' });
+    }
+
+    return res.json({
+      id: indicateur.id,
+      code: indicateur.code,
+      nom: indicateur.nom,
+      description: indicateur.description,
+      formule: indicateur.formule,
+      unite: indicateur.unite,
+      frequence: indicateur.frequence,
+      type: indicateur.est_iodp ? 'iodp' : 'ir',
+      composante: indicateur.id_composante === 1 ? 'Productivite agricole' : indicateur.id_composante === 2 ? 'Acces au marche' : indicateur.id_composante === 3 ? 'Services publics agricoles' : 'Intervention d\'urgence agricole',
+      champs: getChampsPourIndicateur(indicateur.code),
+    });
+  } catch (error) {
+    console.error('GET /api/calculateur/indicateurs/:code failed', error);
+    const message = error instanceof Error ? error.message : 'Erreur de connexion a la base de donnees';
+    if (message.startsWith('Database configuration is missing') || isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message });
+    }
+    return res.status(500).json({ message: 'Impossible de recuperer cet indicateur du calculateur' });
+  }
 });
 
 function getChampsPourIndicateur(code: string) {
@@ -2241,10 +2679,10 @@ function getChampsPourIndicateur(code: string) {
   return champsMap[code] || [{ id: 'valeur', label: 'Valeur', type: 'number', required: true }];
 }
 
-app.post('/api/calculateur/calculer/:code', authenticateToken, (req, res) => {
+app.post('/api/calculateur/calculer/:code', authenticateToken, async (req, res) => {
   const { code } = req.params;
   const donnees = req.body;
-  const indicateur = [...iodpIndicateurs, ...irIndicateurs].find(i => i.code === code);
+  const indicateur = await getLegacyIndicateurByCode(code);
   if (!indicateur) return res.status(404).json({ message: 'Indicateur non trouvé' });
 
   let valeur = 0;
@@ -2273,257 +2711,1324 @@ app.get('/api/calculateur/historique', authenticateToken, (_req, res) => {
 });
 
 // ==================== OT (OPÉRATEURS TECHNIQUES) ROUTES ====================
-
-const otActivites = [
-  { id: 1, type: 'formation', titre: 'Formation agriculteurs AIC - Village Masi', statut: 'terminee', province: 'Kwilu', beneficiaires: 45, date: '2026-03-28' },
-  { id: 2, type: 'enquete', titre: 'Distribution semences maïs hybride', statut: 'en_cours', province: 'Kasaï', beneficiaires: 120, date: '2026-04-01' },
-  { id: 3, type: 'suivi', titre: 'Collecte données RNA - Enregistrement', statut: 'planifiee', province: 'Haut-Lomami', beneficiaires: 0, date: '2026-04-05' },
-];
-
-const otEquipiers = [
-  { id: 1, nom: 'LUKUSA Jean', role: 'Superviseur', province: 'Kwilu', statut: 'Actif', activites_menees: 12 },
-  { id: 2, nom: 'KITENGE Marie', role: 'Agent terrain', province: 'Kasaï', statut: 'Actif', activites_menees: 8 },
-  { id: 3, nom: 'MBUYI Paul', role: 'Agent terrain', province: 'Haut-Lomami', statut: 'Actif', activites_menees: 6 },
-];
-
-const otRapports = [
-  { id: 1, mois: 'Mars 2026', province: 'Kwilu', activites_realisees: 8, beneficiaires_atteints: 1240, taux_execution: 92, soumis: true, date_soumission: '2026-03-31' },
-  { id: 2, mois: 'Février 2026', province: 'Kwilu', activites_realisees: 6, beneficiaires_atteints: 980, taux_execution: 78, soumis: true, date_soumission: '2026-02-28' },
-];
-
-app.get('/api/ot/data', authenticateToken, (_req, res) => {
-  res.json({
-    id: 'ot-001',
-    nom: 'Opérateur Technique Principal',
-    sigle: 'OTP',
-    region: 'National',
-    provinces: ['Kwilu', 'Kongo Central', 'Kinshasa', 'Kasaï'],
-    responsable: { nom: 'Jean-Pierre KABEYA', email: 'jp.kabeya@otp.cd', telephone: '+243812345678' },
-    equipes: { total: otEquipiers.length, superviseurs: 4, enqueteurs: 15, techniciens: 5 },
-    performances: { taux_realisation: 78, taux_satisfaction: 85, qualite_donnees: 92, ponctualite: 88 },
-    activites: {
-      enquetes_realisees: otActivites.filter((a: any) => a.type === 'enquete').length,
-      formations_dispensees: otActivites.filter((a: any) => a.type === 'formation').length,
-      suivis_effectues: otActivites.filter((a: any) => a.type === 'suivi').length,
-      plaintes_traitees: otActivites.filter((a: any) => a.type === 'plainte').length,
-    },
-    indicateurs: { production: 76, adoption: 68, satisfaction: 85 },
-    objectifs: {
-      enquetes: { realises: otActivites.filter((a: any) => a.type === 'enquete').length, cible: 1600 },
-      formations: { realises: otActivites.filter((a: any) => a.type === 'formation').length, cible: 40 },
-      suivis: { realises: otActivites.filter((a: any) => a.type === 'suivi').length, cible: 200 },
-    },
-    zones: [
-      { province: 'Kwilu', territoire: 'Idiofa', villages: 45, enquetes: 320 },
-      { province: 'Kwilu', territoire: 'Gungu', villages: 38, enquetes: 280 },
-      { province: 'Kongo Central', territoire: 'Kimvula', villages: 29, enquetes: 210 },
-      { province: 'Kasaï', territoire: 'Tshikapa', villages: 52, enquetes: 390 },
-    ],
-    dernier_rapport: otRapports.filter(r => r.soumis).sort((a, b) => b.id - a.id)[0]?.date_soumission ?? '2026-02-28',
-    dernier_suivi: '2026-03-28',
-  });
+app.get('/api/ot/data', authenticateToken, async (_req, res) => {
+  try {
+    return res.json(await getOTData());
+  } catch (error) {
+    console.error('GET /api/ot/data failed', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+    return res.status(500).json({ message: 'Erreur lors du chargement des données OT' });
+  }
 });
 
-app.get('/api/ot/activites', authenticateToken, (req, res) => {
-  const { province, statut } = req.query;
-  let filtered = [...otActivites];
-  if (province) filtered = filtered.filter(a => a.province === province);
-  if (statut) filtered = filtered.filter(a => a.statut === statut);
-  res.json({ data: filtered, total: filtered.length });
+app.get('/api/ot/activites', authenticateToken, async (req, res) => {
+  try {
+    return res.json(await getOTActivites({
+      province: req.query.province ? String(req.query.province) : undefined,
+      statut: req.query.statut ? String(req.query.statut) : undefined,
+      date_debut: req.query.date_debut ? String(req.query.date_debut) : undefined,
+      date_fin: req.query.date_fin ? String(req.query.date_fin) : undefined,
+    }));
+  } catch (error) {
+    console.error('GET /api/ot/activites failed', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+    return res.status(500).json({ message: 'Erreur lors du chargement des activités terrain' });
+  }
 });
 
-app.get('/api/ot/equipiers', authenticateToken, (_req, res) => {
-  res.json({ data: otEquipiers, total: otEquipiers.length });
+app.get('/api/ot/equipiers', authenticateToken, async (req, res) => {
+  try {
+    return res.json(await getOTEquipiers({
+      fonction: req.query.fonction ? String(req.query.fonction) : undefined,
+      province: req.query.province ? String(req.query.province) : undefined,
+      actif: req.query.actif === undefined ? undefined : String(req.query.actif) === 'true',
+    }));
+  } catch (error) {
+    console.error('GET /api/ot/equipiers failed', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+    return res.status(500).json({ message: 'Erreur lors du chargement des équipiers OT' });
+  }
 });
 
-app.get('/api/ot/rapports', authenticateToken, (_req, res) => {
-  res.json(otRapports);
+app.get('/api/ot/rapports', authenticateToken, async (_req, res) => {
+  try {
+    return res.json(await getOTRapports());
+  } catch (error) {
+    console.error('GET /api/ot/rapports failed', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+    return res.status(500).json({ message: 'Erreur lors du chargement des rapports OT' });
+  }
 });
 
-app.post('/api/ot/rapports', authenticateToken, (req, res) => {
-  const newRapport = { id: otRapports.length + 1, ...req.body, soumis: true, date_soumission: new Date().toISOString().split('T')[0] };
-  otRapports.push(newRapport);
-  res.status(201).json(newRapport);
+app.post('/api/ot/rapports', authenticateToken, async (req, res) => {
+  try {
+    return res.status(201).json(await createOTRapport({
+      mois: req.body.mois ? String(req.body.mois) : undefined,
+      annee: req.body.annee !== undefined ? Number(req.body.annee) : undefined,
+      enquetes: req.body.enquetes !== undefined ? Number(req.body.enquetes) : undefined,
+      formations: req.body.formations !== undefined ? Number(req.body.formations) : undefined,
+      suivis: req.body.suivis !== undefined ? Number(req.body.suivis) : undefined,
+      qualite_donnees: req.body.qualite_donnees !== undefined ? Number(req.body.qualite_donnees) : undefined,
+      commentaires: req.body.commentaires ? String(req.body.commentaires) : undefined,
+      valide: req.body.valide !== undefined ? Boolean(req.body.valide) : undefined,
+    }));
+  } catch (error) {
+    console.error('POST /api/ot/rapports failed', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+    return res.status(500).json({ message: 'Erreur lors de la création du rapport OT' });
+  }
 });
 
-app.put('/api/ot/activites/:id', authenticateToken, (req, res) => {
-  const index = otActivites.findIndex(a => a.id === Number(req.params.id));
-  if (index === -1) return res.status(404).json({ message: 'Activité non trouvée' });
-  otActivites[index] = { ...otActivites[index], ...req.body };
-  res.json(otActivites[index]);
+app.put('/api/ot/activites/:id', authenticateToken, async (req, res) => {
+  try {
+    const activite = await updateOTActivite(Number(req.params.id), {
+      type: req.body.type !== undefined ? String(req.body.type) : undefined,
+      titre: req.body.titre !== undefined ? String(req.body.titre) : undefined,
+      description: req.body.description !== undefined ? String(req.body.description) : undefined,
+      date: req.body.date !== undefined ? String(req.body.date) : undefined,
+      province: req.body.province !== undefined ? String(req.body.province) : undefined,
+      territoire: req.body.territoire !== undefined ? String(req.body.territoire) : undefined,
+      village: req.body.village !== undefined ? String(req.body.village) : undefined,
+      statut: req.body.statut !== undefined ? String(req.body.statut) : undefined,
+      responsable: req.body.responsable !== undefined ? String(req.body.responsable) : undefined,
+      participants: req.body.participants !== undefined ? Number(req.body.participants) : undefined,
+      resultats: req.body.resultats === null ? null : req.body.resultats !== undefined ? String(req.body.resultats) : undefined,
+    });
+
+    if (!activite) {
+      return res.status(404).json({ message: 'Activité non trouvée' });
+    }
+
+    return res.json(activite);
+  } catch (error) {
+    console.error('PUT /api/ot/activites/:id failed', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+    return res.status(500).json({ message: 'Erreur lors de la mise à jour de l\'activité terrain' });
+  }
 });
 
-app.post('/api/ot/activites', authenticateToken, (req, res) => {
-  const newActivite = { id: otActivites.length + 1, ...req.body, beneficiaires: 0 };
-  otActivites.push(newActivite);
-  res.status(201).json(newActivite);
+app.post('/api/ot/activites', authenticateToken, async (req, res) => {
+  try {
+    return res.status(201).json(await createOTActivite({
+      type: req.body.type ? String(req.body.type) : undefined,
+      titre: req.body.titre ? String(req.body.titre) : undefined,
+      description: req.body.description ? String(req.body.description) : undefined,
+      date: req.body.date ? String(req.body.date) : undefined,
+      province: req.body.province ? String(req.body.province) : undefined,
+      territoire: req.body.territoire ? String(req.body.territoire) : undefined,
+      village: req.body.village ? String(req.body.village) : undefined,
+      statut: req.body.statut ? String(req.body.statut) : undefined,
+      responsable: req.body.responsable ? String(req.body.responsable) : undefined,
+      participants: req.body.participants !== undefined ? Number(req.body.participants) : undefined,
+      resultats: req.body.resultats === null ? null : req.body.resultats ? String(req.body.resultats) : undefined,
+    }));
+  } catch (error) {
+    console.error('POST /api/ot/activites failed', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+    return res.status(500).json({ message: 'Erreur lors de la création de l\'activité terrain' });
+  }
+});
+
+app.get('/api/ot/export/:format', authenticateToken, async (req, res) => {
+  try {
+    const activites = await getOTActivites();
+    const format = String(req.params.format).toLowerCase();
+
+    if (format === 'excel') {
+      const csv = [
+        ['Type', 'Titre', 'Date', 'Province', 'Statut', 'Responsable', 'Participants'],
+        ...activites.map((item) => [item.type, item.titre, item.date, item.province, item.statut, item.responsable, item.participants ?? 0]),
+      ].map((row) => row.join(',')).join('\n');
+
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename=ot_activites.csv');
+      return res.send(csv);
+    }
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename=ot_activites.pdf');
+    return res.send(Buffer.from(`OT export\nTotal activités: ${activites.length}`));
+  } catch (error) {
+    console.error('GET /api/ot/export/:format failed', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+    return res.status(500).json({ message: 'Erreur lors de l\'export OT' });
+  }
 });
 
 // ==================== DATABASE VIEWS ====================
 
-app.get('/api/database/beneficiaires', authenticateToken, (req, res) => {
-  const { search, province, sexe, type_exploitant, page = 0, limit = 10 } = req.query;
-  let filtered = [...beneficiaires];
-  if (search) { const s = String(search).toLowerCase(); filtered = filtered.filter(b => b.nom.toLowerCase().includes(s) || b.prenom.toLowerCase().includes(s) || b.rna_id.toLowerCase().includes(s)); }
-  if (province) filtered = filtered.filter(b => b.province === province);
-  if (sexe) filtered = filtered.filter(b => b.sexe === sexe);
-  if (type_exploitant) filtered = filtered.filter(b => b.type_exploitant === type_exploitant);
-  const start = Number(page) * Number(limit);
-  res.json({ data: filtered.slice(start, start + Number(limit)), total: filtered.length, page: Number(page), totalPages: Math.ceil(filtered.length / Number(limit)) });
-});
+app.get('/api/database/beneficiaires', authenticateToken, async (req, res) => {
+  try {
+    const payload = await getBeneficiaires({
+      search: req.query.search ? String(req.query.search) : undefined,
+      province: req.query.province ? String(req.query.province) : undefined,
+      sexe: req.query.sexe ? String(req.query.sexe) : undefined,
+      type: req.query.type_exploitant ? String(req.query.type_exploitant) : req.query.type ? String(req.query.type) : undefined,
+      page: req.query.page ? Number(req.query.page) : 0,
+      limit: req.query.limit ? Number(req.query.limit) : 10,
+    });
 
-app.get('/api/database/beneficiaires/stats', authenticateToken, (_req, res) => {
-  res.json({
-    total: 124530,
-    par_sexe: { femmes: 56038, hommes: 68492 },
-    par_type: { agriculteur: 58420, eleveur: 31180, pisciculteur: 14230, mixte: 20700 },
-    par_province: { Kinshasa: 21450, 'Kongo Central': 22180, Kwilu: 19870, Kasaï: 24130, 'Haut-Lomami': 18640, Tanganyika: 18260 },
-    par_age: { jeunes: 42340, adultes: 68190, seniors: 14000 },
-    par_instruction: { aucun: 18420, primaire: 45230, secondaire: 48760, superieur: 12120 },
-    par_technologies: { semences_ameliorees: 72450, engrais_organiques: 61230, irrigation: 28340, mecanisation: 15670 },
-    evolution_mensuelle: [
-      { mois: 'Oct', total: 98200 },
-      { mois: 'Nov', total: 104500 },
-      { mois: 'Déc', total: 109800 },
-      { mois: 'Jan', total: 113200 },
-      { mois: 'Fév', total: 118900 },
-      { mois: 'Mar', total: 124530 },
-    ],
-  });
-});
+    res.json({
+      ...payload,
+      data: payload.data.map(mapBeneficiaireToDatabaseRecord),
+    });
+  } catch (error) {
+    console.error('GET /api/database/beneficiaires failed', error);
 
-app.get('/api/indicateurs-database', authenticateToken, (req, res) => {
-  const { search, type, composante, page = 0, limit = 10 } = req.query;
-  let all = [...iodpIndicateurs, ...irIndicateurs];
-  if (search) { const s = String(search).toLowerCase(); all = all.filter(i => i.nom.toLowerCase().includes(s) || i.code.toLowerCase().includes(s)); }
-  if (type === 'iodp') all = all.filter(i => i.est_iodp);
-  if (type === 'ir') all = all.filter(i => !i.est_iodp);
-  const start = Number(page) * Number(limit);
-  res.json({ data: all.slice(start, start + Number(limit)), total: all.length, page: Number(page), totalPages: Math.ceil(all.length / Number(limit)) });
-});
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
 
-app.get('/api/indicateurs-database/stats', authenticateToken, (_req, res) => {
-  res.json({ total: iodpIndicateurs.length + irIndicateurs.length, iodp: iodpIndicateurs.length, ir: irIndicateurs.length, taux_moyen: Math.round([...iodpIndicateurs, ...irIndicateurs].reduce((s, i) => s + i.progression, 0) / (iodpIndicateurs.length + irIndicateurs.length)) });
-});
-
-app.put('/api/indicateurs-database/:id', authenticateToken, (req, res) => {
-  const id = Number(req.params.id);
-  let idx = iodpIndicateurs.findIndex(i => i.id === id);
-  if (idx !== -1) { iodpIndicateurs[idx] = { ...iodpIndicateurs[idx], ...req.body }; return res.json(iodpIndicateurs[idx]); }
-  idx = irIndicateurs.findIndex(i => i.id === id);
-  if (idx !== -1) { irIndicateurs[idx] = { ...irIndicateurs[idx], ...req.body }; return res.json(irIndicateurs[idx]); }
-  res.status(404).json({ message: 'Indicateur non trouvé' });
-});
-
-// ==================== SUIVI MISSIONS T4 2025 ====================
-
-const suiviMissionsData = [
-  // ===== KASAÏ — Section 1: Missions routine =====
-  { id: 1, num: '1.1', section: 1, sectionLabel: 'Missions au profit du personnel dans le cadre des travaux de routine', natureMission: 'Accompagnement Assistant SG Agriculture à Mweka', objectif: 'Conduire le véhicule', horsProjet: 1, projet: 1, montantUSD: 706, dates: '02–05 oct 2025', avanceUSD: 706, solde: 0, province: 'Kasaï' },
-  { id: 2, num: '1.2', section: 1, sectionLabel: 'Missions au profit du personnel dans le cadre des travaux de routine', natureMission: 'Distribution semences mucuna', objectif: 'Déposer les semences', horsProjet: 0, projet: 2, montantUSD: 0, dates: '01 oct 2025', avanceUSD: 0, solde: 0, province: 'Kasaï' },
-  { id: 3, num: '1.3', section: 1, sectionLabel: 'Missions au profit du personnel dans le cadre des travaux de routine', natureMission: 'Appui UPEP Kwilu (gestion financière)', objectif: 'Appuyer UPEP', horsProjet: 0, projet: 1, montantUSD: 877, dates: '03–09 oct 2025', avanceUSD: 724, solde: 153, province: 'Kasaï' },
-  { id: 4, num: '1.4', section: 1, sectionLabel: 'Missions au profit du personnel dans le cadre des travaux de routine', natureMission: 'Accompagnement comptable Kwilu', objectif: 'Conduire comptable + récupérer semences', horsProjet: 0, projet: 1, montantUSD: 410, dates: '03–04 oct 2025', avanceUSD: 370, solde: 40, province: 'Kasaï' },
-  { id: 5, num: '1.5', section: 1, sectionLabel: 'Missions au profit du personnel dans le cadre des travaux de routine', natureMission: 'Enquête production agricole Tshikapa', objectif: 'Superviser enquête', horsProjet: 0, projet: 2, montantUSD: 7102, dates: '06–12 oct 2025', avanceUSD: 5504, solde: 1598, province: 'Kasaï' },
-  { id: 6, num: '1.6', section: 1, sectionLabel: 'Missions au profit du personnel dans le cadre des travaux de routine', natureMission: 'Appui campagne agricole A 2025', objectif: 'Appuyer campagne', horsProjet: 1, projet: 0, montantUSD: 905, dates: '17–25 sept 2025', avanceUSD: 905, solde: 0, province: 'Kasaï' },
-  { id: 7, num: '1.7', section: 1, sectionLabel: 'Missions au profit du personnel dans le cadre des travaux de routine', natureMission: 'Récupération comptable Kwilu', objectif: 'Récupérer comptable', horsProjet: 0, projet: 1, montantUSD: 561, dates: '08–09 oct 2025', avanceUSD: 379, solde: 182, province: 'Kasaï' },
-  { id: 8, num: '1.8', section: 1, sectionLabel: 'Missions au profit du personnel dans le cadre des travaux de routine', natureMission: 'Remise à niveau CPM Banque mondiale', objectif: 'Formation STEP + contrats', horsProjet: 0, projet: 1, montantUSD: 1958, dates: '17–24 oct 2025', avanceUSD: 1382, solde: 576, province: 'Kasaï' },
-  { id: 9, num: '1.9', section: 1, sectionLabel: 'Missions au profit du personnel dans le cadre des travaux de routine', natureMission: 'Accompagnement CPM Kikwit', objectif: 'Conduire CPM', horsProjet: 0, projet: 1, montantUSD: 200, dates: '17–18 oct 2025', avanceUSD: 160, solde: 40, province: 'Kasaï' },
-  { id: 10, num: '1.10', section: 1, sectionLabel: 'Missions au profit du personnel dans le cadre des travaux de routine', natureMission: 'Briefing + installation CGP Mweka', objectif: 'Installer CGP', horsProjet: 0, projet: 2, montantUSD: 8525, dates: '17–23 oct 2025', avanceUSD: 8163, solde: 362, province: 'Kasaï' },
-  { id: 11, num: '1.11', section: 1, sectionLabel: 'Missions au profit du personnel dans le cadre des travaux de routine', natureMission: 'Briefing + installation CGP Luebo', objectif: 'Installer CGP', horsProjet: 0, projet: 2, montantUSD: 8163, dates: '17–23 oct 2025', avanceUSD: 7801, solde: 362, province: 'Kasaï' },
-  { id: 12, num: '1.12', section: 1, sectionLabel: 'Missions au profit du personnel dans le cadre des travaux de routine', natureMission: 'Briefing + installation CGP Tshikapa', objectif: 'Installer CGP', horsProjet: 0, projet: 4, montantUSD: 5975, dates: '29 oct–05 nov 2025', avanceUSD: 5975, solde: 0, province: 'Kasaï' },
-  { id: 13, num: '1.13', section: 1, sectionLabel: 'Missions au profit du personnel dans le cadre des travaux de routine', natureMission: 'Récupération semences FAO Kikwit', objectif: 'Récupérer semences', horsProjet: 0, projet: 1, montantUSD: 734, dates: '12–13 oct 2025', avanceUSD: 734, solde: 0, province: 'Kasaï' },
-  { id: 14, num: '1.14', section: 1, sectionLabel: 'Missions au profit du personnel dans le cadre des travaux de routine', natureMission: 'Mise à niveau communication (webmastering)', objectif: 'Formation communication', horsProjet: 0, projet: 2, montantUSD: 6909, dates: '19–27 oct 2025', avanceUSD: 6436, solde: 473, province: 'Kasaï' },
-  { id: 15, num: '1.15', section: 1, sectionLabel: 'Missions au profit du personnel dans le cadre des travaux de routine', natureMission: 'Appui UPEP Kwilu', objectif: 'Appuyer UPEP', horsProjet: 0, projet: 1, montantUSD: 731, dates: '19–24 oct 2025', avanceUSD: 611, solde: 120, province: 'Kasaï' },
-  { id: 16, num: '1.16', section: 1, sectionLabel: 'Missions au profit du personnel dans le cadre des travaux de routine', natureMission: 'Appui fonctionnement KWILU', objectif: 'Appuyer activités', horsProjet: 0, projet: 2, montantUSD: 877, dates: '02–05 nov 2025', avanceUSD: 724, solde: 153, province: 'Kasaï' },
-  { id: 17, num: '1.17', section: 1, sectionLabel: 'Missions au profit du personnel dans le cadre des travaux de routine', natureMission: 'Visite agrimultiplicateur', objectif: 'Déposer semences', horsProjet: 0, projet: 2, montantUSD: 0, dates: '04 nov 2025', avanceUSD: 0, solde: 0, province: 'Kasaï' },
-  { id: 18, num: '1.18', section: 1, sectionLabel: 'Missions au profit du personnel dans le cadre des travaux de routine', natureMission: 'Suivi réparation véhicules Kikwit', objectif: 'Suivre réparation', horsProjet: 0, projet: 2, montantUSD: 915, dates: '06–10 nov 2025', avanceUSD: 642, solde: 273, province: 'Kasaï' },
-  { id: 19, num: '1.19', section: 1, sectionLabel: 'Missions au profit du personnel dans le cadre des travaux de routine', natureMission: 'Supervision technique Tshikapa', objectif: 'Supervision', horsProjet: 1, projet: 0, montantUSD: 575, dates: '16–18 nov 2025', avanceUSD: 0, solde: 0, province: 'Kasaï' },
-  { id: 20, num: '1.20', section: 1, sectionLabel: 'Missions au profit du personnel dans le cadre des travaux de routine', natureMission: 'Participation Revue Mi-Parcours', objectif: '', horsProjet: 0, projet: 4, montantUSD: 8056, dates: '17–24 oct 2025', avanceUSD: 0, solde: 0, province: 'Kasaï' },
-  { id: 21, num: '1.21', section: 1, sectionLabel: 'Missions au profit du personnel dans le cadre des travaux de routine', natureMission: 'Captage histoires à succès', objectif: 'Capturer histoires + réunions', horsProjet: 0, projet: 3, montantUSD: 7512, dates: '07 nov 2025', avanceUSD: 6595, solde: 917, province: 'Kasaï' },
-  { id: 22, num: '1.22', section: 1, sectionLabel: 'Missions au profit du personnel dans le cadre des travaux de routine', natureMission: 'Accompagnement comptable Kikwit', objectif: 'Accompagner comptable', horsProjet: 0, projet: 1, montantUSD: 200, dates: '28–29 nov 2025', avanceUSD: 160, solde: 40, province: 'Kasaï' },
-  { id: 23, num: '1.23', section: 1, sectionLabel: 'Missions au profit du personnel dans le cadre des travaux de routine', natureMission: 'Appui UPEP Kwilu', objectif: 'Appuyer UPEP', horsProjet: 0, projet: 1, montantUSD: 2028, dates: '04–10 déc 2025', avanceUSD: 1142, solde: 886, province: 'Kasaï' },
-  { id: 24, num: '1.24', section: 1, sectionLabel: 'Missions au profit du personnel dans le cadre des travaux de routine', natureMission: 'Atelier restitution APS BETRA/WEST', objectif: 'Participer atelier', horsProjet: 0, projet: 1, montantUSD: 1059, dates: '09–14 déc 2025', avanceUSD: 862, solde: 197, province: 'Kasaï' },
-  { id: 25, num: '1.25', section: 1, sectionLabel: 'Missions au profit du personnel dans le cadre des travaux de routine', natureMission: 'Accompagnement ETGC Kikwit', objectif: 'Conduire véhicule', horsProjet: 0, projet: 1, montantUSD: 392, dates: '09–10 déc 2025', avanceUSD: 352, solde: 40, province: 'Kasaï' },
-  { id: 26, num: '1.26', section: 1, sectionLabel: 'Missions au profit du personnel dans le cadre des travaux de routine', natureMission: 'Suivi réparation véhicules Kikwit', objectif: 'Suivre réparation', horsProjet: 0, projet: 1, montantUSD: 498, dates: '09–10 déc 2025', avanceUSD: 498, solde: 0, province: 'Kasaï' },
-  { id: 27, num: '1.27', section: 1, sectionLabel: 'Missions au profit du personnel dans le cadre des travaux de routine', natureMission: 'Récupération comptable + véhicule Kwilu', objectif: 'Récupérer comptable + véhicule', horsProjet: 0, projet: 2, montantUSD: 533, dates: '12–14 déc 2025', avanceUSD: 465, solde: 68, province: 'Kasaï' },
-  { id: 28, num: '1.28', section: 1, sectionLabel: 'Missions au profit du personnel dans le cadre des travaux de routine', natureMission: 'Mission conjointe UNOPS/AGETIP', objectif: 'Reconnaissance axes routiers', horsProjet: 0, projet: 2, montantUSD: 1685, dates: '21–24 déc 2025', avanceUSD: 1348, solde: 337, province: 'Kasaï' },
-  // Kasaï — Section 3: Ateliers
-  { id: 29, num: '3.1', section: 3, sectionLabel: 'Ateliers', natureMission: 'Atelier restitution EIES Kamonia', objectif: 'Participer atelier', horsProjet: 0, projet: 4, montantUSD: 800, dates: '18–19 nov 2025', avanceUSD: 640, solde: 160, province: 'Kasaï' },
-
-  // ===== KASAÏ CENTRAL — Section 2: Implémentation =====
-  { id: 30, num: '2.1', section: 2, sectionLabel: "Missions en vue de l'implémentation des activités", natureMission: 'Supervision & accompagnement enquête PEA (Demba, Dibaya)', objectif: 'Enquêter bénéficiaires PNDA (B-2024, A-2024, B-2025)', horsProjet: 16, projet: 1, montantUSD: 9493, dates: '12 oct 2025', avanceUSD: 9493, solde: 0, province: 'Kasaï Central' },
-  { id: 31, num: '2.2', section: 2, sectionLabel: "Missions en vue de l'implémentation des activités", natureMission: 'Déploiement semences mucuna (Demba, Luiza)', objectif: 'Appui adoption agriculture intelligente', horsProjet: 3, projet: 2, montantUSD: 1638, dates: '15 oct 2025', avanceUSD: 1638, solde: 0, province: 'Kasaï Central' },
-  { id: 32, num: '2.3', section: 2, sectionLabel: "Missions en vue de l'implémentation des activités", natureMission: 'Briefing CGP sur MGP (Luiza, Dibaya, Demba)', objectif: 'Renforcement capacités CGP', horsProjet: 214, projet: 2, montantUSD: 24697, dates: '16 oct 2025', avanceUSD: 24697, solde: 0, province: 'Kasaï Central' },
-  { id: 33, num: '2.4', section: 2, sectionLabel: "Missions en vue de l'implémentation des activités", natureMission: 'Évaluation boutures manioc FAO/INERA Ngandajika', objectif: 'Augmenter production manioc', horsProjet: 0, projet: 2, montantUSD: 3255, dates: '17 oct 2025', avanceUSD: 3255, solde: 0, province: 'Kasaï Central' },
-  { id: 34, num: '2.5', section: 2, sectionLabel: "Missions en vue de l'implémentation des activités", natureMission: 'Supervision vente semences (Luiza, Dibaya, Demba)', objectif: 'Suivi achats/ventes semences', horsProjet: 0, projet: 1, montantUSD: 298, dates: '20 oct 2025', avanceUSD: 298, solde: 0, province: 'Kasaï Central' },
-  { id: 35, num: '2.6', section: 2, sectionLabel: "Missions en vue de l'implémentation des activités", natureMission: 'Formation sécurité routière', objectif: 'Renforcer capacités utilisateurs engins roulants', horsProjet: 31, projet: 6, montantUSD: 2286, dates: '27 oct 2025', avanceUSD: 2286, solde: 0, province: 'Kasaï Central' },
-  { id: 36, num: '2.7', section: 2, sectionLabel: "Missions en vue de l'implémentation des activités", natureMission: 'Suivi mise en œuvre PNDA (Hinterland Kananga)', objectif: 'Suivi activités PNDA', horsProjet: 0, projet: 4, montantUSD: 2650, dates: '04 nov 2025', avanceUSD: 2650, solde: 0, province: 'Kasaï Central' },
-  { id: 37, num: '2.8', section: 2, sectionLabel: "Missions en vue de l'implémentation des activités", natureMission: 'Formation mise à niveau animateurs webmastering (UNCP)', objectif: 'Renforcement capacités communication', horsProjet: 0, projet: 1, montantUSD: 1331, dates: '21 oct 2025', avanceUSD: 1331, solde: 0, province: 'Kasaï Central' },
-  { id: 38, num: '2.9', section: 2, sectionLabel: "Missions en vue de l'implémentation des activités", natureMission: 'Participation revue à mi-parcours (UNCP)', objectif: 'Participation revue PNDA', horsProjet: 0, projet: 4, montantUSD: 11201, dates: '23 nov 2025', avanceUSD: 11201, solde: 0, province: 'Kasaï Central' },
-  { id: 39, num: '2.10', section: 2, sectionLabel: "Missions en vue de l'implémentation des activités", natureMission: 'Livraison boutures manioc aux AVEC', objectif: 'Appui champs semenciers communautaires', horsProjet: 3, projet: 3, montantUSD: 13995, dates: '05 nov 2025', avanceUSD: 13995, solde: 0, province: 'Kasaï Central' },
-  { id: 40, num: '2.11', section: 2, sectionLabel: "Missions en vue de l'implémentation des activités", natureMission: 'Production capsules histoires de succès', objectif: 'Élaboration histoires de succès PNDA', horsProjet: 0, projet: 1, montantUSD: 1700, dates: '15 nov 2025', avanceUSD: 1700, solde: 0, province: 'Kasaï Central' },
-  { id: 41, num: '2.12', section: 2, sectionLabel: "Missions en vue de l'implémentation des activités", natureMission: 'Participation atelier validation PTBA/Kikwit', objectif: 'Validation PTBA', horsProjet: 0, projet: 4, montantUSD: 2150, dates: '20 déc 2025', avanceUSD: 2150, solde: 0, province: 'Kasaï Central' },
-
-  // ===== KWILU — Section 2: Implémentation =====
-  { id: 42, num: '2.1', section: 2, sectionLabel: "Missions en vue de l'implémentation des activités", natureMission: 'Mise en œuvre activités', objectif: 'Collecte données enquêtes production PEA', horsProjet: 20, projet: 3, montantUSD: 10162, dates: '03–12 oct 2025', avanceUSD: 0, solde: 0, province: 'Kwilu' },
-  { id: 43, num: '2.2', section: 2, sectionLabel: "Missions en vue de l'implémentation des activités", natureMission: 'Mise en œuvre activités', objectif: 'Suivi contentieux campagne agricole A2025 (Gungu)', horsProjet: 0, projet: 3, montantUSD: 1002, dates: '07–09 oct 2025', avanceUSD: 0, solde: 0, province: 'Kwilu' },
-  { id: 44, num: '2.3', section: 2, sectionLabel: "Missions en vue de l'implémentation des activités", natureMission: 'Mise en œuvre activités', objectif: 'Sensibilisation + supervision campagne A & vente mucuna', horsProjet: 0, projet: 2, montantUSD: 3839, dates: '', avanceUSD: 0, solde: 0, province: 'Kwilu' },
-  { id: 45, num: '2.4', section: 2, sectionLabel: "Missions en vue de l'implémentation des activités", natureMission: 'Mise en œuvre activités', objectif: 'Appui & supervision commercialisation boutures manioc/mucuna/maïs (Bulungu, Gungu, Idiofa)', horsProjet: 1, projet: 6, montantUSD: 5934, dates: '14–21 oct 2025', avanceUSD: 0, solde: 0, province: 'Kwilu' },
-  { id: 46, num: '2.5', section: 2, sectionLabel: "Missions en vue de l'implémentation des activités", natureMission: 'Mise en œuvre activités', objectif: 'Appui logistique distribution carburant & huile moteur', horsProjet: 0, projet: 2, montantUSD: 1805, dates: '26 nov–01 déc 2025', avanceUSD: 0, solde: 0, province: 'Kwilu' },
-  { id: 47, num: '2.6', section: 2, sectionLabel: "Missions en vue de l'implémentation des activités", natureMission: 'Mise en œuvre activités', objectif: 'Appui fonctionnement UPEP Kwilu (paiement AC)', horsProjet: 0, projet: 2, montantUSD: 1128, dates: '24–28 nov 2025', avanceUSD: 0, solde: 0, province: 'Kwilu' },
-  { id: 48, num: '2.7', section: 2, sectionLabel: "Missions en vue de l'implémentation des activités", natureMission: 'Mise en œuvre activités', objectif: 'Briefing & installation CGP', horsProjet: 0, projet: 2, montantUSD: 0, dates: '17 sept–16 oct 2025', avanceUSD: 0, solde: 0, province: 'Kwilu' },
-  { id: 49, num: '2.8', section: 2, sectionLabel: "Missions en vue de l'implémentation des activités", natureMission: 'Mise en œuvre activités', objectif: 'Collecte & production histoires à succès (3 territoires)', horsProjet: 1, projet: 2, montantUSD: 1060, dates: '17–20 nov 2025', avanceUSD: 0, solde: 0, province: 'Kwilu' },
-  { id: 50, num: '2.9', section: 2, sectionLabel: "Missions en vue de l'implémentation des activités", natureMission: 'Mise en œuvre activités', objectif: 'Suivi fonctionnement CGP dans les territoires', horsProjet: 0, projet: 2, montantUSD: 3191, dates: '11–22 nov 2025', avanceUSD: 0, solde: 0, province: 'Kwilu' },
-  { id: 51, num: '2.10', section: 2, sectionLabel: "Missions en vue de l'implémentation des activités", natureMission: 'Mise en œuvre activités', objectif: 'Missions FACT 9/8 – entretien véhicules INERA & pêche/élevage', horsProjet: 2, projet: 0, montantUSD: 875, dates: '24–25 déc 2025', avanceUSD: 0, solde: 0, province: 'Kwilu' },
-  { id: 52, num: '2.11', section: 2, sectionLabel: "Missions en vue de l'implémentation des activités", natureMission: 'Mise en œuvre activités', objectif: 'Installation parcs à bois + vente boutures fortifiées', horsProjet: 4, projet: 2, montantUSD: 5714, dates: '10–27 déc 2025', avanceUSD: 0, solde: 0, province: 'Kwilu' },
-  { id: 53, num: '2.12', section: 2, sectionLabel: "Missions en vue de l'implémentation des activités", natureMission: 'Mise en œuvre activités', objectif: 'Distribution matériels aratoires aux OP', horsProjet: 0, projet: 4, montantUSD: 1978, dates: '19–24 déc 2025', avanceUSD: 0, solde: 0, province: 'Kwilu' },
-  // Kwilu — Section 3: Ateliers & Formations
-  { id: 54, num: '3.1', section: 3, sectionLabel: 'Ateliers', natureMission: 'Atelier / Réunion supervision & revue', objectif: 'Participation supervision & revue mi-parcours PNDA (Kinshasa)', horsProjet: 0, projet: 6, montantUSD: 9291, dates: '23–30 nov 2025', avanceUSD: 0, solde: 0, province: 'Kwilu' },
-  { id: 55, num: '3.2', section: 3, sectionLabel: 'Ateliers', natureMission: 'Atelier de restitution', objectif: 'Restitution APS BETRA/WEST (Kinshasa)', horsProjet: 0, projet: 2, montantUSD: 632, dates: '10–13 déc 2025', avanceUSD: 0, solde: 0, province: 'Kwilu' },
-  { id: 56, num: '3.3', section: 3, sectionLabel: 'Ateliers', natureMission: 'Formation', objectif: 'Remise à niveau en webmastering (communication)', horsProjet: 0, projet: 2, montantUSD: 2320, dates: '21–24 oct 2025', avanceUSD: 0, solde: 0, province: 'Kwilu' },
-  { id: 57, num: '3.4', section: 3, sectionLabel: 'Ateliers', natureMission: 'Formation', objectif: 'Remise à niveau en passation de marchés (STEP & contrats)', horsProjet: 0, projet: 2, montantUSD: 1341, dates: '19–24 oct 2025', avanceUSD: 0, solde: 0, province: 'Kwilu' },
-
-  // ===== UNCP — Section 2: Implémentation =====
-  { id: 58, num: '2.1', section: 2, sectionLabel: "Missions en vue de l'implémentation des activités", natureMission: 'Atelier formation prévention & sécurité routière (Kananga)', objectif: 'Former les utilisateurs des engins roulants', horsProjet: 25, projet: 9, montantUSD: 3732, dates: '24/09–05/10 2025', avanceUSD: 3420, solde: 0, province: 'UNCP' },
-  { id: 59, num: '2.2', section: 2, sectionLabel: "Missions en vue de l'implémentation des activités", natureMission: 'Enquête production PNDA (Kwilu, Kasaï Central, Kasaï)', objectif: 'Collecte données indicateurs ODP PNDA', horsProjet: 44, projet: 3, montantUSD: 30800, dates: '01–15 oct 2025', avanceUSD: 0, solde: 0, province: 'UNCP' },
-  { id: 60, num: '2.3', section: 2, sectionLabel: "Missions en vue de l'implémentation des activités", natureMission: 'Participation ateliers restitution EIES (Kananga)', objectif: 'Participer à la restitution des EIES', horsProjet: 50, projet: 6, montantUSD: 788, dates: '26–30 oct 2025', avanceUSD: 526, solde: 0, province: 'UNCP' },
-  { id: 61, num: '2.4', section: 2, sectionLabel: "Missions en vue de l'implémentation des activités", natureMission: 'Enquête production PNDA (répétition ligne 2.2)', objectif: 'Collecte données indicateurs ODP PNDA', horsProjet: 44, projet: 3, montantUSD: 30800, dates: '01–15 oct 2025', avanceUSD: 0, solde: 0, province: 'UNCP' },
-  { id: 62, num: '2.5', section: 2, sectionLabel: "Missions en vue de l'implémentation des activités", natureMission: 'Appui technique terrain – préparation supervision', objectif: 'Appuyer consultant pour rapport mi-parcours', horsProjet: 1, projet: 1, montantUSD: 4341, dates: '04–11 nov 2025', avanceUSD: 935, solde: 0, province: 'UNCP' },
-  { id: 63, num: '2.6', section: 2, sectionLabel: "Missions en vue de l'implémentation des activités", natureMission: 'Appui technique – préparation supervision conjointe', objectif: 'Appui organisation matérielle mission technique', horsProjet: 4, projet: 6, montantUSD: 13743, dates: '13–19 nov 2025', avanceUSD: 0, solde: 0, province: 'UNCP' },
-  { id: 64, num: '2.7', section: 2, sectionLabel: "Missions en vue de l'implémentation des activités", natureMission: 'Supervision terrain Kikwit & Kasaï', objectif: 'Accompagner TTL & vérifier aspects environnementaux', horsProjet: 3, projet: 3, montantUSD: 3820, dates: '30/11–05/12 2025', avanceUSD: 3055, solde: 0, province: 'UNCP' },
-  { id: 65, num: '2.8', section: 2, sectionLabel: "Missions en vue de l'implémentation des activités", natureMission: 'Remise officielle motos – Kongo Central', objectif: "Renforcer capacités agents de l'État", horsProjet: 45, projet: 4, montantUSD: 6318, dates: '16–19 déc 2025', avanceUSD: 0, solde: 0, province: 'UNCP' },
-  { id: 66, num: '2.9', section: 2, sectionLabel: "Missions en vue de l'implémentation des activités", natureMission: 'Examen & validation PTBA 2026 (COPIL)', objectif: 'Examiner & approuver PTBA avant transmission au bailleur', horsProjet: 92, projet: 22, montantUSD: 49979, dates: '21–24 déc 2026', avanceUSD: 0, solde: 0, province: 'UNCP' },
-  // UNCP — Section 3: Atelier
-  { id: 67, num: '8.1', section: 3, sectionLabel: 'Ateliers', natureMission: 'Atelier revue à mi-parcours (Kinshasa)', objectif: 'Participer à la revue à mi-parcours du PNDA', horsProjet: 45, projet: 28, montantUSD: 2252, dates: '24–28 nov 2025', avanceUSD: 1802, solde: 0, province: 'UNCP' },
-];
-
-app.get('/api/suivi/missions', authenticateToken, (req: express.Request, res: express.Response) => {
-  const { province } = req.query;
-  const data = province && typeof province === 'string'
-    ? suiviMissionsData.filter(m => m.province === province)
-    : suiviMissionsData;
-  res.json(data);
-});
-
-app.get('/api/suivi/stats', authenticateToken, (_req: express.Request, res: express.Response) => {
-  const provinces = ['Kasaï', 'Kasaï Central', 'Kwilu', 'UNCP'];
-  const parProvince: Record<string, { missions: number; montant: number; avances: number; solde: number }> = {};
-  for (const prov of provinces) {
-    const ms = suiviMissionsData.filter(m => m.province === prov);
-    parProvince[prov] = {
-      missions: ms.length,
-      montant: ms.reduce((s, m) => s + m.montantUSD, 0),
-      avances: ms.reduce((s, m) => s + m.avanceUSD, 0),
-      solde: ms.reduce((s, m) => s + m.solde, 0),
-    };
+    return res.status(500).json({ message: 'Erreur lors du chargement de la base bénéficiaires' });
   }
-  res.json({
-    totalMissions: suiviMissionsData.length,
-    totalMontant: suiviMissionsData.reduce((s, m) => s + m.montantUSD, 0),
-    totalAvances: suiviMissionsData.reduce((s, m) => s + m.avanceUSD, 0),
-    totalSolde: suiviMissionsData.reduce((s, m) => s + m.solde, 0),
-    parProvince,
-  });
+});
+
+app.get('/api/database/beneficiaires/stats', authenticateToken, async (_req, res) => {
+  try {
+    const [baseStats, databaseStats] = await Promise.all([
+      getBeneficiaireStats(),
+      getBeneficiairesDatabaseStats(),
+    ]);
+
+    res.json({
+      total: baseStats.total,
+      par_sexe: { femmes: baseStats.femmes, hommes: baseStats.hommes },
+      par_type: databaseStats.parType,
+      par_province: databaseStats.parProvince,
+      par_age: { jeunes: 0, adultes: baseStats.total, seniors: 0 },
+      par_instruction: {},
+      par_technologies: databaseStats.parTechnologies,
+      evolution_mensuelle: databaseStats.evolutionMensuelle,
+    });
+  } catch (error) {
+    console.error('GET /api/database/beneficiaires/stats failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors du chargement des statistiques bénéficiaires' });
+  }
+});
+
+app.get('/api/indicateurs-database', authenticateToken, async (req, res) => {
+  try {
+    res.json(await getIndicateursDatabase({
+      search: typeof req.query.search === 'string' ? req.query.search : undefined,
+      type: typeof req.query.type === 'string' ? req.query.type : undefined,
+      composante: typeof req.query.composante === 'string' ? req.query.composante : undefined,
+      frequence: typeof req.query.frequence === 'string' ? req.query.frequence : undefined,
+      statut: typeof req.query.statut === 'string' ? req.query.statut : undefined,
+      page: Number(req.query.page ?? 0),
+      limit: Number(req.query.limit ?? 10),
+    }));
+  } catch (error) {
+    console.error('GET /api/indicateurs-database failed', error);
+    const message = error instanceof Error ? error.message : 'Erreur de connexion a la base de donnees';
+    if (message.startsWith('Database configuration is missing') || isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message });
+    }
+    return res.status(500).json({ message: 'Impossible de recuperer la base indicateurs' });
+  }
+});
+
+app.get('/api/indicateurs-database/stats', authenticateToken, async (_req, res) => {
+  try {
+    res.json(await getIndicateursDatabaseStats());
+  } catch (error) {
+    console.error('GET /api/indicateurs-database/stats failed', error);
+    const message = error instanceof Error ? error.message : 'Erreur de connexion a la base de donnees';
+    if (message.startsWith('Database configuration is missing') || isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message });
+    }
+    return res.status(500).json({ message: 'Impossible de recuperer les statistiques des indicateurs' });
+  }
+});
+
+app.get('/api/indicateurs-database/:id', authenticateToken, async (req, res) => {
+  try {
+    const indicateur = await getIndicateurDatabaseById(Number(req.params.id));
+    if (!indicateur) {
+      return res.status(404).json({ message: 'Indicateur non trouve' });
+    }
+    return res.json(indicateur);
+  } catch (error) {
+    console.error('GET /api/indicateurs-database/:id failed', error);
+    const message = error instanceof Error ? error.message : 'Erreur de connexion a la base de donnees';
+    if (message.startsWith('Database configuration is missing') || isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message });
+    }
+    return res.status(500).json({ message: 'Impossible de recuperer cet indicateur' });
+  }
+});
+
+app.put('/api/indicateurs-database/:id', authenticateToken, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (req.body?.valeurs?.actuelle !== undefined) {
+      await updateIndicateurValeur(id, Number(req.body.valeurs.actuelle), req.body?.periode);
+    }
+    const indicateur = await getIndicateurDatabaseById(id);
+    if (!indicateur) {
+      return res.status(404).json({ message: 'Indicateur non trouve' });
+    }
+    return res.json(indicateur);
+  } catch (error) {
+    console.error('PUT /api/indicateurs-database/:id failed', error);
+    const message = error instanceof Error ? error.message : 'Erreur de connexion a la base de donnees';
+    if (message.startsWith('Database configuration is missing') || isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message });
+    }
+    return res.status(500).json({ message: 'Impossible de mettre a jour cet indicateur' });
+  }
+});
+
+app.put('/api/indicateurs-database/:id/valeur', authenticateToken, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const { valeur, periode } = req.body;
+    const indicateur = await updateIndicateurValeur(id, Number(valeur), periode);
+    if (!indicateur) {
+      return res.status(404).json({ message: 'Indicateur non trouve' });
+    }
+    return res.json({ success: true, indicateur });
+  } catch (error) {
+    console.error('PUT /api/indicateurs-database/:id/valeur failed', error);
+    const message = error instanceof Error ? error.message : 'Erreur de connexion a la base de donnees';
+    if (message.startsWith('Database configuration is missing') || isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message });
+    }
+    return res.status(500).json({ message: 'Impossible de mettre a jour la valeur' });
+  }
+});
+
+app.get('/api/suivi/missions', authenticateToken, async (req: express.Request, res: express.Response) => {
+  try {
+    const province = typeof req.query.province === 'string' ? req.query.province : undefined;
+    return res.json(await getSuiviMissions(province));
+  } catch (error) {
+    console.error('GET /api/suivi/missions failed', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+    return res.status(500).json({ message: 'Erreur lors du chargement des missions de suivi' });
+  }
+});
+
+app.get('/api/suivi/stats', authenticateToken, async (_req: express.Request, res: express.Response) => {
+  try {
+    return res.json(await getSuiviStats());
+  } catch (error) {
+    console.error('GET /api/suivi/stats failed', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+    return res.status(500).json({ message: 'Erreur lors du chargement des statistiques de suivi' });
+  }
+});
+
+// Statistiques avancées des bénéficiaires
+app.get('/api/beneficiaires/advanced-stats', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { saison, province, territoire, secteur, groupement, village, ptech } = req.query;
+    
+    let whereClause = 'WHERE 1=1';
+    const params: any[] = [];
+    
+    if (saison) {
+      whereClause += ' AND a.saison = ?';
+      params.push(saison);
+    }
+    if (province) {
+      whereClause += ' AND a.province = ?';
+      params.push(province);
+    }
+    if (territoire) {
+      whereClause += ' AND a.territoire = ?';
+      params.push(territoire);
+    }
+    if (secteur) {
+      whereClause += ' AND a.secteur = ?';
+      params.push(secteur);
+    }
+    if (groupement) {
+      whereClause += ' AND a.groupement = ?';
+      params.push(groupement);
+    }
+    if (village) {
+      whereClause += ' AND a.village = ?';
+      params.push(village);
+    }
+    if (ptech) {
+      whereClause += ' AND a.ptech = ?';
+      params.push(ptech);
+    }
+    
+    // Stats globales
+    const [statsRows] = await getDbPool().query<RowDataPacket[]>(`
+      SELECT 
+        COUNT(*) AS total_producteurs,
+        SUM(CASE WHEN a.sexe = 'F' THEN 1 ELSE 0 END) AS total_femmes,
+        AVG(CASE WHEN a.age IS NOT NULL AND a.age > 0 THEN a.age END) AS age_moyen,
+        SUM(CASE WHEN a.est_chef_menage = 1 THEN 1 ELSE 0 END) AS chefs_menage,
+        SUM(CASE WHEN a.membre_deja_enregistre = 1 THEN 1 ELSE 0 END) AS membres_deja_enregistres
+      FROM agriculteurs a
+      ${whereClause}
+    `, params);
+    
+    // Distribution par âge
+    const [ageRows] = await getDbPool().query<RowDataPacket[]>(`
+      SELECT 
+        CASE 
+          WHEN a.age BETWEEN 18 AND 25 THEN '18-25 ans'
+          WHEN a.age BETWEEN 26 AND 40 THEN '26-40 ans'
+          WHEN a.age BETWEEN 41 AND 60 THEN '41-60 ans'
+          WHEN a.age > 60 THEN 'Plus de 60 ans'
+          ELSE 'Non renseigné'
+        END AS tranche_age,
+        COUNT(*) AS nombre
+      FROM agriculteurs a
+      ${whereClause}
+      GROUP BY tranche_age
+    `, params);
+    
+    // Distribution par statut matrimonial
+    const [matrimonialRows] = await getDbPool().query<RowDataPacket[]>(`
+      SELECT 
+        COALESCE(a.situation_matrimoniale, 'Non renseigné') AS situation,
+        COUNT(*) AS nombre
+      FROM agriculteurs a
+      ${whereClause}
+      GROUP BY a.situation_matrimoniale
+    `, params);
+    
+    // Distribution par niveau d'éducation
+    const [educationRows] = await getDbPool().query<RowDataPacket[]>(`
+      SELECT 
+        COALESCE(a.niveau_instruction, 'Non renseigné') AS niveau,
+        COUNT(*) AS nombre
+      FROM agriculteurs a
+      ${whereClause}
+      GROUP BY a.niveau_instruction
+    `, params);
+    
+    // Distribution par type d'activité
+    const [activiteRows] = await getDbPool().query<RowDataPacket[]>(`
+      SELECT 
+        CASE 
+          WHEN a.ptech LIKE '%elev%' THEN 'Elevage'
+          WHEN a.ptech LIKE '%pisc%' THEN 'Aquapisciculture'
+          ELSE 'Agriculture'
+        END AS type_activite,
+        COUNT(*) AS nombre
+      FROM agriculteurs a
+      ${whereClause}
+      GROUP BY type_activite
+    `, params);
+    
+    // Distribution par superficie de terres
+    const [superficieRows] = await getDbPool().query<RowDataPacket[]>(`
+      SELECT 
+        CASE 
+          WHEN a.superficie_terres = 0 OR a.superficie_terres IS NULL THEN 'Aucune'
+          WHEN a.superficie_terres <= 0.5 THEN '0 - 0.5 ha'
+          WHEN a.superficie_terres <= 1 THEN '0.5 - 1 ha'
+          WHEN a.superficie_terres <= 2 THEN '1 - 2 ha'
+          WHEN a.superficie_terres <= 3 THEN '2 - 3 ha'
+          ELSE 'Plus de 3 ha'
+        END AS tranche_superficie,
+        COUNT(*) AS nombre
+      FROM agriculteurs a
+      ${whereClause}
+      GROUP BY tranche_superficie
+    `, params);
+    
+    // Top 5 cultures
+    const [culturesRows] = await getDbPool().query<RowDataPacket[]>(`
+      SELECT c.nom, COUNT(*) AS nombre
+      FROM agriculteurs_cultures ac
+      JOIN cultures c ON c.id = ac.culture_id
+      JOIN agriculteurs a ON a.id = ac.agriculteur_id
+      ${whereClause}
+      GROUP BY c.nom
+      ORDER BY nombre DESC
+      LIMIT 5
+    `, params);
+    
+    res.json({
+      stats: statsRows[0],
+      age_distribution: ageRows,
+      matrimonial_distribution: matrimonialRows,
+      education_distribution: educationRows,
+      activite_distribution: activiteRows,
+      superficie_distribution: superficieRows,
+      top_cultures: culturesRows
+    });
+  } catch (error) {
+    console.error('GET /api/beneficiaires/advanced-stats failed', error);
+    res.status(500).json({ message: 'Erreur lors du chargement des statistiques avancées' });
+  }
+});
+
+// Paquets techniques
+app.get('/api/beneficiaires/ptech-stats', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { saison, province, territoire, secteur, groupement, village } = req.query;
+    
+    let whereClause = 'WHERE 1=1';
+    const params: any[] = [];
+    
+    if (saison) {
+      whereClause += ' AND a.saison = ?';
+      params.push(saison);
+    }
+    if (province) {
+      whereClause += ' AND a.province = ?';
+      params.push(province);
+    }
+    if (territoire) {
+      whereClause += ' AND a.territoire = ?';
+      params.push(territoire);
+    }
+    if (secteur) {
+      whereClause += ' AND a.secteur = ?';
+      params.push(secteur);
+    }
+    if (groupement) {
+      whereClause += ' AND a.groupement = ?';
+      params.push(groupement);
+    }
+    if (village) {
+      whereClause += ' AND a.village = ?';
+      params.push(village);
+    }
+    
+    // Statistiques des paquets techniques
+    const [ptechRows] = await getDbPool().query<RowDataPacket[]>(`
+      SELECT 
+        a.ptech,
+        COUNT(*) AS nombre_producteurs,
+        COUNT(DISTINCT a.province) AS provinces_concernees
+      FROM agriculteurs a
+      ${whereClause}
+      GROUP BY a.ptech
+      ORDER BY nombre_producteurs DESC
+    `, params);
+    
+    // Distribution par province des paquets techniques
+    const [ptechProvinceRows] = await getDbPool().query<RowDataPacket[]>(`
+      SELECT 
+        a.province,
+        a.ptech,
+        COUNT(*) AS nombre
+      FROM agriculteurs a
+      ${whereClause}
+      GROUP BY a.province, a.ptech
+      ORDER BY a.province, nombre DESC
+    `, params);
+    
+    res.json({
+      ptech_distribution: ptechRows,
+      ptech_by_province: ptechProvinceRows,
+      total_ptech_selectionnes: ptechRows.reduce((sum: number, row: any) => sum + row.nombre_producteurs, 0)
+    });
+  } catch (error) {
+    console.error('GET /api/beneficiaires/ptech-stats failed', error);
+    res.status(500).json({ message: 'Erreur lors du chargement des statistiques des paquets techniques' });
+  }
+});
+
+// Distribution des cartes et ventes de semences
+app.get('/api/beneficiaires/cartes-ventes-stats', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { saison, province, territoire, secteur, groupement, village } = req.query;
+    
+    let whereClause = 'WHERE 1=1';
+    const params: any[] = [];
+    
+    if (saison) {
+      whereClause += ' AND a.saison = ?';
+      params.push(saison);
+    }
+    if (province) {
+      whereClause += ' AND a.province = ?';
+      params.push(province);
+    }
+    if (territoire) {
+      whereClause += ' AND a.territoire = ?';
+      params.push(territoire);
+    }
+    if (secteur) {
+      whereClause += ' AND a.secteur = ?';
+      params.push(secteur);
+    }
+    if (groupement) {
+      whereClause += ' AND a.groupement = ?';
+      params.push(groupement);
+    }
+    if (village) {
+      whereClause += ' AND a.village = ?';
+      params.push(village);
+    }
+    
+    // Statistiques des cartes
+    const [carteRows] = await getDbPool().query<RowDataPacket[]>(`
+      SELECT 
+        a.province,
+        COUNT(*) AS total_producteurs,
+        SUM(CASE WHEN dc.statut = 'distribuee' THEN 1 ELSE 0 END) AS cartes_distribuees,
+        SUM(CASE WHEN dc.statut = 'en_attente' THEN 1 ELSE 0 END) AS cartes_attente,
+        SUM(CASE WHEN dc.statut = 'a_imprimer' THEN 1 ELSE 0 END) AS cartes_imprimer
+      FROM agriculteurs a
+      LEFT JOIN distribution_cartes dc ON dc.rna_id = CAST(a.farmer_id AS CHAR)
+      ${whereClause}
+      GROUP BY a.province
+      ORDER BY a.province
+    `, params);
+    
+    // Statistiques des ventes par province
+    const [venteProvinceRows] = await getDbPool().query<RowDataPacket[]>(`
+      SELECT 
+        vs.province,
+        COUNT(DISTINCT vs.rna_id) AS producteurs_acheteurs,
+        SUM(vs.quantite_kg) AS total_kg,
+        SUM(vs.montant_usd) AS total_usd,
+        SUM(vs.montant_cdf) AS total_cdf
+      FROM ventes_semences vs
+      JOIN agriculteurs a ON a.farmer_id = CAST(vs.rna_id AS UNSIGNED)
+      ${whereClause}
+      GROUP BY vs.province
+      ORDER BY vs.province
+    `, params);
+    
+    // Tableau village - cartes - semences
+    const [villageRows] = await getDbPool().query<RowDataPacket[]>(`
+      SELECT 
+        a.village,
+        COUNT(*) AS total_producteurs,
+        SUM(CASE WHEN dc.statut = 'distribuee' THEN 1 ELSE 0 END) AS ont_recu_carte,
+        COUNT(DISTINCT vs.rna_id) AS ont_achete_semences
+      FROM agriculteurs a
+      LEFT JOIN distribution_cartes dc ON dc.rna_id = CAST(a.farmer_id AS CHAR)
+      LEFT JOIN ventes_semences vs ON vs.rna_id = CAST(a.farmer_id AS CHAR)
+      ${whereClause}
+      GROUP BY a.village
+      ORDER BY a.village
+    `, params);
+    
+    // Ventes par fournisseur
+    const [fournisseurRows] = await getDbPool().query<RowDataPacket[]>(`
+      SELECT 
+        vs.fournisseur,
+        SUM(vs.quantite_kg) AS total_kg,
+        SUM(vs.montant_cdf) AS total_cdf
+      FROM ventes_semences vs
+      ${whereClause.replace('a.', '')}
+      WHERE vs.fournisseur IS NOT NULL
+      GROUP BY vs.fournisseur
+      ORDER BY total_kg DESC
+    `, params);
+    
+    // Widgets globaux
+    const [widgetRows] = await getDbPool().query<RowDataPacket[]>(`
+      SELECT 
+        COUNT(DISTINCT a.farmer_id) AS producteurs_avec_ptech,
+        SUM(CASE WHEN dc.statut = 'distribuee' THEN 1 ELSE 0 END) AS ont_recu_carte,
+        COUNT(DISTINCT vs.rna_id) AS ont_achete_semences,
+        COUNT(DISTINCT vs.fournisseur) AS fournisseurs_actifs,
+        SUM(vs.quantite_kg) AS kg_semences_vendues
+      FROM agriculteurs a
+      LEFT JOIN distribution_cartes dc ON dc.rna_id = CAST(a.farmer_id AS CHAR)
+      LEFT JOIN ventes_semences vs ON vs.rna_id = CAST(a.farmer_id AS CHAR)
+      ${whereClause}
+    `, params);
+    
+    res.json({
+      widgets: widgetRows[0],
+      distribution_cartes_par_province: carteRows,
+      ventes_semences_par_province: venteProvinceRows,
+      suivi_par_village: villageRows,
+      ventes_par_fournisseur: fournisseurRows
+    });
+  } catch (error) {
+    console.error('GET /api/beneficiaires/cartes-ventes-stats failed', error);
+    res.status(500).json({ message: 'Erreur lors du chargement des statistiques des cartes et ventes' });
+  }
+});
+
+// Liste des filtres disponibles
+app.get('/api/beneficiaires/filters', authenticateToken, async (_req: Request, res: Response) => {
+  try {
+    const [saisons] = await getDbPool().query('SELECT DISTINCT saison FROM agriculteurs WHERE saison IS NOT NULL ORDER BY saison DESC');
+    const [provinces] = await getDbPool().query('SELECT DISTINCT province FROM agriculteurs WHERE province IS NOT NULL ORDER BY province');
+    const [territoires] = await getDbPool().query('SELECT DISTINCT territoire, province FROM agriculteurs WHERE territoire IS NOT NULL ORDER BY province, territoire');
+    const [secteurs] = await getDbPool().query('SELECT DISTINCT secteur, province, territoire FROM agriculteurs WHERE secteur IS NOT NULL ORDER BY secteur');
+    const [groupements] = await getDbPool().query('SELECT DISTINCT groupement, province, territoire, secteur FROM agriculteurs WHERE groupement IS NOT NULL ORDER BY groupement');
+    const [villages] = await getDbPool().query('SELECT DISTINCT village, province, territoire, secteur, groupement FROM agriculteurs WHERE village IS NOT NULL ORDER BY village');
+    const [ptechs] = await getDbPool().query('SELECT DISTINCT ptech FROM agriculteurs WHERE ptech IS NOT NULL ORDER BY ptech');
+    
+    res.json({
+      saisons,
+      provinces,
+      territoires,
+      secteurs,
+      groupements,
+      villages,
+      ptechs
+    });
+  } catch (error) {
+    console.error('GET /api/beneficiaires/filters failed', error);
+    res.status(500).json({ message: 'Erreur lors du chargement des filtres' });
+  }
+});
+
+// Export des statistiques
+app.get('/api/beneficiaires/export/:format', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const format = req.params.format;
+    const { saison, province, territoire, secteur, groupement, village, ptech } = req.query;
+    
+    let whereClause = 'WHERE 1=1';
+    const params: any[] = [];
+    
+    if (saison) {
+      whereClause += ' AND a.saison = ?';
+      params.push(saison);
+    }
+    if (province) {
+      whereClause += ' AND a.province = ?';
+      params.push(province);
+    }
+    if (territoire) {
+      whereClause += ' AND a.territoire = ?';
+      params.push(territoire);
+    }
+    if (secteur) {
+      whereClause += ' AND a.secteur = ?';
+      params.push(secteur);
+    }
+    if (groupement) {
+      whereClause += ' AND a.groupement = ?';
+      params.push(groupement);
+    }
+    if (village) {
+      whereClause += ' AND a.village = ?';
+      params.push(village);
+    }
+    if (ptech) {
+      whereClause += ' AND a.ptech = ?';
+      params.push(ptech);
+    }
+    
+    // Récupérer les données
+    const [statsRows] = await getDbPool().query<RowDataPacket[]>(`
+      SELECT 
+        COUNT(*) AS total_producteurs,
+        SUM(CASE WHEN a.sexe = 'F' THEN 1 ELSE 0 END) AS total_femmes,
+        AVG(CASE WHEN a.age IS NOT NULL AND a.age > 0 THEN a.age END) AS age_moyen,
+        SUM(CASE WHEN a.est_chef_menage = 1 THEN 1 ELSE 0 END) AS chefs_menage,
+        SUM(CASE WHEN a.membre_deja_enregistre = 1 THEN 1 ELSE 0 END) AS membres_deja_enregistres
+      FROM agriculteurs a
+      ${whereClause}
+    `, params);
+    
+    const [ageRows] = await getDbPool().query<RowDataPacket[]>(`
+      SELECT 
+        CASE 
+          WHEN a.age BETWEEN 18 AND 25 THEN '18-25 ans'
+          WHEN a.age BETWEEN 26 AND 40 THEN '26-40 ans'
+          WHEN a.age BETWEEN 41 AND 60 THEN '41-60 ans'
+          WHEN a.age > 60 THEN 'Plus de 60 ans'
+          ELSE 'Non renseigné'
+        END AS tranche_age,
+        COUNT(*) AS nombre
+      FROM agriculteurs a
+      ${whereClause}
+      GROUP BY tranche_age
+    `, params);
+    
+    if (format === 'excel') {
+      // Création du CSV
+      const csvRows = [
+        ['=== STATISTIQUES GLOBALES ==='],
+        ['Indicateur', 'Valeur'],
+        ['Total producteurs', statsRows[0]?.total_producteurs || 0],
+        ['Productrices', statsRows[0]?.total_femmes || 0],
+        ['Âge moyen', `${Math.round(statsRows[0]?.age_moyen || 0)} ans`],
+        ['Chefs de ménage', statsRows[0]?.chefs_menage || 0],
+        ['Membres déjà enregistrés', statsRows[0]?.membres_deja_enregistres || 0],
+        [],
+        ['=== RÉPARTITION PAR ÂGE ==='],
+        ['Tranche d\'âge', 'Nombre'],
+        ...ageRows.map((row: any) => [row.tranche_age, row.nombre]),
+      ];
+      
+      const csv = csvRows.map(row => row.join(',')).join('\n');
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename=statistiques_beneficiaires_${new Date().toISOString().split('T')[0]}.csv`);
+      res.send(csv);
+    } else {
+      res.status(400).json({ message: 'Format non supporté' });
+    }
+  } catch (error) {
+    console.error('GET /api/beneficiaires/export failed', error);
+    res.status(500).json({ message: 'Erreur lors de l\'export' });
+  }
+});
+
+// Export des bénéficiaires détaillés
+app.get('/api/beneficiaires/export-beneficiaires/:format', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const format = req.params.format;
+    const { saison, province, territoire, secteur, groupement, village, ptech } = req.query;
+    
+    let whereClause = 'WHERE 1=1';
+    const params: any[] = [];
+    
+    if (saison) {
+      whereClause += ' AND a.saison = ?';
+      params.push(saison);
+    }
+    if (province) {
+      whereClause += ' AND a.province = ?';
+      params.push(province);
+    }
+    if (territoire) {
+      whereClause += ' AND a.territoire = ?';
+      params.push(territoire);
+    }
+    if (secteur) {
+      whereClause += ' AND a.secteur = ?';
+      params.push(secteur);
+    }
+    if (groupement) {
+      whereClause += ' AND a.groupement = ?';
+      params.push(groupement);
+    }
+    if (village) {
+      whereClause += ' AND a.village = ?';
+      params.push(village);
+    }
+    if (ptech) {
+      whereClause += ' AND a.ptech = ?';
+      params.push(ptech);
+    }
+    
+    const [beneficiaires] = await getDbPool().query(`
+      SELECT 
+        a.farmer_id AS rna_id,
+        a.nom_complet,
+        a.sexe,
+        a.age,
+        a.province,
+        a.territoire,
+        a.secteur,
+        a.groupement,
+        a.village,
+        a.saison,
+        a.ptech,
+        a.est_chef_menage,
+        a.membre_deja_enregistre,
+        a.a_recu_carte,
+        COALESCE(dc.statut, 'non_distribuee') AS statut_carte,
+        COALESCE(vs.total_kg, 0) AS semences_achetees_kg
+      FROM agriculteurs a
+      LEFT JOIN distribution_cartes dc ON dc.rna_id = CAST(a.farmer_id AS CHAR)
+      LEFT JOIN (
+        SELECT rna_id, SUM(quantite_kg) AS total_kg
+        FROM ventes_semences
+        GROUP BY rna_id
+      ) vs ON vs.rna_id = CAST(a.farmer_id AS CHAR)
+      ${whereClause}
+      ORDER BY a.province, a.territoire, a.village, a.nom_complet
+    `, params);
+    
+    if (format === 'excel') {
+      const csvRows = [
+        ['RNA ID', 'Nom complet', 'Sexe', 'Âge', 'Province', 'Territoire', 'Secteur', 'Groupement', 'Village', 'Saison', 'Paquet technique', 'Chef de ménage', 'Membre déjà enregistré', 'A reçu carte', 'Statut carte', 'Semences achetées (kg)'],
+        ...(beneficiaires as any[]).map(b => [
+          b.rna_id,
+          b.nom_complet,
+          b.sexe === 'F' ? 'Femme' : 'Homme',
+          b.age || '-',
+          b.province,
+          b.territoire,
+          b.secteur,
+          b.groupement,
+          b.village,
+          b.saison,
+          b.ptech,
+          b.est_chef_menage ? 'Oui' : 'Non',
+          b.membre_deja_enregistre ? 'Oui' : 'Non',
+          b.a_recu_carte ? 'Oui' : 'Non',
+          b.statut_carte,
+          b.semences_achetees_kg,
+        ]),
+      ];
+      
+      const csv = csvRows.map(row => row.join(',')).join('\n');
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename=beneficiaires_detail_${new Date().toISOString().split('T')[0]}.csv`);
+      res.send(csv);
+    } else {
+      res.status(400).json({ message: 'Format non supporté' });
+    }
+  } catch (error) {
+    console.error('GET /api/beneficiaires/export-beneficiaires failed', error);
+    res.status(500).json({ message: 'Erreur lors de l\'export' });
+  }
+});
+
+// ==================== PLANS D'ATTÉNUATION ROUTES ====================
+
+// Obtenir tous les plans d'atténuation avec leurs actions
+app.get('/api/plans-attenuation', authenticateToken, async (_req: Request, res: Response) => {
+  try {
+    const [risques] = await getDbPool().query(`
+      SELECT 
+        id, code, nom, description, categorie, probabilite, impact, niveau, statut,
+        plan_attenuation, responsable, date_identification, province, actions_prevues,
+        indicateurs_surveillance, dernier_suivi
+      FROM risques
+      WHERE plan_attenuation IS NOT NULL AND plan_attenuation != ''
+      ORDER BY 
+        FIELD(niveau, 'Critique', 'Élevé', 'Modéré', 'Faible'),
+        date_identification DESC
+    `);
+
+    // Pour chaque risque, récupérer ses actions
+    const result = await Promise.all((risques as any[]).map(async (risque) => {
+      const [actions] = await getDbPool().query(`
+        SELECT 
+          id, id_risque, action, responsable, date_debut, date_fin, statut, resultat
+        FROM risque_actions
+        WHERE id_risque = ?
+        ORDER BY date_fin ASC, statut ASC
+      `, [risque.id]);
+      
+      return {
+        ...risque,
+        actions_prevues: risque.actions_prevues ? JSON.parse(risque.actions_prevues) : [],
+        indicateurs_surveillance: risque.indicateurs_surveillance ? JSON.parse(risque.indicateurs_surveillance) : [],
+        actions: actions
+      };
+    }));
+
+    res.json(result);
+  } catch (error) {
+    console.error('GET /api/plans-attenuation failed', error);
+    res.status(500).json({ message: 'Erreur lors du chargement des plans d\'atténuation' });
+  }
+});
+
+// Obtenir les statistiques des plans d'atténuation
+app.get('/api/plans-attenuation/stats', authenticateToken, async (_req: Request, res: Response) => {
+  try {
+    const [totalActions] = await getDbPool().query<RowDataPacket[]>(`
+      SELECT 
+        COUNT(*) AS total,
+        SUM(CASE WHEN statut = 'realisee' THEN 1 ELSE 0 END) AS realisees,
+        SUM(CASE WHEN statut = 'en_cours' THEN 1 ELSE 0 END) AS en_cours,
+        SUM(CASE WHEN statut = 'prevue' THEN 1 ELSE 0 END) AS prevues,
+        SUM(CASE WHEN statut = 'abandonnee' THEN 1 ELSE 0 END) AS abandonnees
+      FROM risque_actions
+    `);
+    
+    const [risquesAvecPlan] = await getDbPool().query<CountRow[]>(`
+      SELECT COUNT(*) AS total
+      FROM risques
+      WHERE plan_attenuation IS NOT NULL AND plan_attenuation != ''
+    `);
+
+    res.json({
+      ...(totalActions[0] ?? {}),
+      risques_avec_plan: Number(risquesAvecPlan[0]?.total ?? 0),
+    });
+  } catch (error) {
+    console.error('GET /api/plans-attenuation/stats failed', error);
+    res.status(500).json({ message: 'Erreur lors du chargement des statistiques' });
+  }
+});
+
+// Mettre à jour le plan d'atténuation d'un risque
+app.put('/api/plans-attenuation/:id', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const id = Number(req.params.id);
+    const { plan_attenuation, actions_prevues, indicateurs_surveillance } = req.body;
+    
+    await getDbPool().query(
+      `UPDATE risques 
+       SET plan_attenuation = COALESCE(?, plan_attenuation),
+           actions_prevues = COALESCE(?, actions_prevues),
+           indicateurs_surveillance = COALESCE(?, indicateurs_surveillance),
+           updated_at = NOW()
+       WHERE id = ?`,
+      [
+        plan_attenuation, 
+        actions_prevues ? JSON.stringify(actions_prevues) : null,
+        indicateurs_surveillance ? JSON.stringify(indicateurs_surveillance) : null,
+        id
+      ]
+    );
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('PUT /api/plans-attenuation/:id failed', error);
+    res.status(500).json({ message: 'Erreur lors de la mise à jour du plan' });
+  }
+});
+
+// Ajouter une action à un risque
+app.post('/api/plans-attenuation/:id/actions', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const idRisque = Number(req.params.id);
+    const { action, responsable, date_debut, date_fin, statut, resultat } = req.body;
+    
+    const [result] = await getDbPool().query(
+      `INSERT INTO risque_actions (id_risque, action, responsable, date_debut, date_fin, statut, resultat)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [idRisque, action, responsable, date_debut, date_fin, statut || 'prevue', resultat || null]
+    );
+    
+    const [newAction] = await getDbPool().query(
+      `SELECT * FROM risque_actions WHERE id = ?`,
+      [(result as any).insertId]
+    );
+    
+    res.status(201).json((newAction as any[])[0]);
+  } catch (error) {
+    console.error('POST /api/plans-attenuation/:id/actions failed', error);
+    res.status(500).json({ message: 'Erreur lors de l\'ajout de l\'action' });
+  }
+});
+
+// Mettre à jour une action
+app.put('/api/plans-attenuation/actions/:id', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const id = Number(req.params.id);
+    const { action, responsable, date_debut, date_fin, statut, resultat } = req.body;
+    
+    await getDbPool().query(
+      `UPDATE risque_actions 
+       SET action = COALESCE(?, action),
+           responsable = COALESCE(?, responsable),
+           date_debut = COALESCE(?, date_debut),
+           date_fin = COALESCE(?, date_fin),
+           statut = COALESCE(?, statut),
+           resultat = COALESCE(?, resultat)
+       WHERE id = ?`,
+      [action, responsable, date_debut, date_fin, statut, resultat, id]
+    );
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('PUT /api/plans-attenuation/actions/:id failed', error);
+    res.status(500).json({ message: 'Erreur lors de la mise à jour de l\'action' });
+  }
+});
+
+// Supprimer une action
+app.delete('/api/plans-attenuation/actions/:id', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const id = Number(req.params.id);
+    await getDbPool().query('DELETE FROM risque_actions WHERE id = ?', [id]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('DELETE /api/plans-attenuation/actions/:id failed', error);
+    res.status(500).json({ message: 'Erreur lors de la suppression de l\'action' });
+  }
+});
+
+// ==================== DISTRIBUTION CARTES ROUTES ====================
+
+// Obtenir la liste des cartes
+app.get('/api/cartes-agriculteurs', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const search = req.query.search ? String(req.query.search) : '';
+    const province = req.query.province ? String(req.query.province) : '';
+    const statut = req.query.statut ? String(req.query.statut) : '';
+    const page = Math.max(Number(req.query.page ?? 0), 0);
+    const limit = Math.max(Number(req.query.limit ?? 10), 1);
+    const offset = page * limit;
+
+    let whereClause = 'WHERE 1=1';
+    const params: any[] = [];
+
+    if (search) {
+      whereClause += ' AND (a.nom_complet LIKE ? OR CAST(a.farmer_id AS CHAR) LIKE ? OR dc.numero_carte LIKE ?)';
+      const searchParam = `%${search}%`;
+      params.push(searchParam, searchParam, searchParam);
+    }
+
+    if (province) {
+      whereClause += ' AND a.province = ?';
+      params.push(province);
+    }
+
+    if (statut) {
+      whereClause += ' AND COALESCE(dc.statut, "a_imprimer") = ?';
+      params.push(statut);
+    }
+
+    // Compter le total
+    const [countRows] = await getDbPool().query<CountRow[]>(
+      `SELECT COUNT(*) AS total
+       FROM agriculteurs a
+       LEFT JOIN distribution_cartes dc ON dc.rna_id = CAST(a.farmer_id AS CHAR)
+       ${whereClause}`,
+      params
+    );
+    const total = Number(countRows[0]?.total ?? 0);
+
+    // Récupérer les données
+    const [rows] = await getDbPool().query<any[]>(
+      `SELECT 
+         a.id,
+         CAST(a.farmer_id AS CHAR) AS rna_id,
+         a.nom_complet,
+         a.sexe,
+         a.province,
+         a.territoire,
+         a.secteur,
+         a.groupement,
+         a.village,
+         1 AS producteur_enregistre,
+         COALESCE(dc.statut, 'a_imprimer') AS statut_carte,
+         dc.numero_carte,
+         dc.date_distribution,
+         dc.agent_distribution,
+         dc.observations
+       FROM agriculteurs a
+       LEFT JOIN distribution_cartes dc ON dc.rna_id = CAST(a.farmer_id AS CHAR)
+       ${whereClause}
+       ORDER BY a.id DESC
+       LIMIT ? OFFSET ?`,
+      [...params, limit, offset]
+    );
+
+    const data = rows.map((row) => ({
+      id: row.id,
+      rna_id: row.rna_id,
+      nom_complet: row.nom_complet,
+      sexe: row.sexe,
+      province: row.province || '',
+      territoire: row.territoire || '',
+      secteur: row.secteur || '',
+      groupement: row.groupement || '',
+      village: row.village || '',
+      producteur_enregistre: Boolean(row.producteur_enregistre),
+      statut_carte: row.statut_carte,
+      numero_carte: row.numero_carte || undefined,
+      date_distribution: row.date_distribution ? new Date(row.date_distribution).toISOString().split('T')[0] : undefined,
+      agent_distribution: row.agent_distribution || undefined,
+      observations: row.observations || undefined,
+    }));
+
+    res.json({ data, total, page, totalPages: Math.ceil(total / limit) });
+  } catch (error) {
+    console.error('GET /api/cartes-agriculteurs failed', error);
+    res.status(500).json({ message: 'Erreur lors du chargement des cartes' });
+  }
+});
+
+// Obtenir les statistiques des cartes
+app.get('/api/cartes-agriculteurs/stats', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const search = req.query.search ? String(req.query.search) : '';
+    const province = req.query.province ? String(req.query.province) : '';
+    const statut = req.query.statut ? String(req.query.statut) : '';
+
+    let whereClause = 'WHERE 1=1';
+    const params: any[] = [];
+
+    if (search) {
+      whereClause += ' AND (a.nom_complet LIKE ? OR CAST(a.farmer_id AS CHAR) LIKE ? OR dc.numero_carte LIKE ?)';
+      const searchParam = `%${search}%`;
+      params.push(searchParam, searchParam, searchParam);
+    }
+
+    if (province) {
+      whereClause += ' AND a.province = ?';
+      params.push(province);
+    }
+
+    if (statut) {
+      whereClause += ' AND COALESCE(dc.statut, "a_imprimer") = ?';
+      params.push(statut);
+    }
+
+    const [rows] = await getDbPool().query<any[]>(
+      `SELECT
+         COUNT(*) AS total,
+         COUNT(*) AS producteurs_enregistres,
+         SUM(CASE WHEN COALESCE(dc.statut, 'a_imprimer') = 'distribuee' THEN 1 ELSE 0 END) AS distribuees,
+         SUM(CASE WHEN COALESCE(dc.statut, 'a_imprimer') = 'en_attente' THEN 1 ELSE 0 END) AS en_attente,
+         SUM(CASE WHEN COALESCE(dc.statut, 'a_imprimer') = 'a_imprimer' THEN 1 ELSE 0 END) AS a_imprimer,
+         COUNT(DISTINCT NULLIF(TRIM(a.province), '')) AS provinces
+       FROM agriculteurs a
+       LEFT JOIN distribution_cartes dc ON dc.rna_id = CAST(a.farmer_id AS CHAR)
+       ${whereClause}`,
+      params
+    );
+
+    const stats = rows[0];
+    res.json({
+      total: Number(stats?.total ?? 0),
+      producteurs_enregistres: Number(stats?.producteurs_enregistres ?? 0),
+      distribuees: Number(stats?.distribuees ?? 0),
+      en_attente: Number(stats?.en_attente ?? 0),
+      a_imprimer: Number(stats?.a_imprimer ?? 0),
+      provinces: Number(stats?.provinces ?? 0),
+    });
+  } catch (error) {
+    console.error('GET /api/cartes-agriculteurs/stats failed', error);
+    res.status(500).json({ message: 'Erreur lors du chargement des statistiques' });
+  }
+});
+
+// Mettre à jour le statut d'une carte
+app.put('/api/cartes-agriculteurs/:id', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const id = Number(req.params.id);
+    const { numero_carte, date_distribution, agent_distribution, statut, observations } = req.body;
+
+    // Vérifier si l'enregistrement existe
+    const [existing] = await getDbPool().query<any[]>(
+      'SELECT * FROM distribution_cartes WHERE rna_id = (SELECT CAST(farmer_id AS CHAR) FROM agriculteurs WHERE id = ?)',
+      [id]
+    );
+
+    if (existing.length === 0) {
+      // Créer un nouvel enregistrement
+      const [agriculteur] = await getDbPool().query<any[]>(
+        'SELECT CAST(farmer_id AS CHAR) AS rna_id FROM agriculteurs WHERE id = ?',
+        [id]
+      );
+      
+      if (agriculteur.length === 0) {
+        return res.status(404).json({ message: 'Agriculteur non trouvé' });
+      }
+
+      await getDbPool().query(
+        `INSERT INTO distribution_cartes (rna_id, numero_carte, date_distribution, agent_distribution, statut, observations)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [agriculteur[0].rna_id, numero_carte, date_distribution, agent_distribution, statut || 'a_imprimer', observations]
+      );
+    } else {
+      // Mettre à jour l'enregistrement existant
+      await getDbPool().query(
+        `UPDATE distribution_cartes 
+         SET numero_carte = COALESCE(?, numero_carte),
+             date_distribution = COALESCE(?, date_distribution),
+             agent_distribution = COALESCE(?, agent_distribution),
+             statut = COALESCE(?, statut),
+             observations = COALESCE(?, observations)
+         WHERE rna_id = (SELECT CAST(farmer_id AS CHAR) FROM agriculteurs WHERE id = ?)`,
+        [numero_carte, date_distribution, agent_distribution, statut, observations, id]
+      );
+    }
+
+    res.json({ success: true, message: 'Carte mise à jour avec succès' });
+  } catch (error) {
+    console.error('PUT /api/cartes-agriculteurs/:id failed', error);
+    res.status(500).json({ message: 'Erreur lors de la mise à jour de la carte' });
+  }
+});
+
+// Exporter les données
+app.get('/api/cartes-agriculteurs/export/:format', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const format = req.params.format;
+    const search = req.query.search ? String(req.query.search) : '';
+    const province = req.query.province ? String(req.query.province) : '';
+    const statut = req.query.statut ? String(req.query.statut) : '';
+
+    let whereClause = 'WHERE 1=1';
+    const params: any[] = [];
+
+    if (search) {
+      whereClause += ' AND (a.nom_complet LIKE ? OR CAST(a.farmer_id AS CHAR) LIKE ? OR dc.numero_carte LIKE ?)';
+      const searchParam = `%${search}%`;
+      params.push(searchParam, searchParam, searchParam);
+    }
+
+    if (province) {
+      whereClause += ' AND a.province = ?';
+      params.push(province);
+    }
+
+    if (statut) {
+      whereClause += ' AND COALESCE(dc.statut, "a_imprimer") = ?';
+      params.push(statut);
+    }
+
+    const [rows] = await getDbPool().query<any[]>(
+      `SELECT 
+         CAST(a.farmer_id AS CHAR) AS rna_id,
+         a.nom_complet,
+         a.sexe,
+         a.province,
+         a.territoire,
+         a.secteur,
+         a.groupement,
+         a.village,
+         COALESCE(dc.statut, 'a_imprimer') AS statut_carte,
+         dc.numero_carte,
+         dc.date_distribution,
+         dc.agent_distribution
+       FROM agriculteurs a
+       LEFT JOIN distribution_cartes dc ON dc.rna_id = CAST(a.farmer_id AS CHAR)
+       ${whereClause}
+       ORDER BY a.province, a.territoire, a.village, a.nom_complet`,
+      params
+    );
+
+    if (format === 'excel') {
+      const csvRows = [
+        ['RNA ID', 'Nom complet', 'Sexe', 'Province', 'Territoire', 'Secteur', 'Groupement', 'Village', 'Statut carte', 'Numéro carte', 'Date distribution', 'Agent distribution'],
+        ...rows.map(row => [
+          row.rna_id,
+          row.nom_complet,
+          row.sexe === 'F' ? 'Femme' : 'Homme',
+          row.province || '',
+          row.territoire || '',
+          row.secteur || '',
+          row.groupement || '',
+          row.village || '',
+          row.statut_carte === 'distribuee' ? 'Distribuée' : row.statut_carte === 'en_attente' ? 'En attente' : 'À imprimer',
+          row.numero_carte || '',
+          row.date_distribution ? new Date(row.date_distribution).toLocaleDateString('fr-FR') : '',
+          row.agent_distribution || '',
+        ]),
+      ];
+      
+      const csv = csvRows.map(row => row.join(',')).join('\n');
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename=distribution_cartes_${new Date().toISOString().split('T')[0]}.csv`);
+      res.send('\uFEFF' + csv);
+    } else {
+      res.status(400).json({ message: 'Format non supporté' });
+    }
+  } catch (error) {
+    console.error('GET /api/cartes-agriculteurs/export failed', error);
+    res.status(500).json({ message: 'Erreur lors de l\'export' });
+  }
 });
 
 // ==================== DÉMARRAGE DU SERVEUR ====================
@@ -2531,10 +4036,7 @@ app.get('/api/suivi/stats', authenticateToken, (_req: express.Request, res: expr
 app.listen(PORT, () => {
   console.log(`🚀 Serveur démarré sur http://localhost:${PORT}`);
   console.log(`📊 API PNDA opérationnelle`);
-  console.log(`🔐 Comptes de test:`);
-  console.log(`   - admin@pnda.cd / admin123`);
-  console.log(`   - uncp@pnda.cd / uncp123`);
-  console.log(`   - upep@pnda.cd / upep123`);
+  console.log(`🔐 Authentification: table MySQL utilisateur`);
 });
 
 export default app;

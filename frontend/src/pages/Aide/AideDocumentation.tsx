@@ -57,6 +57,7 @@ import {
   Schedule,
 } from '@mui/icons-material';
 import type { ArticleAide, FAQ, Tutoriel, ContactSupport as ContactSupportType } from '../../services/aide.service';
+import { moduleGridStyles } from '../../components/common/Layout/moduleGridStyles';
 
 // Données mockées
 const mockGuides: ArticleAide[] = [
@@ -276,7 +277,7 @@ export const AideDocumentation: React.FC = () => {
         <Grid container spacing={3}>
           {mockGuides.map((guide) => (
             <Grid size={{ xs: 12, md: 6, lg: 4 }} key={guide.id}>
-              <Card sx={{ borderRadius: 2, height: '100%', display: 'flex', flexDirection: 'column' }}>
+              <Card sx={{ ...moduleGridStyles.statCard, display: 'flex', flexDirection: 'column' }}>
                 <CardContent sx={{ flex: 1 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
                     <Avatar sx={{ bgcolor: '#E8F5E9' }}>
@@ -335,7 +336,7 @@ export const AideDocumentation: React.FC = () => {
               ))}
             </Grid>
             <Grid size={{ xs: 12, md: 4 }}>
-              <Paper sx={{ p: 2, borderRadius: 2, bgcolor: '#F1F8E9' }}>
+              <Paper sx={{ ...moduleGridStyles.sectionPanel, bgcolor: '#F1F8E9' }}>
                 <Typography variant="subtitle1" fontWeight={600} gutterBottom>
                   Catégories FAQ
                 </Typography>
@@ -387,7 +388,7 @@ export const AideDocumentation: React.FC = () => {
         <Grid container spacing={3}>
           {mockTutoriels.map((tutoriel) => (
             <Grid size={{ xs: 12, md: 4 }} key={tutoriel.id}>
-              <Card sx={{ borderRadius: 2, height: '100%', cursor: 'pointer' }} onClick={() => { setSelectedTutoriel(tutoriel); setTutorielDialogOpen(true); }}>
+              <Card sx={{ ...moduleGridStyles.statCard, cursor: 'pointer' }} onClick={() => { setSelectedTutoriel(tutoriel); setTutorielDialogOpen(true); }}>
                 <CardContent>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
                     <Avatar sx={{ bgcolor: '#E3F2FD' }}>
@@ -419,7 +420,7 @@ export const AideDocumentation: React.FC = () => {
       {tabValue === 3 && (
         <Grid container spacing={3}>
           <Grid size={{ xs: 12, md: 6 }}>
-            <Card sx={{ borderRadius: 2 }}>
+            <Card sx={moduleGridStyles.statCard}>
               <CardContent>
                 <Typography variant="h6" fontWeight={600} gutterBottom>
                   Contactez-nous
@@ -447,7 +448,7 @@ export const AideDocumentation: React.FC = () => {
             </Card>
           </Grid>
           <Grid size={{ xs: 12, md: 6 }}>
-            <Card sx={{ borderRadius: 2 }}>
+            <Card sx={moduleGridStyles.statCard}>
               <CardContent>
                 <Typography variant="h6" fontWeight={600} gutterBottom>
                   Envoyer une demande

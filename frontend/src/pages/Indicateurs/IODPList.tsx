@@ -1,4 +1,5 @@
 // frontend/src/pages/Indicateurs/IODPList.tsx
+
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -11,12 +12,6 @@ import {
   Chip,
   IconButton,
   Collapse,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Tooltip,
   Button,
   Dialog,
@@ -48,19 +43,81 @@ interface Indicateur {
   est_iodp: boolean;
 }
 
+// Type pour les widgets
+interface WidgetData {
+  total: number;
+  atteints: number;      // >= 100%
+  en_bonne_voie: number; // 70% - 99%
+  en_alerte: number;     // 50% - 69%
+  critiques: number;     // < 50%
+  non_renseignes: number;
+  progression_moyenne: number;
+}
+
 const getProgressionColor = (progression: number) => {
-  if (progression >= 90) return '#4CAF50';
-  if (progression >= 70) return '#81C784';
-  if (progression >= 50) return '#FFC107';
-  return '#F44336';
+  if (progression >= 100) return '#2E7D32';
+  if (progression >= 70) return '#66BB6A';
+  if (progression >= 50) return '#F9A825';
+  return '#E53935';
+};
+
+const getProgressionLabel = (progression: number): string => {
+  if (progression >= 100) return 'Atteint';
+  if (progression >= 70) return 'Bonne voie';
+  if (progression >= 50) return 'Alerte';
+  return 'Critique';
 };
 
 const formatUnite = (valeur: number, unite: string) => {
-  if (unite === '%') return `${valeur}%`;
+  if (unite === '%') return `${valeur.toFixed(1)}%`;
   if (unite === 'nombre') return valeur.toLocaleString();
   if (unite === 'km') return `${valeur.toLocaleString()} km`;
   if (unite === 'ha') return `${valeur.toLocaleString()} ha`;
   return `${valeur} ${unite}`;
+};
+
+// Calcul des statistiques
+const calculateWidgetData = (indicateurs: Indicateur[]): WidgetData => {
+  let atteints = 0;
+  let en_bonne_voie = 0;
+  let en_alerte = 0;
+  let critiques = 0;
+  let non_renseignes = 0;
+  let somme_progression = 0;
+  let compteur_progression = 0;
+
+  indicateurs.forEach((ind) => {
+    const aDesDonnees = ind.valeur_actuelle !== undefined && ind.valeur_actuelle > 0;
+    
+    if (!aDesDonnees) {
+      non_renseignes++;
+      return;
+    }
+
+    const progression = ind.progression;
+    somme_progression += progression;
+    compteur_progression++;
+
+    if (progression >= 100) {
+      atteints++;
+    } else if (progression >= 70) {
+      en_bonne_voie++;
+    } else if (progression >= 50) {
+      en_alerte++;
+    } else {
+      critiques++;
+    }
+  });
+
+  return {
+    total: indicateurs.length,
+    atteints,
+    en_bonne_voie,
+    en_alerte,
+    critiques,
+    non_renseignes,
+    progression_moyenne: compteur_progression > 0 ? Math.round(somme_progression / compteur_progression) : 0,
+  };
 };
 
 // Données mockées en cas d'erreur API
@@ -74,9 +131,9 @@ const mockIndicateurs: Indicateur[] = [
     unite: '%',
     frequence: 'annuelle',
     cible: 30,
-    valeur_actuelle: 15,
+    valeur_actuelle: 70,
     valeur_reference: 12,
-    progression: 50,
+    progression: 233,
     id_composante: 2,
     est_iodp: true
   },
@@ -88,10 +145,10 @@ const mockIndicateurs: Indicateur[] = [
     formule: 'Somme cumulée des petits exploitants bénéficiaires jusqu\'à l\'année t',
     unite: 'nombre',
     frequence: 'annuelle',
-    cible: 50000,
-    valeur_actuelle: 32450,
+    cible: 300000,
+    valeur_actuelle: 20000,
     valeur_reference: 25000,
-    progression: 64.9,
+    progression: 7,
     id_composante: 1,
     est_iodp: true
   },
@@ -103,47 +160,116 @@ const mockIndicateurs: Indicateur[] = [
     formule: 'Somme cumulée des femmes bénéficiaires jusqu\'à l\'année t',
     unite: 'nombre',
     frequence: 'annuelle',
-    cible: 22500,
-    valeur_actuelle: 14600,
+    cible: 150000,
+    valeur_actuelle: 11000,
     valeur_reference: 11200,
-    progression: 64.9,
+    progression: 7,
     id_composante: 1,
     est_iodp: true
   },
   { 
     id: 4, 
-    code: 'IODP2.3', 
+    code: 'IODP3.1', 
     nom: 'Hausse du rendement de maïs à travers les pratiques AIC',
     description: 'Augmentation en pourcentage du rendement de maïs grâce aux technologies intelligentes face au climat',
     formule: '((Rendement maïs année t - Rendement maïs année 0) / Rendement maïs année 0) x 100',
     unite: '%',
     frequence: 'annuelle',
-    cible: 30,
-    valeur_actuelle: 23,
+    cible: 100,
+    valeur_actuelle: 100,
     valeur_reference: 18,
-    progression: 76.7,
+    progression: 100,
     id_composante: 1,
     est_iodp: true
   },
   { 
     id: 5, 
-    code: 'IODP3.1', 
+    code: 'IODP3.2', 
+    nom: 'Hausse du rendement du manioc à travers les pratiques AIC',
+    description: 'Augmentation en pourcentage du rendement du manioc grâce aux technologies intelligentes face au climat',
+    formule: '((Rendement manioc année t - Rendement manioc année 0) / Rendement manioc année 0) x 100',
+    unite: '%',
+    frequence: 'annuelle',
+    cible: 50,
+    valeur_actuelle: 0,
+    valeur_reference: 0,
+    progression: 0,
+    id_composante: 1,
+    est_iodp: true
+  },
+  { 
+    id: 6, 
+    code: 'IODP4.1', 
     nom: 'Plans de contingence pour risques agricoles',
     description: 'Nombre de plans de contingence approuvés pour les risques liés au secteur agricole',
     formule: 'Nombre cumulé de plans de contingence approuvés',
     unite: 'nombre',
     frequence: 'annuelle',
-    cible: 8,
-    valeur_actuelle: 5,
+    cible: 4,
+    valeur_actuelle: 2,
     valeur_reference: 3,
-    progression: 62.5,
+    progression: 50,
     id_composante: 3,
+    est_iodp: true
+  },
+  { 
+    id: 7, 
+    code: 'IODP5.1', 
+    nom: 'Bénéficiaires directs du projet',
+    description: 'Nombre total de bénéficiaires directs du projet',
+    formule: 'Somme cumulée des bénéficiaires',
+    unite: 'nombre',
+    frequence: 'annuelle',
+    cible: 600000,
+    valeur_actuelle: 142622,
+    valeur_reference: 0,
+    progression: 24,
+    id_composante: 0,
+    est_iodp: true
+  },
+  { 
+    id: 8, 
+    code: 'IODP5.2', 
+    nom: 'Bénéficiaires directs du projet - Femmes',
+    description: 'Nombre de femmes bénéficiaires directes du projet',
+    formule: 'Somme cumulée des bénéficiaires femmes',
+    unite: 'nombre',
+    frequence: 'annuelle',
+    cible: 300000,
+    valeur_actuelle: 77059,
+    valeur_reference: 0,
+    progression: 26,
+    id_composante: 0,
+    est_iodp: true
+  },
+  { 
+    id: 9, 
+    code: 'IODP6.1', 
+    nom: 'Provinces soumettant des plans de maintenance routière',
+    description: 'Nombre de provinces soumettant des plans annuels au FONER',
+    formule: 'Comptage des provinces',
+    unite: 'nombre',
+    frequence: 'annuelle',
+    cible: 4,
+    valeur_actuelle: 0,
+    valeur_reference: 0,
+    progression: 0,
+    id_composante: 2,
     est_iodp: true
   },
 ];
 
 export const IODPList: React.FC = () => {
   const [indicateurs, setIndicateurs] = useState<Indicateur[]>([]);
+  const [widgetData, setWidgetData] = useState<WidgetData>({
+    total: 0,
+    atteints: 0,
+    en_bonne_voie: 0,
+    en_alerte: 0,
+    critiques: 0,
+    non_renseignes: 0,
+    progression_moyenne: 0,
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
@@ -161,11 +287,19 @@ export const IODPList: React.FC = () => {
     setError(null);
     try {
       const response = await indicateurService.getIODP();
-      setIndicateurs(response.data);
+      const iodpIndicateurs = response.data;
+      setIndicateurs(iodpIndicateurs);
+      
+      // Calculer les stats pour les widgets
+      const stats = calculateWidgetData(iodpIndicateurs);
+      setWidgetData(stats);
     } catch (err) {
       console.error('Erreur API:', err);
       setError('Erreur de connexion au serveur. Affichage des données de démonstration.');
       setIndicateurs(mockIndicateurs);
+      
+      const stats = calculateWidgetData(mockIndicateurs);
+      setWidgetData(stats);
     } finally {
       setLoading(false);
     }
@@ -206,12 +340,18 @@ export const IODPList: React.FC = () => {
 
   return (
     <Box>
-      <Typography variant="h4" sx={{ fontWeight: 600, color: 'primary.main', mb: 1 }}>
+      <Typography variant="h4" sx={{ fontWeight: 700, color: 'primary.main', mb: 1 }}>
         Indicateurs IODP
       </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
         Objectifs de Développement du Programme - Suivi des performances
       </Typography>
+      <Chip 
+        label="9 indicateurs ODP · 20 indicateurs IR dans l'onglet dédié" 
+        size="small" 
+        variant="outlined" 
+        sx={{ mb: 3 }}
+      />
 
       {error && (
         <Alert severity="warning" sx={{ mb: 3 }} action={
@@ -222,6 +362,122 @@ export const IODPList: React.FC = () => {
           {error}
         </Alert>
       )}
+
+      {/* ============================================ */}
+      {/* WIDGETS DE SYNTHÈSE GLOBALE - ODP UNIQUEMENT */}
+      {/* ============================================ */}
+      <Grid container spacing={2} sx={{ mb: 4 }}>
+        {/* Carte 1: Total indicateurs ODP */}
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <Card sx={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box>
+                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
+                    Indicateurs ODP
+                  </Typography>
+                  <Typography variant="h3" sx={{ fontWeight: 700, mt: 1 }}>
+                    {widgetData.total}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    sur 29 indicateurs totaux (dont 20 IR)
+                  </Typography>
+                </Box>
+                <GoogleIcon name="track_changes" size={40} sx={{ color: '#1976D2', opacity: 0.7 }} />
+              </Box>
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                {widgetData.non_renseignes} sans données
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Carte 2: Progression moyenne des ODP */}
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <Card sx={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box>
+                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
+                    Progression Moyenne (ODP)
+                  </Typography>
+                  <Typography variant="h3" sx={{ fontWeight: 700, color: getProgressionColor(widgetData.progression_moyenne) }}>
+                    {widgetData.progression_moyenne}%
+                  </Typography>
+                </Box>
+                <GoogleIcon name="trending_up" size={40} sx={{ color: getProgressionColor(widgetData.progression_moyenne), opacity: 0.7 }} />
+              </Box>
+              <LinearProgress
+                variant="determinate"
+                value={Math.min(widgetData.progression_moyenne, 100)}
+                sx={{ mt: 1.5, height: 6, borderRadius: '8px', bgcolor: '#E0E0E0' }}
+              />
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Carte 3: Indicateurs ODP atteints */}
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <Card 
+            sx={{ 
+              borderRadius: '16px', 
+              boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+              borderLeft: '4px solid #2E7D32'
+            }}
+          >
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box>
+                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
+                    ✅ ODP Atteints
+                  </Typography>
+                  <Typography variant="h3" sx={{ fontWeight: 700, color: '#2E7D32' }}>
+                    {widgetData.atteints}
+                  </Typography>
+                </Box>
+                <GoogleIcon name="check_circle" size={40} sx={{ color: '#2E7D32', opacity: 0.7 }} />
+              </Box>
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                {widgetData.total > 0 ? Math.round((widgetData.atteints / widgetData.total) * 100) : 0}% des ODP
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Carte 4: Indicateurs ODP critiques */}
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <Card 
+            sx={{ 
+              borderRadius: '16px', 
+              boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+              borderLeft: '4px solid #E53935'
+            }}
+          >
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box>
+                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
+                    🔴 ODP Critiques
+                  </Typography>
+                  <Typography variant="h3" sx={{ fontWeight: 700, color: '#E53935' }}>
+                    {widgetData.critiques}
+                  </Typography>
+                </Box>
+                <GoogleIcon name="warning" size={40} sx={{ color: '#E53935', opacity: 0.7 }} />
+              </Box>
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                {widgetData.en_alerte} en alerte · {widgetData.en_bonne_voie} bonne voie
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* Note explicative */}
+      <Alert severity="info" sx={{ mb: 3 }}>
+        <strong>📊 À savoir :</strong> Cette page affiche les <strong>9 Indicateurs d'Objectifs de Développement (ODP)</strong> du programme. 
+        Les <strong>20 Indicateurs de Résultats (IR)</strong> sont disponibles dans l'onglet dédié.
+      </Alert>
 
       <ExportToolbar
         title="Indicateurs IODP"
@@ -244,7 +500,7 @@ export const IODPList: React.FC = () => {
           valeur_reference: i.valeur_reference,
           cible: i.cible,
           valeur_actuelle: i.valeur_actuelle,
-          progression: `${i.progression}%`,
+          progression: `${i.progression.toFixed(1)}%`,
         }))}
         filename="indicateurs_iodp"
         landscape
@@ -261,20 +517,22 @@ export const IODPList: React.FC = () => {
                       <Chip 
                         label={indicateur.code} 
                         size="small" 
-                        sx={{ bgcolor: '#2E7D32', color: 'white' }}
+                        sx={{ bgcolor: '#1976D2', color: 'white' }}
                       />
                       <Chip 
                         label={indicateur.frequence} 
                         size="small" 
                         variant="outlined"
                       />
-                      {indicateur.progression >= 70 ? (
-                        <GoogleIcon name="check_circle" size={24} sx={{ color: '#4CAF50' }} />
-                      ) : indicateur.progression >= 40 ? (
-                        <GoogleIcon name="warning" size={24} sx={{ color: '#FFC107' }} />
-                      ) : (
-                        <GoogleIcon name="warning" size={24} sx={{ color: '#F44336' }} />
-                      )}
+                      <Chip 
+                        label={getProgressionLabel(indicateur.progression)} 
+                        size="small" 
+                        sx={{ 
+                          bgcolor: getProgressionColor(indicateur.progression),
+                          color: 'white',
+                          fontSize: '0.7rem'
+                        }} 
+                      />
                     </Box>
                     <Typography variant="h6" gutterBottom>
                       {indicateur.nom}
@@ -289,7 +547,7 @@ export const IODPList: React.FC = () => {
                         <Typography variant="caption" color="text.secondary">
                           Progression
                         </Typography>
-                        <Typography variant="caption" fontWeight={500}>
+                        <Typography variant="caption" fontWeight={500} color={getProgressionColor(indicateur.progression)}>
                           {indicateur.progression.toFixed(1)}%
                         </Typography>
                       </Box>
@@ -320,7 +578,7 @@ export const IODPList: React.FC = () => {
                       </Box>
                       <Box>
                         <Typography variant="caption" color="text.secondary">
-                          Cible
+                          Cible finale
                         </Typography>
                         <Typography variant="h6">
                           {formatUnite(indicateur.cible, indicateur.unite)}
@@ -361,60 +619,6 @@ export const IODPList: React.FC = () => {
                     <Paper sx={{ p: 2, bgcolor: '#F5F5F5', fontFamily: 'monospace', fontSize: '0.875rem', mb: 2 }}>
                       {indicateur.formule}
                     </Paper>
-                    
-                    <Typography variant="subtitle2" gutterBottom>
-                      Historique des performances
-                    </Typography>
-                    <TableContainer component={Paper} variant="outlined">
-                      <Table size="small">
-                        <TableHead>
-                          <TableRow sx={{ bgcolor: '#F5F5F5' }}>
-                            <TableCell>Période</TableCell>
-                            <TableCell align="right">Valeur</TableCell>
-                            <TableCell align="right">Progression</TableCell>
-                            <TableCell align="right">Statut</TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          <TableRow>
-                            <TableCell>T1 2025</TableCell>
-                            <TableCell align="right">{formatUnite(indicateur.valeur_reference * 0.5, indicateur.unite)}</TableCell>
-                            <TableCell align="right">50%</TableCell>
-                            <TableCell align="right">
-                              <Chip label="Début" size="small" variant="outlined" />
-                            </TableCell>
-                          </TableRow>
-                          <TableRow>
-                            <TableCell>T2 2025</TableCell>
-                            <TableCell align="right">{formatUnite(indicateur.valeur_reference * 0.7, indicateur.unite)}</TableCell>
-                            <TableCell align="right">70%</TableCell>
-                            <TableCell align="right">
-                              <Chip label="En progression" size="small" color="warning" />
-                            </TableCell>
-                          </TableRow>
-                          <TableRow>
-                            <TableCell>T3 2025</TableCell>
-                            <TableCell align="right">{formatUnite(indicateur.valeur_reference, indicateur.unite)}</TableCell>
-                            <TableCell align="right">100%</TableCell>
-                            <TableCell align="right">
-                              <Chip label="Référence" size="small" color="info" />
-                            </TableCell>
-                          </TableRow>
-                          <TableRow>
-                            <TableCell>T1 2026</TableCell>
-                            <TableCell align="right">{formatUnite(indicateur.valeur_actuelle, indicateur.unite)}</TableCell>
-                            <TableCell align="right">{indicateur.progression.toFixed(1)}%</TableCell>
-                            <TableCell align="right">
-                              <Chip 
-                                label={indicateur.progression >= 70 ? 'Bon' : 'À améliorer'} 
-                                size="small" 
-                                color={indicateur.progression >= 70 ? 'success' : 'warning'}
-                              />
-                            </TableCell>
-                          </TableRow>
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
                   </Box>
                 </Collapse>
               </CardContent>

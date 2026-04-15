@@ -27,8 +27,6 @@ import {
   CircularProgress,
   Alert,
   Tooltip,
-  Card,
-  CardContent,
   Tabs,
   Tab,
   Badge,
@@ -42,23 +40,9 @@ import { useNavigate } from 'react-router-dom';
 import { grmService } from '../../services/grm.service';
 import type { Plainte, PlainteFilters } from '../../services/grm.service';
 import GoogleIcon from '../../components/common/GoogleIcon';
+import { GradientWidget } from '../../components/common/Widget/GradientWidget';
 import { ExportToolbar } from '../../components/common/ExportToolbar/ExportToolbar';
 import { useNotifications } from '../../context/NotificationsContext';
-
-// Composant de statistiques
-const StatsCard: React.FC<{ title: string; value: number; icon: React.ReactNode; color: string }> = ({ title, value, icon, color }) => (
-  <Card sx={{ bgcolor: `${color}10`, borderLeft: `4px solid ${color}` }}>
-    <CardContent>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Box>
-          <Typography variant="caption" color="text.secondary">{title}</Typography>
-          <Typography variant="h5" fontWeight={600}>{value.toLocaleString()}</Typography>
-        </Box>
-        <Box sx={{ color, display: 'flex', alignItems: 'center' }}>{icon}</Box>
-      </Box>
-    </CardContent>
-  </Card>
-);
 
 const getStatusChip = (statut: string) => {
   switch (statut) {
@@ -274,18 +258,42 @@ export const PlainteList: React.FC = () => {
 
       {/* Statistiques */}
       {stats && (
-        <Grid container spacing={2} sx={{ mb: 3 }}>
+        <Grid container spacing={3} sx={{ mb: 4 }}>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <StatsCard title="Total plaintes" value={stats.total || 24} icon={<GoogleIcon name="assignment" size={28} />} color="#2E7D32" />
+            <GradientWidget
+              title="Total plaintes"
+              value={(stats.total || 24).toLocaleString('fr-FR')}
+              icon={<GoogleIcon name="assignment" size={36} />}
+              trend={{ value: Math.max(stats.sensibles || 0, sensitiveComplaintNotifications.length), direction: 'up', period: 'cas sensibles' }}
+              color="primary"
+            />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <StatsCard title="En cours" value={stats.en_cours || 8} icon={<GoogleIcon name="pending_actions" size={28} />} color="#FF8F00" />
+            <GradientWidget
+              title="En cours"
+              value={(stats.en_cours || 8).toLocaleString('fr-FR')}
+              icon={<GoogleIcon name="pending_actions" size={36} />}
+              trend={{ value: (stats.total || 0) > 0 ? Math.round(((stats.en_cours || 0) / stats.total) * 100) : 0, direction: 'up', period: 'du total' }}
+              color="warning"
+            />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <StatsCard title="Traitée" value={stats.traitees || 14} icon={<GoogleIcon name="check_circle" size={28} />} color="#4CAF50" />
+            <GradientWidget
+              title="Traitées"
+              value={(stats.traitees || 14).toLocaleString('fr-FR')}
+              icon={<GoogleIcon name="check_circle" size={36} />}
+              trend={{ value: (stats.total || 0) > 0 ? Math.round(((stats.traitees || 0) / stats.total) * 100) : 0, direction: 'up', period: 'du total' }}
+              color="success"
+            />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <StatsCard title="Cas VBG/EAS/HS" value={Math.max(stats.sensibles || 0, sensitiveComplaintNotifications.length)} icon={<GoogleIcon name="warning" size={28} />} color="#D32F2F" />
+            <GradientWidget
+              title="Cas VBG/EAS/HS"
+              value={Math.max(stats.sensibles || 0, sensitiveComplaintNotifications.length).toLocaleString('fr-FR')}
+              icon={<GoogleIcon name="warning" size={36} />}
+              trend={{ value: unreadComplaintNotifications.length, direction: unreadComplaintNotifications.length > 0 ? 'down' : 'up', period: unreadComplaintNotifications.length > 0 ? 'notifications non lues' : 'aucune alerte' }}
+              color="danger"
+            />
           </Grid>
         </Grid>
       )}

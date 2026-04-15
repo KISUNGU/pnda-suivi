@@ -28,7 +28,6 @@ import {
   Alert,
   Tooltip,
   Card,
-  CardContent,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -46,8 +45,6 @@ import {
   Refresh,
   Clear,
   TrendingUp,
-  CheckCircle,
-  Warning,
   Info,
   Edit,
   History,
@@ -57,6 +54,8 @@ import {
   Visibility,
 } from '@mui/icons-material';
 import GoogleIcon from '../../components/common/GoogleIcon';
+import { GradientWidget } from '../../components/common/Widget/GradientWidget';
+import { moduleGridStyles } from '../../components/common/Layout/moduleGridStyles';
 import { ExportToolbar } from '../../components/common/ExportToolbar/ExportToolbar';
 import { indicateursDatabaseService, type IndicateurComplet, type IndicateurFilters, type IndicateurStats } from '../../services/indicateursDatabase.service';
 
@@ -452,59 +451,48 @@ export const IndicateursDatabase: React.FC = () => {
 
       {/* Statistiques */}
       {stats && (
-        <Grid container spacing={2} sx={{ mb: 3 }}>
+        <Grid container spacing={3} sx={{ mb: 4 }}>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <Card sx={{ borderRadius: 2, borderLeft: '4px solid #2E7D32' }}>
-              <CardContent>
-                <Typography variant="caption" color="text.secondary">Total indicateurs</Typography>
-                <Typography variant="h4" fontWeight={700}>{stats.total}</Typography>
-                <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-                  <Chip label={`IODP: ${stats.par_type.iodp}`} size="small" sx={{ bgcolor: '#E8F5E9', color: '#2E7D32' }} />
-                  <Chip label={`IR: ${stats.par_type.ir}`} size="small" sx={{ bgcolor: '#E3F2FD', color: '#1976D2' }} />
-                </Stack>
-              </CardContent>
-            </Card>
+            <GradientWidget
+              title="Total indicateurs"
+              value={stats.total.toLocaleString('fr-FR')}
+              icon={<GoogleIcon name="analytics" size={36} />}
+              trend={{ value: stats.par_type.iodp, direction: 'up', period: 'IODP' }}
+              color="primary"
+            />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <Card sx={{ borderRadius: 2 }}>
-              <CardContent>
-                <Typography variant="caption" color="text.secondary">Progression moyenne</Typography>
-                <Typography variant="h4" fontWeight={700} color={getProgressionColor(stats.progression_moyenne)}>
-                  {stats.progression_moyenne}%
-                </Typography>
-                <LinearProgress variant="determinate" value={stats.progression_moyenne} sx={{ mt: 1, height: 6, borderRadius: 2 }} />
-              </CardContent>
-            </Card>
+            <GradientWidget
+              title="Progression moyenne"
+              value={`${stats.progression_moyenne}%`}
+              icon={<GoogleIcon name="trending_up" size={36} />}
+              trend={{ value: Math.round(stats.progression_moyenne), direction: 'up', period: 'de la cible' }}
+              color="info"
+            />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <Card sx={{ borderRadius: 2 }}>
-              <CardContent>
-                <Stack direction="row" alignItems="center" spacing={1}>
-                  <CheckCircle sx={{ color: '#4CAF50' }} />
-                  <Typography variant="caption" color="text.secondary">Indicateurs atteints</Typography>
-                </Stack>
-                <Typography variant="h4" fontWeight={700}>{stats.indicateurs_atteints}</Typography>
-                <Typography variant="caption" color="text.secondary">sur {stats.total}</Typography>
-              </CardContent>
-            </Card>
+            <GradientWidget
+              title="Indicateurs atteints"
+              value={stats.indicateurs_atteints.toLocaleString('fr-FR')}
+              icon={<GoogleIcon name="check_circle" size={36} />}
+              trend={{ value: stats.total > 0 ? Math.round((stats.indicateurs_atteints / stats.total) * 100) : 0, direction: 'up', period: 'du total' }}
+              color="success"
+            />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <Card sx={{ borderRadius: 2 }}>
-              <CardContent>
-                <Stack direction="row" alignItems="center" spacing={1}>
-                  <Warning sx={{ color: '#F44336' }} />
-                  <Typography variant="caption" color="text.secondary">Indicateurs en alerte</Typography>
-                </Stack>
-                <Typography variant="h4" fontWeight={700} color="error.main">{stats.indicateurs_en_alerte}</Typography>
-                <Typography variant="caption" color="text.secondary">progression {'<'} 50%</Typography>
-              </CardContent>
-            </Card>
+            <GradientWidget
+              title="Indicateurs en alerte"
+              value={stats.indicateurs_en_alerte.toLocaleString('fr-FR')}
+              icon={<GoogleIcon name="warning" size={36} />}
+              trend={{ value: stats.total > 0 ? Math.round((stats.indicateurs_en_alerte / stats.total) * 100) : 0, direction: 'down', period: 'progression < 50%' }}
+              color="danger"
+            />
           </Grid>
         </Grid>
       )}
 
       {/* Barre de recherche et actions */}
-      <Paper sx={{ p: 2, mb: 3, borderRadius: 2 }}>
+      <Paper sx={moduleGridStyles.filterPanel}>
         <Grid container spacing={2} alignItems="center">
           <Grid size={{ xs: 12, md: 6 }}>
             <TextField
@@ -636,7 +624,10 @@ export const IndicateursDatabase: React.FC = () => {
                     <Tooltip title="Référence">
                       <Chip label={ind.valeurs.reference.toLocaleString()} size="small" variant="outlined" />
                     </Tooltip>
-                    <Tooltip title="Cible">
+                    <Tooltip title="Cible annuelle">
+                      <Chip label={(ind.valeurs.cible_annuelle ?? ind.valeurs.cible).toLocaleString()} size="small" variant="outlined" sx={{ bgcolor: '#E3F2FD' }} />
+                    </Tooltip>
+                    <Tooltip title="Cible finale">
                       <Chip label={ind.valeurs.cible.toLocaleString()} size="small" sx={{ bgcolor: '#FFF3E0' }} />
                     </Tooltip>
                     <Tooltip title="Actuelle">
@@ -648,7 +639,7 @@ export const IndicateursDatabase: React.FC = () => {
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <LinearProgress 
                       variant="determinate" 
-                      value={ind.valeurs.progression} 
+                      value={Math.min(ind.valeurs.progression, 100)} 
                       sx={{ width: 60, height: 6, borderRadius: 2 }}
                     />
                     <Typography variant="caption" fontWeight={500} color={getProgressionColor(ind.valeurs.progression)}>
@@ -774,6 +765,10 @@ export const IndicateursDatabase: React.FC = () => {
                       {selectedIndicateur.formule}
                     </Paper>
                   </Grid>
+                  <Grid size={{ xs: 12 }}>
+                    <Typography variant="subtitle2" color="text.secondary">Méthodologie de collecte</Typography>
+                    <Typography variant="body2">{selectedIndicateur.methodologie_collecte || '—'}</Typography>
+                  </Grid>
                   <Grid size={{ xs: 12, md: 6 }}>
                     <Typography variant="subtitle2" color="text.secondary">Source des données</Typography>
                     <Typography variant="body2">{selectedIndicateur.source_donnees}</Typography>
@@ -812,34 +807,48 @@ export const IndicateursDatabase: React.FC = () => {
 
               <TabPanel value={tabValue} index={3}>
                 <Grid container spacing={2}>
-                  <Grid size={{ xs: 12, md: 4 }}>
+                  <Grid size={{ xs: 12, md: 3 }}>
                     <Card sx={{ textAlign: 'center', p: 2 }}>
                       <Typography variant="caption" color="text.secondary">Valeur référence</Typography>
                       <Typography variant="h5">{selectedIndicateur.valeurs.reference.toLocaleString()} {selectedIndicateur.unite}</Typography>
                     </Card>
                   </Grid>
-                  <Grid size={{ xs: 12, md: 4 }}>
+                  <Grid size={{ xs: 12, md: 3 }}>
                     <Card sx={{ textAlign: 'center', p: 2 }}>
-                      <Typography variant="caption" color="text.secondary">Cible</Typography>
+                      <Typography variant="caption" color="text.secondary">Cible annuelle</Typography>
+                      <Typography variant="h5">{(selectedIndicateur.valeurs.cible_annuelle ?? selectedIndicateur.valeurs.cible).toLocaleString()} {selectedIndicateur.unite}</Typography>
+                    </Card>
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 3 }}>
+                    <Card sx={{ textAlign: 'center', p: 2 }}>
+                      <Typography variant="caption" color="text.secondary">Cible finale</Typography>
                       <Typography variant="h5">{selectedIndicateur.valeurs.cible.toLocaleString()} {selectedIndicateur.unite}</Typography>
                     </Card>
                   </Grid>
-                  <Grid size={{ xs: 12, md: 4 }}>
+                  <Grid size={{ xs: 12, md: 3 }}>
                     <Card sx={{ textAlign: 'center', p: 2, bgcolor: '#E8F5E9' }}>
                       <Typography variant="caption" color="text.secondary">Valeur actuelle</Typography>
                       <Typography variant="h5" color="primary.main">{selectedIndicateur.valeurs.actuelle.toLocaleString()} {selectedIndicateur.unite}</Typography>
                     </Card>
                   </Grid>
+                  {selectedIndicateur.valeurs.final_realise !== undefined && selectedIndicateur.valeurs.final_realise !== null && (
+                    <Grid size={{ xs: 12, md: 6 }}>
+                      <Card sx={{ textAlign: 'center', p: 2, bgcolor: '#FFF8E1' }}>
+                        <Typography variant="caption" color="text.secondary">Réalisé final</Typography>
+                        <Typography variant="h5" color="#E65100">{selectedIndicateur.valeurs.final_realise.toLocaleString()} {selectedIndicateur.unite}</Typography>
+                      </Card>
+                    </Grid>
+                  )}
                   <Grid size={{ xs: 12 }}>
                     <Box sx={{ mt: 2 }}>
-                      <Typography variant="subtitle2" gutterBottom>Progression vers la cible</Typography>
+                      <Typography variant="subtitle2" gutterBottom>Progression vers la cible finale</Typography>
                       <LinearProgress 
                         variant="determinate" 
-                        value={selectedIndicateur.valeurs.progression} 
+                        value={Math.min(selectedIndicateur.valeurs.progression, 100)} 
                         sx={{ height: 10, borderRadius: 2 }}
                       />
                       <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                        {selectedIndicateur.valeurs.progression}% de la cible atteinte
+                        {selectedIndicateur.valeurs.progression}% de la cible finale atteinte
                       </Typography>
                     </Box>
                   </Grid>
@@ -866,7 +875,8 @@ export const IndicateursDatabase: React.FC = () => {
             <Alert severity="info" sx={{ mb: 2 }}>
               <strong>Indicateur:</strong> {selectedIndicateur?.nom}<br />
               <strong>Unité:</strong> {selectedIndicateur?.unite}<br />
-              <strong>Cible:</strong> {selectedIndicateur?.valeurs.cible.toLocaleString()} {selectedIndicateur?.unite}
+              <strong>Cible annuelle:</strong> {(selectedIndicateur?.valeurs.cible_annuelle ?? selectedIndicateur?.valeurs.cible)?.toLocaleString()} {selectedIndicateur?.unite}<br />
+              <strong>Cible finale:</strong> {selectedIndicateur?.valeurs.cible.toLocaleString()} {selectedIndicateur?.unite}
             </Alert>
             <TextField
               fullWidth

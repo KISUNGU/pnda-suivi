@@ -121,9 +121,8 @@ export const LoginPage: React.FC = () => {
           </form>
 
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mt: 2 }}>
-            Comptes de démonstration :<br />
-            admin@pnda.cd / admin123<br />
-            uncp@pnda.cd / uncp123
+            Utilisez un compte existant dans la table utilisateur.<br />
+            Plusieurs comptes importés utilisent encore le mot de passe initial password123.
           </Typography>
         </Paper>
       </Container>

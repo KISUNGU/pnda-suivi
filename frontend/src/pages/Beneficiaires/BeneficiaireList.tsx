@@ -27,12 +27,12 @@ import {
   CircularProgress,
   Alert,
   Tooltip,
-  Card,
-  CardContent,
 } from '@mui/material';
 import type { Beneficiaire, BeneficiaireFilters } from '../../services/api';
 import { beneficiaireService } from '../../services/api';
 import GoogleIcon from '../../components/common/GoogleIcon';
+import { GradientWidget } from '../../components/common/Widget/GradientWidget';
+import { moduleGridStyles } from '../../components/common/Layout/moduleGridStyles';
 import { ExportToolbar } from '../../components/common/ExportToolbar/ExportToolbar';
 
 interface BeneficiaireStats {
@@ -41,21 +41,6 @@ interface BeneficiaireStats {
   hommes: number;
   provinces: number;
 }
-
-// Composant de statistiques
-const StatsCard: React.FC<{ title: string; value: number; icon: React.ReactNode; color: string }> = ({ title, value, icon, color }) => (
-  <Card sx={{ bgcolor: `${color}10`, borderLeft: `4px solid ${color}` }}>
-    <CardContent>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Box>
-          <Typography variant="caption" color="text.secondary">{title}</Typography>
-          <Typography variant="h5" fontWeight={600}>{value.toLocaleString()}</Typography>
-        </Box>
-        <Box sx={{ color, display: 'flex', alignItems: 'center' }}>{icon}</Box>
-      </Box>
-    </CardContent>
-  </Card>
-);
 
 export const BeneficiaireList: React.FC = () => {
   const [beneficiaires, setBeneficiaires] = useState<Beneficiaire[]>([]);
@@ -166,18 +151,42 @@ export const BeneficiaireList: React.FC = () => {
       </Box>
 
       {stats && (
-        <Grid container spacing={2} sx={{ mb: 3 }}>
+        <Grid container spacing={3} sx={{ mb: 4 }}>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <StatsCard title="Total bénéficiaires" value={stats.total || 0} icon={<GoogleIcon name="groups" size={28} />} color="#2E7D32" />
+            <GradientWidget
+              title="Total bénéficiaires"
+              value={(stats.total || 0).toLocaleString('fr-FR')}
+              icon={<GoogleIcon name="groups" size={36} />}
+              trend={{ value: stats.provinces || 0, direction: 'up', period: 'provinces couvertes' }}
+              color="primary"
+            />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <StatsCard title="Femmes" value={stats.femmes || 0} icon={<GoogleIcon name="female" size={28} />} color="#4CAF50" />
+            <GradientWidget
+              title="Femmes"
+              value={(stats.femmes || 0).toLocaleString('fr-FR')}
+              icon={<GoogleIcon name="female" size={36} />}
+              trend={{ value: (stats.total || 0) > 0 ? Math.round(((stats.femmes || 0) / (stats.total || 1)) * 100) : 0, direction: 'up', period: '% du total' }}
+              color="success"
+            />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <StatsCard title="Hommes" value={stats.hommes || 0} icon={<GoogleIcon name="male" size={28} />} color="#81C784" />
+            <GradientWidget
+              title="Hommes"
+              value={(stats.hommes || 0).toLocaleString('fr-FR')}
+              icon={<GoogleIcon name="male" size={36} />}
+              trend={{ value: (stats.total || 0) > 0 ? Math.round(((stats.hommes || 0) / (stats.total || 1)) * 100) : 0, direction: 'up', period: '% du total' }}
+              color="info"
+            />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <StatsCard title="Provinces couvertes" value={stats.provinces || 0} icon={<GoogleIcon name="map" size={28} />} color="#A5D6A7" />
+            <GradientWidget
+              title="Provinces couvertes"
+              value={stats.provinces || 0}
+              icon={<GoogleIcon name="map" size={36} />}
+              trend={{ value: Math.round(((stats.provinces || 0) / 26) * 100), direction: 'up', period: 'sur 26 provinces' }}
+              color="warning"
+            />
           </Grid>
         </Grid>
       )}
@@ -186,7 +195,7 @@ export const BeneficiaireList: React.FC = () => {
         Les données RNA proviennent directement de la table SQL FAO <strong>agriculteurs</strong>. Cet écran est accessible en lecture seule.
       </Alert>
 
-      <Paper sx={{ p: 2, mb: 3, borderRadius: '10px' }}>
+      <Paper sx={moduleGridStyles.filterPanel}>
         <Grid container spacing={2} alignItems="center">
           <Grid size={{ xs: 12, md: 6 }}>
             <TextField

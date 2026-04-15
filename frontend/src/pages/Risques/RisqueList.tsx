@@ -1,12 +1,11 @@
 // frontend/src/pages/Risques/RisqueList.tsx
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Typography,
   Paper,
   Grid,
-  Card,
-  CardContent,
   Chip,
   Button,
   Dialog,
@@ -34,144 +33,15 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
-  Avatar,
+  Snackbar,
 } from '@mui/material';
-import { GoogleIcon } from '../../components/common/GoogleIcon';
+import GoogleIcon from '../../components/common/GoogleIcon';
+import { GradientWidget } from '../../components/common/Widget/GradientWidget';
 import { ExportToolbar } from '../../components/common/ExportToolbar/ExportToolbar';
 import risqueService from '../../services/risque.service';
-import type { Risque, ActionAtténuation, AlerteRisque } from '../../services/risque.service';
+import type { Risque, ActionAtténuation, AlerteRisque, RisqueStats, CategorieRisque, StatutRisque } from '../../services/risque.service';
 
-// Données mockées complètes
-const mockRisques: Risque[] = [
-  {
-    id: 1,
-    code: 'RISK-001',
-    nom: 'Retard dans la distribution des intrants agricoles',
-    description: 'Les intrants agricoles (semences, engrais) ne sont pas distribués dans les délais impartis, impactant les campagnes agricoles.',
-    categorie: 'gestion',
-    probabilite: 4,
-    impact: 3,
-    niveau: 'Élevé',
-    statut: 'en_cours',
-    plan_atténuation: 'Renforcer la logistique, mettre en place un suivi quotidien des livraisons, prévoir des stocks tampons',
-    responsable: 'UNCP / Cellule Logistique',
-    date_identification: '2026-01-15',
-    province: 'Kwilu, Kasaï, Haut-Lomami',
-    actions_prevues: ['Établir un planning de livraison', 'Renforcer l\'équipe logistique', 'Mettre en place un système de tracking'],
-    indicateurs_surveillance: ['Délai moyen de livraison', 'Taux de satisfaction des bénéficiaires'],
-    dernier_suivi: '2026-03-25',
-  },
-  {
-    id: 2,
-    code: 'RISK-002',
-    nom: 'Sécheresse prolongée affectant les rendements',
-    description: 'Risque de sécheresse prolongée pendant la saison des pluies, pouvant réduire les rendements agricoles de 30 à 50%.',
-    categorie: 'environnemental',
-    probabilite: 3,
-    impact: 5,
-    niveau: 'Critique',
-    statut: 'identifie',
-    plan_atténuation: 'Mettre en place des systèmes d\'irrigation goutte-à-goutte, distribuer des semences résistantes à la sécheresse, former aux techniques de conservation de l\'eau',
-    responsable: 'Ministère Agriculture / INERA',
-    date_identification: '2026-02-10',
-    province: 'Kasaï, Kwilu, Tanganyika',
-    actions_prevues: ['Distribution de semences résistantes', 'Formation aux techniques AIC', 'Installation de systèmes d\'irrigation pilotes'],
-    indicateurs_surveillance: ['Indice de sécheresse', 'Rendements par culture', 'Taux d\'adoption des techniques AIC'],
-    dernier_suivi: '2026-03-20',
-  },
-  {
-    id: 3,
-    code: 'RISK-003',
-    nom: 'Insécurité dans les zones d\'intervention',
-    description: 'Présence de groupes armés dans certaines zones limitant l\'accès aux bénéficiaires et la mise en œuvre des activités.',
-    categorie: 'sante_securite',
-    probabilite: 2,
-    impact: 4,
-    niveau: 'Élevé',
-    statut: 'en_cours',
-    plan_atténuation: 'Coordination avec les autorités locales, adaptation des itinéraires, mise en place de couloirs sécurisés',
-    responsable: 'OVDA / Autorités provinciales',
-    date_identification: '2026-01-05',
-    province: 'Kasaï, Tanganyika',
-    actions_prevues: ['Réunions de coordination mensuelles', 'Évaluation des zones à risque', 'Plan de contingence sécuritaire'],
-    indicateurs_surveillance: ['Nombre d\'incidents signalés', 'Accès aux zones ciblées', 'Délais de mise en œuvre'],
-    dernier_suivi: '2026-03-28',
-  },
-  {
-    id: 4,
-    code: 'RISK-004',
-    nom: 'Faible adoption des technologies agricoles',
-    description: 'Les agriculteurs sont réticents à adopter les nouvelles technologies AIC/AIN en raison de traditions locales et de manque de confiance.',
-    categorie: 'technique',
-    probabilite: 3,
-    impact: 3,
-    niveau: 'Modéré',
-    statut: 'atténue',
-    plan_atténuation: 'Renforcer les formations, organiser des démonstrations terrain, impliquer les leaders communautaires',
-    responsable: 'SENASEM / Services de vulgarisation',
-    date_identification: '2025-12-10',
-    province: 'Kinshasa, Kongo Central',
-    actions_prevues: ['Campagnes de sensibilisation', 'Champs écoles paysans', 'Visites d\'échanges inter-paysans'],
-    indicateurs_surveillance: ['Taux d\'adoption', 'Nombre de formations réalisées', 'Satisfaction des bénéficiaires'],
-    dernier_suivi: '2026-03-15',
-  },
-  {
-    id: 5,
-    code: 'RISK-005',
-    nom: 'Fluctuation des prix des produits agricoles',
-    description: 'Variations importantes des prix sur les marchés, impactant les revenus des petits exploitants.',
-    categorie: 'socio_economique',
-    probabilite: 4,
-    impact: 3,
-    niveau: 'Élevé',
-    statut: 'en_cours',
-    plan_atténuation: 'Mettre en place des systèmes d\'information sur les marchés, faciliter l\'accès au stockage, promouvoir les contrats de vente',
-    responsable: 'UNCP / Services des marchés',
-    date_identification: '2026-02-20',
-    province: 'National',
-    actions_prevues: ['Création d\'un observatoire des prix', 'Appui aux organisations paysannes pour la commercialisation', 'Systèmes d\'alerte précoce'],
-    indicateurs_surveillance: ['Indice des prix', 'Marge bénéficiaire des exploitants', 'Volume vendu sur les marchés formels'],
-    dernier_suivi: '2026-03-22',
-  },
-  {
-    id: 6,
-    code: 'RISK-006',
-    nom: 'Capacité institutionnelle limitée',
-    description: 'Faiblesse des capacités des institutions publiques pour la mise en œuvre et le suivi du programme.',
-    categorie: 'gestion',
-    probabilite: 3,
-    impact: 4,
-    niveau: 'Élevé',
-    statut: 'identifie',
-    plan_atténuation: 'Renforcement des capacités, formations continues, appui technique personnalisé',
-    responsable: 'UNCP / Banque Mondiale',
-    date_identification: '2026-01-20',
-    province: 'National',
-    actions_prevues: ['Plan de formation annuel', 'Recrutement d\'experts', 'Mentorat des équipes provinciales'],
-    indicateurs_surveillance: ['Taux d\'exécution des activités', 'Qualité des rapports', 'Score de performance institutionnelle'],
-    dernier_suivi: '2026-03-18',
-  },
-];
-
-const mockActions: Record<number, ActionAtténuation[]> = {
-  1: [
-    { id: 1, id_risque: 1, action: 'Établir un planning de livraison détaillé', responsable: 'Cellule Logistique', date_debut: '2026-02-01', date_fin: '2026-02-28', statut: 'realisee', resultat: 'Planning validé et diffusé' },
-    { id: 2, id_risque: 1, action: 'Renforcer l\'équipe logistique', responsable: 'UNCP', date_debut: '2026-02-15', date_fin: '2026-03-15', statut: 'realisee', resultat: '2 recrutements effectués' },
-    { id: 3, id_risque: 1, action: 'Mettre en place un système de tracking', responsable: 'DANTIC', date_debut: '2026-03-01', date_fin: '2026-04-30', statut: 'en_cours' },
-  ],
-  2: [
-    { id: 1, id_risque: 2, action: 'Distribution de semences résistantes', responsable: 'SENASEM', date_debut: '2026-03-01', date_fin: '2026-04-15', statut: 'prevue' },
-    { id: 2, id_risque: 2, action: 'Formation aux techniques AIC', responsable: 'Vulgarisation', date_debut: '2026-03-15', date_fin: '2026-05-30', statut: 'prevue' },
-  ],
-};
-
-const mockAlertes: AlerteRisque[] = [
-  { id: 1, id_risque: 2, message: 'Niveau de risque sécheresse élevé dans la province du Kasaï', date_alerte: '2026-03-28T08:00:00Z', est_lue: false, niveau: 'danger' },
-  { id: 2, id_risque: 1, message: 'Retard de 15 jours dans la livraison des intrants', date_alerte: '2026-03-25T14:30:00Z', est_lue: false, niveau: 'warning' },
-  { id: 3, id_risque: 5, message: 'Baisse des prix du maïs de 20% sur le marché de Kinshasa', date_alerte: '2026-03-20T10:15:00Z', est_lue: true, niveau: 'warning' },
-];
-
-const categorieConfig = {
+const categorieConfig: Record<string, { label: string; icon: string; color: string; bg: string }> = {
   gestion: { label: 'Gestion', icon: 'settings', color: '#1976D2', bg: '#E3F2FD' },
   technique: { label: 'Technique', icon: 'engineering', color: '#FF8F00', bg: '#FFF8E1' },
   politique: { label: 'Politique', icon: 'gavel', color: '#7B1FA2', bg: '#F3E5F5' },
@@ -180,14 +50,14 @@ const categorieConfig = {
   sante_securite: { label: 'Santé & Sécurité', icon: 'health_and_safety', color: '#D32F2F', bg: '#FFEBEE' },
 };
 
-const niveauConfig = {
+const niveauConfig: Record<string, { label: string; color: string; bg: string; icon: string }> = {
   Faible: { label: 'Faible', color: '#4CAF50', bg: '#E8F5E9', icon: 'check_circle' },
   Modéré: { label: 'Modéré', color: '#FFC107', bg: '#FFF8E1', icon: 'warning' },
   Élevé: { label: 'Élevé', color: '#FF9800', bg: '#FFF3E0', icon: 'priority_high' },
   Critique: { label: 'Critique', color: '#F44336', bg: '#FFEBEE', icon: 'error' },
 };
 
-const statutConfig = {
+const statutConfig: Record<string, { label: string; color: string; bg: string; icon: string }> = {
   identifie: { label: 'Identifié', color: '#9E9E9E', bg: '#F5F5F5', icon: 'info' },
   en_cours: { label: 'En cours', color: '#FF9800', bg: '#FFF3E0', icon: 'pending' },
   atténue: { label: 'Atténué', color: '#4CAF50', bg: '#E8F5E9', icon: 'check_circle' },
@@ -197,22 +67,20 @@ const statutConfig = {
 export const RisqueList: React.FC = () => {
   const [risques, setRisques] = useState<Risque[]>([]);
   const [loading, setLoading] = useState(true);
-  const [_error, setError] = useState<string | null>(null);
-  const [stats, setStats] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [stats, setStats] = useState<RisqueStats | null>(null);
   const [alertes, setAlertes] = useState<AlerteRisque[]>([]);
+  const [actions, setActions] = useState<Record<number, ActionAtténuation[]>>({});
   const [tabValue, setTabValue] = useState(0);
   const [selectedRisque, setSelectedRisque] = useState<Risque | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [formData, setFormData] = useState<Partial<Risque>>({});
-  const [actions, setActions] = useState<Record<number, ActionAtténuation[]>>({});
   const [expandedAccordion, setExpandedAccordion] = useState<number | false>(false);
+  const [saving, setSaving] = useState(false);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -221,48 +89,35 @@ export const RisqueList: React.FC = () => {
         risqueService.getStats(),
         risqueService.getAlertes(),
       ]);
-      setRisques(risquesRes.data?.length ? risquesRes.data : mockRisques);
-      setAlertes(alertesRes.data?.length ? alertesRes.data : mockAlertes);
-      const s = statsRes.data;
-      setStats(s || {
-        total: mockRisques.length,
-        critiques: mockRisques.filter(r => r.niveau === 'Critique').length,
-        eleves: mockRisques.filter(r => r.niveau === 'Élevé').length,
-        moderes: mockRisques.filter(r => r.niveau === 'Modéré').length,
-        faibles: mockRisques.filter(r => r.niveau === 'Faible').length,
-        en_cours: mockRisques.filter(r => r.statut === 'en_cours').length,
-        attenues: mockRisques.filter(r => r.statut === 'atténue' || r.statut === 'cloture').length,
-      });
-      setActions(mockActions);
-    } catch {
-      setRisques(mockRisques);
-      setActions(mockActions);
-      setAlertes(mockAlertes);
-      setStats({
-        total: mockRisques.length,
-        critiques: mockRisques.filter(r => r.niveau === 'Critique').length,
-        eleves: mockRisques.filter(r => r.niveau === 'Élevé').length,
-        moderes: mockRisques.filter(r => r.niveau === 'Modéré').length,
-        faibles: mockRisques.filter(r => r.niveau === 'Faible').length,
-        en_cours: mockRisques.filter(r => r.statut === 'en_cours').length,
-        attenues: mockRisques.filter(r => r.statut === 'atténue' || r.statut === 'cloture').length,
-      });
+      setRisques(risquesRes.data);
+      setStats(statsRes.data);
+      setAlertes(alertesRes.data);
+    } catch (err) {
+      console.error('Erreur chargement risques:', err);
+      setError('Impossible de charger les données des risques');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const handleMarquerLue = async (id: number) => {
+  const loadActions = useCallback(async (risqueId: number) => {
     try {
-      await risqueService.marquerAlerteLue(id);
-    } catch { /* ignore */ }
-    setAlertes(prev => prev.map(a => a.id === id ? { ...a, est_lue: true } : a));
-  };
+      const res = await risqueService.getActions(risqueId);
+      setActions(prev => ({ ...prev, [risqueId]: res.data }));
+    } catch (err) {
+      console.error('Erreur chargement actions:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const handleOpenDialog = (risque?: Risque) => {
     if (risque) {
       setSelectedRisque(risque);
       setFormData(risque);
+      loadActions(risque.id);
     } else {
       setSelectedRisque(null);
       setFormData({
@@ -270,6 +125,7 @@ export const RisqueList: React.FC = () => {
         probabilite: 3,
         impact: 3,
         statut: 'identifie',
+        date_identification: new Date().toISOString().split('T')[0],
       });
     }
     setDialogOpen(true);
@@ -277,20 +133,27 @@ export const RisqueList: React.FC = () => {
 
   const handleOpenDetail = (risque: Risque) => {
     setSelectedRisque(risque);
+    loadActions(risque.id);
     setDetailDialogOpen(true);
   };
 
   const handleSave = async () => {
+    setSaving(true);
     try {
       if (selectedRisque) {
         await risqueService.update(selectedRisque.id, formData);
+        setSnackbar({ open: true, message: 'Risque mis à jour avec succès', severity: 'success' });
       } else {
         await risqueService.create(formData);
+        setSnackbar({ open: true, message: 'Risque créé avec succès', severity: 'success' });
       }
       setDialogOpen(false);
       loadData();
     } catch (err) {
       console.error(err);
+      setSnackbar({ open: true, message: 'Erreur lors de l\'enregistrement', severity: 'error' });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -298,8 +161,21 @@ export const RisqueList: React.FC = () => {
     if (window.confirm('Êtes-vous sûr de vouloir supprimer ce risque ?')) {
       try {
         await risqueService.delete(id);
-      } catch { /* si erreur, on recharge quand même */ }
-      loadData();
+        setSnackbar({ open: true, message: 'Risque supprimé avec succès', severity: 'success' });
+        loadData();
+      } catch (err) {
+        console.error(err);
+        setSnackbar({ open: true, message: 'Erreur lors de la suppression', severity: 'error' });
+      }
+    }
+  };
+
+  const handleMarquerLue = async (id: number) => {
+    try {
+      await risqueService.marquerAlerteLue(id);
+      setAlertes(prev => prev.map(a => a.id === id ? { ...a, est_lue: true } : a));
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -322,6 +198,7 @@ export const RisqueList: React.FC = () => {
   }
 
   const filteredRisques = getFilteredRisques();
+  const alertesNonLues = alertes.filter(a => !a.est_lue);
 
   return (
     <Box>
@@ -335,8 +212,10 @@ export const RisqueList: React.FC = () => {
         </Typography>
       </Box>
 
+      {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
+
       {/* Alertes actives */}
-      {alertes.filter(a => !a.est_lue).length > 0 && (
+      {alertesNonLues.length > 0 && (
         <Alert 
           severity="warning" 
           sx={{ mb: 3, borderRadius: 2 }}
@@ -344,9 +223,9 @@ export const RisqueList: React.FC = () => {
         >
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
             <Typography variant="body2">
-              <strong>{alertes.filter(a => !a.est_lue).length} alerte(s) non lue(s)</strong> - Des risques critiques nécessitent votre attention
+              <strong>{alertesNonLues.length} alerte(s) non lue(s)</strong> - Des risques critiques nécessitent votre attention
             </Typography>
-            <Button size="small" variant="outlined" sx={{ borderRadius: 2 }}>
+            <Button size="small" variant="outlined" sx={{ borderRadius: 2 }} onClick={() => setTabValue(7)}>
               Voir les alertes
             </Button>
           </Box>
@@ -355,58 +234,42 @@ export const RisqueList: React.FC = () => {
 
       {/* Statistiques */}
       {stats && (
-        <Grid container spacing={2} sx={{ mb: 4 }}>
+        <Grid container spacing={3} sx={{ mb: 4 }}>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <Card sx={{ borderRadius: 2 }}>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                  <Avatar sx={{ bgcolor: '#E8F5E9', width: 32, height: 32 }}>
-                    <GoogleIcon name="warning" size={18} sx={{ color: '#2E7D32' }} />
-                  </Avatar>
-                  <Typography variant="caption" color="text.secondary">Total risques</Typography>
-                </Box>
-                <Typography variant="h3" fontWeight={700}>{stats.total}</Typography>
-              </CardContent>
-            </Card>
+            <GradientWidget
+              title="Total risques"
+              value={stats.total.toLocaleString('fr-FR')}
+              icon={<GoogleIcon name="warning" size={36} />}
+              trend={{ value: stats.critiques, direction: 'up', period: 'risques critiques' }}
+              color="primary"
+            />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <Card sx={{ borderRadius: 2, borderLeft: `4px solid ${niveauConfig.Critique.color}` }}>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                  <Avatar sx={{ bgcolor: niveauConfig.Critique.bg, width: 32, height: 32 }}>
-                    <GoogleIcon name="error" size={18} sx={{ color: niveauConfig.Critique.color }} />
-                  </Avatar>
-                  <Typography variant="caption" color="text.secondary">Critiques</Typography>
-                </Box>
-                <Typography variant="h3" fontWeight={700} color="error.main">{stats.critiques}</Typography>
-              </CardContent>
-            </Card>
+            <GradientWidget
+              title="Critiques"
+              value={stats.critiques.toLocaleString('fr-FR')}
+              icon={<GoogleIcon name="error" size={36} />}
+              trend={{ value: stats.total > 0 ? Math.round((stats.critiques / stats.total) * 100) : 0, direction: 'down', period: 'du portefeuille' }}
+              color="danger"
+            />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <Card sx={{ borderRadius: 2, borderLeft: `4px solid ${niveauConfig.Élevé.color}` }}>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                  <Avatar sx={{ bgcolor: niveauConfig.Élevé.bg, width: 32, height: 32 }}>
-                    <GoogleIcon name="priority_high" size={18} sx={{ color: niveauConfig.Élevé.color }} />
-                  </Avatar>
-                  <Typography variant="caption" color="text.secondary">Élevés</Typography>
-                </Box>
-                <Typography variant="h3" fontWeight={700} color="warning.main">{stats.eleves}</Typography>
-              </CardContent>
-            </Card>
+            <GradientWidget
+              title="Élevés"
+              value={stats.eleves.toLocaleString('fr-FR')}
+              icon={<GoogleIcon name="priority_high" size={36} />}
+              trend={{ value: stats.total > 0 ? Math.round((stats.eleves / stats.total) * 100) : 0, direction: 'up', period: 'du portefeuille' }}
+              color="warning"
+            />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <Card sx={{ borderRadius: 2, borderLeft: `4px solid ${niveauConfig.Faible.color}` }}>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                  <Avatar sx={{ bgcolor: niveauConfig.Faible.bg, width: 32, height: 32 }}>
-                    <GoogleIcon name="check_circle" size={18} sx={{ color: niveauConfig.Faible.color }} />
-                  </Avatar>
-                  <Typography variant="caption" color="text.secondary">Atténués/Clôturés</Typography>
-                </Box>
-                <Typography variant="h3" fontWeight={700} color="success.main">{stats.attenues}</Typography>
-              </CardContent>
-            </Card>
+            <GradientWidget
+              title="Atténués/Clôturés"
+              value={stats.attenues.toLocaleString('fr-FR')}
+              icon={<GoogleIcon name="check_circle" size={36} />}
+              trend={{ value: stats.total > 0 ? Math.round((stats.attenues / stats.total) * 100) : 0, direction: 'up', period: 'du portefeuille' }}
+              color="success"
+            />
           </Grid>
         </Grid>
       )}
@@ -467,6 +330,8 @@ export const RisqueList: React.FC = () => {
         value={tabValue} 
         onChange={(_, v) => setTabValue(v)} 
         sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}
+        variant="scrollable"
+        scrollButtons="auto"
       >
         <Tab label="Tous" icon={<GoogleIcon name="list" size={18} />} iconPosition="start" />
         <Tab label="Critiques" icon={<GoogleIcon name="error" size={18} />} iconPosition="start" />
@@ -478,36 +343,39 @@ export const RisqueList: React.FC = () => {
         <Tab label="Alertes" icon={<GoogleIcon name="notifications_active" size={18} />} iconPosition="start" />
       </Tabs>
 
-      {tabValue < 6 && <ExportToolbar
-        title="Registre des Risques"
-        subtitle="Identification et suivi des risques du projet"
-        columns={[
-          { header: 'Code', key: 'code', width: 12 },
-          { header: 'Nom', key: 'nom', width: 40 },
-          { header: 'Catégorie', key: 'categorie', width: 18 },
-          { header: 'Niveau', key: 'niveau', width: 12 },
-          { header: 'Probabilité', key: 'probabilite', width: 14 },
-          { header: 'Impact', key: 'impact', width: 10 },
-          { header: 'Score (P×I)', key: 'score', width: 12 },
-          { header: 'Statut', key: 'statut', width: 14 },
-          { header: 'Responsable', key: 'responsable', width: 26 },
-          { header: 'Province', key: 'province', width: 22 },
-        ]}
-        getData={() => filteredRisques.map((r) => ({
-          code: r.code,
-          nom: r.nom,
-          categorie: r.categorie,
-          niveau: r.niveau,
-          probabilite: r.probabilite,
-          impact: r.impact,
-          score: r.probabilite * r.impact,
-          statut: r.statut,
-          responsable: r.responsable,
-          province: r.province,
-        }))}
-        filename="risques"
-        landscape
-      />}
+      {/* Export pour les onglets de liste */}
+      {tabValue < 6 && risques.length > 0 && (
+        <ExportToolbar
+          title="Registre des Risques"
+          subtitle="Identification et suivi des risques du projet"
+          columns={[
+            { header: 'Code', key: 'code', width: 12 },
+            { header: 'Nom', key: 'nom', width: 40 },
+            { header: 'Catégorie', key: 'categorie', width: 18 },
+            { header: 'Niveau', key: 'niveau', width: 12 },
+            { header: 'Probabilité', key: 'probabilite', width: 14 },
+            { header: 'Impact', key: 'impact', width: 10 },
+            { header: 'Score (P×I)', key: 'score', width: 12 },
+            { header: 'Statut', key: 'statut', width: 14 },
+            { header: 'Responsable', key: 'responsable', width: 26 },
+            { header: 'Province', key: 'province', width: 22 },
+          ]}
+          getData={() => filteredRisques.map((r) => ({
+            code: r.code,
+            nom: r.nom,
+            categorie: r.categorie,
+            niveau: r.niveau,
+            probabilite: r.probabilite,
+            impact: r.impact,
+            score: r.probabilite * r.impact,
+            statut: r.statut,
+            responsable: r.responsable,
+            province: r.province || '',
+          }))}
+          filename="risques"
+          landscape
+        />
+      )}
 
       {/* Plans d'atténuation */}
       {tabValue === 6 && (
@@ -525,38 +393,46 @@ export const RisqueList: React.FC = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {risques.map((risque, idx) => (
-                <TableRow key={risque.id} sx={{ bgcolor: idx % 2 === 0 ? 'white' : '#F9FBF9' }}>
-                  <TableCell>
-                    <Chip label={risque.code} size="small" sx={{ bgcolor: '#2E7D32', color: 'white', borderRadius: 1 }} />
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 500, maxWidth: 180 }}>
-                    <Typography variant="body2">{risque.nom}</Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Chip label={niveauConfig[risque.niveau].label} size="small" sx={{ bgcolor: niveauConfig[risque.niveau].bg, color: niveauConfig[risque.niveau].color }} />
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2" sx={{ fontSize: '0.78rem' }}>{risque.plan_atténuation}</Typography>
-                  </TableCell>
-                  <TableCell sx={{ maxWidth: 220 }}>
-                    <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
-                      {(risque.actions_prevues ?? []).slice(0, 2).map((a, i) => (
-                        <Chip key={i} label={a} size="small" variant="outlined" sx={{ fontSize: '0.7rem', m: 0.25 }} />
-                      ))}
-                      {(risque.actions_prevues ?? []).length > 2 && (
-                        <Chip label={`+${(risque.actions_prevues ?? []).length - 2}`} size="small" sx={{ m: 0.25 }} />
-                      )}
-                    </Stack>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2" sx={{ fontSize: '0.78rem' }}>{risque.responsable}</Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Chip label={statutConfig[risque.statut].label} size="small" sx={{ bgcolor: statutConfig[risque.statut].bg, color: statutConfig[risque.statut].color }} />
+              {risques.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
+                    <Typography color="text.secondary">Aucun risque enregistré</Typography>
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                risques.map((risque, idx) => (
+                  <TableRow key={risque.id} sx={{ bgcolor: idx % 2 === 0 ? 'white' : '#F9FBF9' }}>
+                    <TableCell>
+                      <Chip label={risque.code} size="small" sx={{ bgcolor: '#2E7D32', color: 'white', borderRadius: 1 }} />
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 500, maxWidth: 180 }}>
+                      <Typography variant="body2">{risque.nom}</Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Chip label={niveauConfig[risque.niveau]?.label || risque.niveau} size="small" sx={{ bgcolor: niveauConfig[risque.niveau]?.bg, color: niveauConfig[risque.niveau]?.color }} />
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" sx={{ fontSize: '0.78rem' }}>{risque.plan_atténuation}</Typography>
+                    </TableCell>
+                    <TableCell sx={{ maxWidth: 220 }}>
+                      <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+                        {(risque.actions_prevues ?? []).slice(0, 2).map((a, i) => (
+                          <Chip key={i} label={a} size="small" variant="outlined" sx={{ fontSize: '0.7rem', m: 0.25 }} />
+                        ))}
+                        {(risque.actions_prevues ?? []).length > 2 && (
+                          <Chip label={`+${(risque.actions_prevues ?? []).length - 2}`} size="small" sx={{ m: 0.25 }} />
+                        )}
+                      </Stack>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" sx={{ fontSize: '0.78rem' }}>{risque.responsable}</Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Chip label={statutConfig[risque.statut]?.label || risque.statut} size="small" sx={{ bgcolor: statutConfig[risque.statut]?.bg, color: statutConfig[risque.statut]?.color }} />
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </TableContainer>
@@ -583,10 +459,10 @@ export const RisqueList: React.FC = () => {
               >
                 <Box>
                   <Typography variant="body2" fontWeight={alerte.est_lue ? 400 : 600}>
-                    {alerte.message}
+                    [{alerte.risque_code}] {alerte.message}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    {new Date(alerte.date_alerte).toLocaleString()} — Risque #{alerte.id_risque}
+                    {new Date(alerte.date_alerte).toLocaleString()}
                     {alerte.est_lue && ' • Lue'}
                   </Typography>
                 </Box>
@@ -597,139 +473,147 @@ export const RisqueList: React.FC = () => {
       )}
 
       {/* Liste des risques */}
-      {tabValue < 6 && <Grid container spacing={3}>
-        {filteredRisques.map((risque) => (
-          <Grid size={{ xs: 12 }} key={risque.id}>
-            <Accordion 
-              expanded={expandedAccordion === risque.id}
-              onChange={() => setExpandedAccordion(expandedAccordion === risque.id ? false : risque.id)}
-              sx={{ borderRadius: 2, '&:before': { display: 'none' }, mb: 1 }}
-            >
-              <AccordionSummary expandIcon={<GoogleIcon name="expand_more" />}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', width: '100%' }}>
-                  <Chip 
-                    label={risque.code} 
-                    size="small" 
-                    sx={{ bgcolor: '#2E7D32', color: 'white', borderRadius: 1 }}
-                  />
-                  <Chip 
-                    label={categorieConfig[risque.categorie].label}
-                    size="small"
-                    sx={{ bgcolor: categorieConfig[risque.categorie].bg, color: categorieConfig[risque.categorie].color }}
-                  />
-                  <Chip 
-                    label={niveauConfig[risque.niveau].label}
-                    size="small"
-                    icon={<GoogleIcon name={niveauConfig[risque.niveau].icon} size={14} />}
-                    sx={{ bgcolor: niveauConfig[risque.niveau].bg, color: niveauConfig[risque.niveau].color }}
-                  />
-                  <Typography variant="body1" fontWeight={500} sx={{ flex: 1 }}>
-                    {risque.nom}
-                  </Typography>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Box sx={{ width: 100 }}>
-                      <LinearProgress 
-                        variant="determinate" 
-                        value={(risque.probabilite * risque.impact) / 25 * 100} 
-                        sx={{ height: 6, borderRadius: 2 }}
+      {tabValue < 6 && (
+        <Grid container spacing={3}>
+          {filteredRisques.length === 0 ? (
+            <Grid size={{ xs: 12 }}>
+              <Alert severity="info">Aucun risque ne correspond aux critères sélectionnés</Alert>
+            </Grid>
+          ) : (
+            filteredRisques.map((risque) => (
+              <Grid size={{ xs: 12 }} key={risque.id}>
+                <Accordion 
+                  expanded={expandedAccordion === risque.id}
+                  onChange={() => setExpandedAccordion(expandedAccordion === risque.id ? false : risque.id)}
+                  sx={{ borderRadius: 2, '&:before': { display: 'none' }, mb: 1 }}
+                >
+                  <AccordionSummary expandIcon={<GoogleIcon name="expand_more" />}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', width: '100%' }}>
+                      <Chip 
+                        label={risque.code} 
+                        size="small" 
+                        sx={{ bgcolor: '#2E7D32', color: 'white', borderRadius: 1 }}
                       />
-                    </Box>
-                    <Typography variant="caption" color="text.secondary">
-                      Score: {risque.probabilite * risque.impact}/25
-                    </Typography>
-                  </Box>
-                </Box>
-              </AccordionSummary>
-              <AccordionDetails>
-                <Box sx={{ p: 2, bgcolor: '#FAFAFA', borderRadius: 2 }}>
-                  <Grid container spacing={2}>
-                    <Grid size={{ xs: 12, md: 8 }}>
-                      <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                        Description
+                      <Chip 
+                        label={categorieConfig[risque.categorie]?.label || risque.categorie}
+                        size="small"
+                        sx={{ bgcolor: categorieConfig[risque.categorie]?.bg, color: categorieConfig[risque.categorie]?.color }}
+                      />
+                      <Chip 
+                        label={niveauConfig[risque.niveau]?.label || risque.niveau}
+                        size="small"
+                        icon={<GoogleIcon name={niveauConfig[risque.niveau]?.icon || 'warning'} size={14} />}
+                        sx={{ bgcolor: niveauConfig[risque.niveau]?.bg, color: niveauConfig[risque.niveau]?.color }}
+                      />
+                      <Typography variant="body1" fontWeight={500} sx={{ flex: 1 }}>
+                        {risque.nom}
                       </Typography>
-                      <Typography variant="body2" sx={{ mb: 2 }}>
-                        {risque.description}
-                      </Typography>
-                      
-                      <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                        Plan d'atténuation
-                      </Typography>
-                      <Paper sx={{ p: 2, bgcolor: '#F5F5F5', borderRadius: 2, mb: 2 }}>
-                        <Typography variant="body2">{risque.plan_atténuation}</Typography>
-                      </Paper>
-                      
-                      {risque.actions_prevues && risque.actions_prevues.length > 0 && (
-                        <>
-                          <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                            Actions prévues
-                          </Typography>
-                          <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: 'wrap', gap: 1 }}>
-                            {risque.actions_prevues.map((action, idx) => (
-                              <Chip key={idx} label={action} size="small" variant="outlined" />
-                            ))}
-                          </Stack>
-                        </>
-                      )}
-                    </Grid>
-                    
-                    <Grid size={{ xs: 12, md: 4 }}>
-                      <Box sx={{ bgcolor: 'white', p: 2, borderRadius: 2 }}>
-                        <Typography variant="subtitle2" gutterBottom>Informations clés</Typography>
-                        <Divider sx={{ my: 1 }} />
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                          <Typography variant="caption" color="text.secondary">Responsable</Typography>
-                          <Typography variant="caption" fontWeight={500}>{risque.responsable}</Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Box sx={{ width: 100 }}>
+                          <LinearProgress 
+                            variant="determinate" 
+                            value={(risque.probabilite * risque.impact) / 25 * 100} 
+                            sx={{ height: 6, borderRadius: 2 }}
+                          />
                         </Box>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                          <Typography variant="caption" color="text.secondary">Date d'identification</Typography>
-                          <Typography variant="caption">{new Date(risque.date_identification).toLocaleDateString()}</Typography>
-                        </Box>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                          <Typography variant="caption" color="text.secondary">Dernier suivi</Typography>
-                          <Typography variant="caption">{risque.dernier_suivi ? new Date(risque.dernier_suivi).toLocaleDateString() : '-'}</Typography>
-                        </Box>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                          <Typography variant="caption" color="text.secondary">Province(s)</Typography>
-                          <Typography variant="caption">{risque.province}</Typography>
-                        </Box>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <Typography variant="caption" color="text.secondary">Statut</Typography>
-                          <Chip label={statutConfig[risque.statut].label} size="small" sx={{ height: 20, fontSize: '0.7rem' }} />
-                        </Box>
+                        <Typography variant="caption" color="text.secondary">
+                          Score: {risque.probabilite * risque.impact}/25
+                        </Typography>
                       </Box>
-                    </Grid>
-                  </Grid>
-                  
-                  <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 2 }}>
-                    <Button 
-                      size="small" 
-                      startIcon={<GoogleIcon name="visibility" size={16} />}
-                      onClick={() => handleOpenDetail(risque)}
-                    >
-                      Voir détails
-                    </Button>
-                    <Button 
-                      size="small" 
-                      startIcon={<GoogleIcon name="edit" size={16} />}
-                      onClick={() => handleOpenDialog(risque)}
-                    >
-                      Modifier
-                    </Button>
-                    <Button 
-                      size="small" 
-                      color="error"
-                      startIcon={<GoogleIcon name="delete" size={16} />}
-                      onClick={() => handleDelete(risque.id)}
-                    >
-                      Supprimer
-                    </Button>
-                  </Box>
-                </Box>
-              </AccordionDetails>
-            </Accordion>
-          </Grid>
-        ))}
-      </Grid>}
+                    </Box>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <Box sx={{ p: 2, bgcolor: '#FAFAFA', borderRadius: 2 }}>
+                      <Grid container spacing={2}>
+                        <Grid size={{ xs: 12, md: 8 }}>
+                          <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                            Description
+                          </Typography>
+                          <Typography variant="body2" sx={{ mb: 2 }}>
+                            {risque.description}
+                          </Typography>
+                          
+                          <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                            Plan d'atténuation
+                          </Typography>
+                          <Paper sx={{ p: 2, bgcolor: '#F5F5F5', borderRadius: 2, mb: 2 }}>
+                            <Typography variant="body2">{risque.plan_atténuation}</Typography>
+                          </Paper>
+                          
+                          {risque.actions_prevues && risque.actions_prevues.length > 0 && (
+                            <>
+                              <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                                Actions prévues
+                              </Typography>
+                              <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: 'wrap', gap: 1 }}>
+                                {risque.actions_prevues.map((action, idx) => (
+                                  <Chip key={idx} label={action} size="small" variant="outlined" />
+                                ))}
+                              </Stack>
+                            </>
+                          )}
+                        </Grid>
+                        
+                        <Grid size={{ xs: 12, md: 4 }}>
+                          <Box sx={{ bgcolor: 'white', p: 2, borderRadius: 2 }}>
+                            <Typography variant="subtitle2" gutterBottom>Informations clés</Typography>
+                            <Divider sx={{ my: 1 }} />
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                              <Typography variant="caption" color="text.secondary">Responsable</Typography>
+                              <Typography variant="caption" fontWeight={500}>{risque.responsable}</Typography>
+                            </Box>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                              <Typography variant="caption" color="text.secondary">Date d'identification</Typography>
+                              <Typography variant="caption">{new Date(risque.date_identification).toLocaleDateString()}</Typography>
+                            </Box>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                              <Typography variant="caption" color="text.secondary">Dernier suivi</Typography>
+                              <Typography variant="caption">{risque.dernier_suivi ? new Date(risque.dernier_suivi).toLocaleDateString() : '-'}</Typography>
+                            </Box>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                              <Typography variant="caption" color="text.secondary">Province(s)</Typography>
+                              <Typography variant="caption">{risque.province || '-'}</Typography>
+                            </Box>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <Typography variant="caption" color="text.secondary">Statut</Typography>
+                              <Chip label={statutConfig[risque.statut]?.label || risque.statut} size="small" sx={{ height: 20, fontSize: '0.7rem' }} />
+                            </Box>
+                          </Box>
+                        </Grid>
+                      </Grid>
+                      
+                      <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 2 }}>
+                        <Button 
+                          size="small" 
+                          startIcon={<GoogleIcon name="visibility" size={16} />}
+                          onClick={() => handleOpenDetail(risque)}
+                        >
+                          Voir détails
+                        </Button>
+                        <Button 
+                          size="small" 
+                          startIcon={<GoogleIcon name="edit" size={16} />}
+                          onClick={() => handleOpenDialog(risque)}
+                        >
+                          Modifier
+                        </Button>
+                        <Button 
+                          size="small" 
+                          color="error"
+                          startIcon={<GoogleIcon name="delete" size={16} />}
+                          onClick={() => handleDelete(risque.id)}
+                        >
+                          Supprimer
+                        </Button>
+                      </Box>
+                    </Box>
+                  </AccordionDetails>
+                </Accordion>
+              </Grid>
+            ))
+          )}
+        </Grid>
+      )}
 
       {/* Bouton d'ajout flottant */}
       <Button
@@ -762,6 +646,7 @@ export const RisqueList: React.FC = () => {
                 label="Nom du risque"
                 value={formData.nom || ''}
                 onChange={(e) => setFormData({ ...formData, nom: e.target.value })}
+                required
               />
             </Grid>
             <Grid size={{ xs: 12 }}>
@@ -780,7 +665,7 @@ export const RisqueList: React.FC = () => {
                 <Select
                   value={formData.categorie || 'gestion'}
                   label="Catégorie"
-                  onChange={(e) => setFormData({ ...formData, categorie: e.target.value as any })}
+                  onChange={(e) => setFormData({ ...formData, categorie: e.target.value as CategorieRisque })}
                 >
                   {Object.entries(categorieConfig).map(([key, config]) => (
                     <MenuItem key={key} value={key}>{config.label}</MenuItem>
@@ -794,7 +679,7 @@ export const RisqueList: React.FC = () => {
                 type="number"
                 label="Probabilité (1-5)"
                 value={formData.probabilite || 3}
-                onChange={(e) => setFormData({ ...formData, probabilite: parseInt(e.target.value) as any })}
+                onChange={(e) => setFormData({ ...formData, probabilite: parseInt(e.target.value) as 1|2|3|4|5 })}
                 inputProps={{ min: 1, max: 5 }}
               />
             </Grid>
@@ -804,7 +689,7 @@ export const RisqueList: React.FC = () => {
                 type="number"
                 label="Impact (1-5)"
                 value={formData.impact || 3}
-                onChange={(e) => setFormData({ ...formData, impact: parseInt(e.target.value) as any })}
+                onChange={(e) => setFormData({ ...formData, impact: parseInt(e.target.value) as 1|2|3|4|5 })}
                 inputProps={{ min: 1, max: 5 }}
               />
             </Grid>
@@ -832,7 +717,7 @@ export const RisqueList: React.FC = () => {
                 <Select
                   value={formData.statut || 'identifie'}
                   label="Statut"
-                  onChange={(e) => setFormData({ ...formData, statut: e.target.value as any })}
+                  onChange={(e) => setFormData({ ...formData, statut: e.target.value as StatutRisque })}
                 >
                   {Object.entries(statutConfig).map(([key, config]) => (
                     <MenuItem key={key} value={key}>{config.label}</MenuItem>
@@ -849,12 +734,27 @@ export const RisqueList: React.FC = () => {
                 placeholder="Ex: Kinshasa, Kwilu, Kasaï"
               />
             </Grid>
+            <Grid size={{ xs: 6 }}>
+              <TextField
+                fullWidth
+                type="date"
+                label="Date d'identification"
+                value={formData.date_identification || new Date().toISOString().split('T')[0]}
+                onChange={(e) => setFormData({ ...formData, date_identification: e.target.value })}
+                InputLabelProps={{ shrink: true }}
+              />
+            </Grid>
           </Grid>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDialogOpen(false)}>Annuler</Button>
-          <Button variant="contained" onClick={handleSave} sx={{ bgcolor: '#2E7D32', borderRadius: 2 }}>
-            Enregistrer
+          <Button 
+            variant="contained" 
+            onClick={handleSave} 
+            disabled={saving || !formData.nom}
+            sx={{ bgcolor: '#2E7D32', borderRadius: 2 }}
+          >
+            {saving ? 'Enregistrement...' : 'Enregistrer'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -864,9 +764,16 @@ export const RisqueList: React.FC = () => {
         {selectedRisque && (
           <>
             <DialogTitle>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <GoogleIcon name="warning" size={24} sx={{ color: '#2E7D32' }} />
-                <Typography variant="h6">{selectedRisque.code} - {selectedRisque.nom}</Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <GoogleIcon name="warning" size={24} sx={{ color: '#2E7D32' }} />
+                  <Typography variant="h6">{selectedRisque.code} - {selectedRisque.nom}</Typography>
+                </Box>
+                <Chip 
+                  label={niveauConfig[selectedRisque.niveau]?.label || selectedRisque.niveau}
+                  icon={<GoogleIcon name={niveauConfig[selectedRisque.niveau]?.icon || 'warning'} size={14} />}
+                  sx={{ bgcolor: niveauConfig[selectedRisque.niveau]?.bg, color: niveauConfig[selectedRisque.niveau]?.color }}
+                />
               </Box>
             </DialogTitle>
             <DialogContent dividers>
@@ -901,24 +808,32 @@ export const RisqueList: React.FC = () => {
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {(actions[selectedRisque.id] || []).map((action) => (
-                          <TableRow key={action.id}>
-                            <TableCell>{action.action}</TableCell>
-                            <TableCell>{action.responsable}</TableCell>
-                            <TableCell>{new Date(action.date_debut).toLocaleDateString()}</TableCell>
-                            <TableCell>{new Date(action.date_fin).toLocaleDateString()}</TableCell>
-                            <TableCell>
-                              <Chip 
-                                label={action.statut === 'prevue' ? 'Prévue' : action.statut === 'en_cours' ? 'En cours' : action.statut === 'realisee' ? 'Réalisée' : 'Abandonnée'}
-                                size="small"
-                                sx={{ 
-                                  bgcolor: action.statut === 'realisee' ? '#E8F5E9' : action.statut === 'en_cours' ? '#FFF8E1' : '#F5F5F5',
-                                  color: action.statut === 'realisee' ? '#2E7D32' : action.statut === 'en_cours' ? '#FF8F00' : '#757575'
-                                }}
-                              />
+                        {(actions[selectedRisque.id] || []).length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={5} align="center">
+                              <Typography variant="caption" color="text.secondary">Aucune action enregistrée</Typography>
                             </TableCell>
                           </TableRow>
-                        ))}
+                        ) : (
+                          (actions[selectedRisque.id] || []).map((action) => (
+                            <TableRow key={action.id}>
+                              <TableCell>{action.action}</TableCell>
+                              <TableCell>{action.responsable}</TableCell>
+                              <TableCell>{new Date(action.date_debut).toLocaleDateString()}</TableCell>
+                              <TableCell>{new Date(action.date_fin).toLocaleDateString()}</TableCell>
+                              <TableCell>
+                                <Chip 
+                                  label={action.statut === 'prevue' ? 'Prévue' : action.statut === 'en_cours' ? 'En cours' : action.statut === 'realisee' ? 'Réalisée' : 'Abandonnée'}
+                                  size="small"
+                                  sx={{ 
+                                    bgcolor: action.statut === 'realisee' ? '#E8F5E9' : action.statut === 'en_cours' ? '#FFF8E1' : '#F5F5F5',
+                                    color: action.statut === 'realisee' ? '#2E7D32' : action.statut === 'en_cours' ? '#FF8F00' : '#757575'
+                                  }}
+                                />
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
                       </TableBody>
                     </Table>
                   </TableContainer>
@@ -929,16 +844,7 @@ export const RisqueList: React.FC = () => {
                     <Typography variant="subtitle2" gutterBottom>Informations</Typography>
                     <Divider sx={{ mb: 2 }} />
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.5 }}>
-                      <Typography variant="caption" color="text.secondary">Niveau de risque</Typography>
-                      <Chip 
-                        label={niveauConfig[selectedRisque.niveau].label}
-                        size="small"
-                        icon={<GoogleIcon name={niveauConfig[selectedRisque.niveau].icon} size={14} />}
-                        sx={{ bgcolor: niveauConfig[selectedRisque.niveau].bg, color: niveauConfig[selectedRisque.niveau].color }}
-                      />
-                    </Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.5 }}>
-                      <Typography variant="caption" color="text.secondary">Score</Typography>
+                      <Typography variant="caption" color="text.secondary">Score (P×I)</Typography>
                       <Typography variant="body2" fontWeight={500}>{selectedRisque.probabilite * selectedRisque.impact}/25</Typography>
                     </Box>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.5 }}>
@@ -966,11 +872,11 @@ export const RisqueList: React.FC = () => {
                     </Box>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.5 }}>
                       <Typography variant="caption" color="text.secondary">Statut</Typography>
-                      <Chip label={statutConfig[selectedRisque.statut].label} size="small" />
+                      <Chip label={statutConfig[selectedRisque.statut]?.label || selectedRisque.statut} size="small" />
                     </Box>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                       <Typography variant="caption" color="text.secondary">Province(s)</Typography>
-                      <Typography variant="body2">{selectedRisque.province}</Typography>
+                      <Typography variant="body2">{selectedRisque.province || '-'}</Typography>
                     </Box>
                   </Paper>
                 </Grid>
@@ -985,6 +891,14 @@ export const RisqueList: React.FC = () => {
           </>
         )}
       </Dialog>
+
+      {/* Snackbar */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        message={snackbar.message}
+      />
     </Box>
   );
 };
