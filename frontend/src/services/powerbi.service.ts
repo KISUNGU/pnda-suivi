@@ -20,12 +20,11 @@ export interface PowerBIReport {
   id: string;
   name: string;
   description: string;
-  embedUrl: string;
-  reportId: string;
-  datasetId: string;
+  embedUrl: string;      // ← attention: camelCase
+  reportId: string;      // ← attention: camelCase (pas report_id)
+  datasetId: string;     // ← attention: camelCase
   category: 'dashboard' | 'indicateurs' | 'beneficiaires' | 'risques' | 'grm';
   thumbnailUrl?: string;
-  created_at: string;
   updated_at: string;
 }
 

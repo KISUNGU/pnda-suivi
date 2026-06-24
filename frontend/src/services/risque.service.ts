@@ -36,6 +36,19 @@ export interface Risque {
   dernier_suivi?: string;
 }
 
+export type CategorieRisque = Risque['categorie'];
+export type StatutRisque = Risque['statut'];
+
+export interface RisqueStats {
+  total: number;
+  critiques: number;
+  eleves: number;
+  moderes: number;
+  faibles: number;
+  en_cours: number;
+  attenues: number;
+}
+
 export interface ActionAtténuation {
   id: number;
   id_risque: number;
@@ -54,6 +67,7 @@ export interface AlerteRisque {
   date_alerte: string;
   est_lue: boolean;
   niveau: 'info' | 'warning' | 'danger';
+  risque_code?: string;
 }
 
 export const risqueService = {
@@ -62,7 +76,7 @@ export const risqueService = {
   create: (data: Partial<Risque>) => api.post<Risque>('/risques', data),
   update: (id: number, data: Partial<Risque>) => api.put<Risque>(`/risques/${id}`, data),
   delete: (id: number) => api.delete(`/risques/${id}`),
-  getStats: () => api.get('/risques/stats'),
+  getStats: () => api.get<RisqueStats>('/risques/stats'),
   getActions: (id: number) => api.get<ActionAtténuation[]>(`/risques/${id}/actions`),
   addAction: (id: number, action: Partial<ActionAtténuation>) => 
     api.post<ActionAtténuation>(`/risques/${id}/actions`, action),

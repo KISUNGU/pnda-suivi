@@ -1,5 +1,5 @@
 // frontend/src/components/common/Layout/Sidebar.tsx
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Box,
   Drawer,
@@ -12,9 +12,10 @@ import {
   Typography,
   IconButton,
 } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import { useNavigate, useLocation } from 'react-router-dom';
 import GoogleIcon from '../GoogleIcon';
-import { PndaLogo } from '../PndaLogo';
+import { SamentorLogo } from '../SamentorLogo';
 
 interface SidebarProps {
   open: boolean;
@@ -137,7 +138,8 @@ const menuItems: MenuItem[] = [
 export const Sidebar: React.FC<SidebarProps> = ({ open, onClose, variant }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({});
+  const theme = useTheme();
+  const [expandedMenu, setExpandedMenu] = useState<string | null>(null);
 
   // Rôle de l'utilisateur connecté
   const userRole = React.useMemo(() => {
@@ -153,16 +155,30 @@ export const Sidebar: React.FC<SidebarProps> = ({ open, onClose, variant }) => {
   const canSee = (item: MenuItem) =>
     !item.roles || item.roles.includes(userRole);
 
-  const visibleItems = menuItems
-    .filter(canSee)
-    .map((item) => ({
-      ...item,
-      children: item.children?.filter(canSee),
-    }))
-    .filter((item) => !item.children || item.children.length > 0);
+  const visibleItems = React.useMemo(
+    () => menuItems
+      .filter(canSee)
+      .map((item) => ({
+        ...item,
+        children: item.children?.filter(canSee),
+      }))
+      .filter((item) => !item.children || item.children.length > 0),
+    [userRole],
+  );
+
+  const activeParentTitle = React.useMemo(
+    () => visibleItems.find((item) => item.children?.some((child) => child.path === location.pathname))?.title ?? null,
+    [location.pathname, visibleItems],
+  );
+
+  useEffect(() => {
+    if (activeParentTitle) {
+      setExpandedMenu(activeParentTitle);
+    }
+  }, [activeParentTitle]);
 
   const handleMenuClick = (title: string) => {
-    setOpenMenus(prev => ({ ...prev, [title]: !prev[title] }));
+    setExpandedMenu((currentMenu) => (currentMenu === title ? null : title));
   };
 
   const handleItemClick = (path: string) => {
@@ -179,7 +195,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ open, onClose, variant }) => {
       {/* Header avec logo */}
       <Box sx={{ p: 3, borderBottom: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1.5 }}>
         <Box>
-          <PndaLogo height={72} sx={{ mb: 1 }} />
+          <SamentorLogo height={72} sx={{ mb: 1 }} />
           <Typography variant="h6" sx={{ fontWeight: 700, letterSpacing: 0.2 }}>
           
           </Typography>
@@ -199,13 +215,30 @@ export const Sidebar: React.FC<SidebarProps> = ({ open, onClose, variant }) => {
         {visibleItems.map((item) => (
           <React.Fragment key={item.title}>
             <ListItem disablePadding>
+              {(() => {
+                const isExpanded = expandedMenu === item.title;
+                const isDirectlyActive = isActive(item.path || '');
+
+                return (
               <ListItemButton
                 onClick={() => item.children ? handleMenuClick(item.title) : item.path && handleItemClick(item.path)}
                 sx={{
                   borderRadius: '10px',
                   mb: 0.5,
-                  bgcolor: isActive(item.path || '') ? 'rgba(255,255,255,0.2)' : 'transparent',
-                  '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' },
+                  bgcolor: isDirectlyActive
+                    ? 'rgba(255,255,255,0.2)'
+                    : isExpanded
+                      ? 'rgba(255,255,255,0.14)'
+                      : 'transparent',
+                  boxShadow: isExpanded ? 'inset 0 0 0 1px rgba(255,255,255,0.14)' : 'none',
+                  transition: theme.transitions.create(['background-color', 'box-shadow', 'transform'], {
+                    duration: 220,
+                    easing: theme.transitions.easing.easeInOut,
+                  }),
+                  '&:hover': {
+                    bgcolor: isDirectlyActive ? 'rgba(255,255,255,0.24)' : 'rgba(255,255,255,0.1)',
+                    transform: 'translateX(2px)',
+                  },
                 }}
               >
                 <ListItemIcon sx={{ color: 'white', minWidth: 40, fontSize: '26px' }}>
@@ -213,13 +246,41 @@ export const Sidebar: React.FC<SidebarProps> = ({ open, onClose, variant }) => {
                 </ListItemIcon>
                 <ListItemText 
                   primary={item.title} 
-                  primaryTypographyProps={{ fontSize: 14, fontWeight: 500 }} 
+                  primaryTypographyProps={{
+                    fontSize: 14,
+                    fontWeight: isExpanded || isDirectlyActive ? 700 : 500,
+                    letterSpacing: isExpanded ? 0.15 : 0,
+                  }} 
                 />
-                {item.children && (openMenus[item.title] ? <GoogleIcon name="expand_less" size={24} /> : <GoogleIcon name="expand_more" size={24} />)}
+                {item.children && (
+                  <Box
+                    component="span"
+                    sx={{
+                      display: 'inline-flex',
+                      transition: theme.transitions.create('transform', {
+                        duration: 260,
+                        easing: theme.transitions.easing.easeInOut,
+                      }),
+                      transform: expandedMenu === item.title ? 'rotate(180deg)' : 'rotate(0deg)',
+                    }}
+                  >
+                    <GoogleIcon name="expand_more" size={24} />
+                  </Box>
+                )}
               </ListItemButton>
+                );
+              })()}
             </ListItem>
             {item.children && (
-              <Collapse in={openMenus[item.title]} timeout="auto" unmountOnExit>
+              <Collapse
+                in={expandedMenu === item.title}
+                timeout={{ enter: 280, exit: 220 }}
+                easing={{
+                  enter: theme.transitions.easing.easeOut,
+                  exit: theme.transitions.easing.sharp,
+                }}
+                unmountOnExit
+              >
                 <List component="div" disablePadding>
                   {item.children.map((child) => (
                     <ListItemButton
@@ -254,7 +315,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ open, onClose, variant }) => {
       {/* Footer */}
       <Box sx={{ p: 2, borderTop: '1px solid rgba(255,255,255,0.2)' }}>
         <Typography variant="caption" sx={{ opacity: 0.6 }}>
-          Version 2.0 © PNDA RDC 2026
+          Version 2.0 © SAMANTOR 2026
         </Typography>
       </Box>
     </Box>

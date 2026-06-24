@@ -25,6 +25,9 @@ import {
   deletePlainte,
   deleteRisque,
   deleteUtilisateur,
+  findPowerBIReport,
+  buildPowerBIEmbedUrl,
+  generatePowerBIEmbedToken,
   getActiviteById,
   getActivites,
   getActivitesStats,
@@ -113,6 +116,18 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'pnda_secret_key_2026';
+const DEFAULT_ALLOWED_ORIGINS = [
+  'http://localhost',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:5174',
+  'http://127.0.0.1:5174',
+];
+const allowedOrigins = (process.env.CORS_ORIGIN || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+const corsAllowedOrigins = allowedOrigins.length > 0 ? allowedOrigins : DEFAULT_ALLOWED_ORIGINS;
 
 interface AuthenticatedRequest extends Request {
   user?: unknown;
@@ -153,7 +168,19 @@ interface AlerteRisque {
 
 // Middleware
 app.use(helmet());
-app.use(cors());
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || corsAllowedOrigins.includes(origin)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(new Error(`CORS origin not allowed: ${origin}`));
+  },
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  optionsSuccessStatus: 204,
+}));
 app.use(compression());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -332,6 +359,13 @@ app.get('/api/dashboard/rna-overview', authenticateToken, async (_req: Request, 
 
 // ==================== AUTH ROUTES ====================
 
+// Utilisateurs fictifs de secours (utilisés quand la DB est indisponible)
+const FALLBACK_USERS = [
+  { id: 1, nom: 'MUKENDI', prenom: 'Jean', email: 'admin@pnda.cd', password: bcrypt.hashSync('admin123', 10), role: 'admin', province: null },
+  { id: 2, nom: 'KABEYA', prenom: 'Marie', email: 'uncp@pnda.cd', password: bcrypt.hashSync('uncp123', 10), role: 'uncp', province: null },
+  { id: 3, nom: 'TSHIBOLA', prenom: 'Pierre', email: 'upep@pnda.cd', password: bcrypt.hashSync('upep123', 10), role: 'upep', province: 'Kwilu' },
+];
+
 app.post('/api/auth/login', async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
@@ -362,7 +396,25 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
     console.error(error);
 
     if (isDatabaseConnectivityError(error)) {
-      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+      // DB indisponible : authentification via utilisateurs fictifs
+      const { email: emailBody, password: passwordBody } = req.body as { email: string; password: string };
+      const normalizedEmail = String(emailBody ?? '').trim().toLowerCase();
+      const fallbackUser = FALLBACK_USERS.find(u => u.email === normalizedEmail);
+
+      if (!fallbackUser || !bcrypt.compareSync(String(passwordBody ?? ''), fallbackUser.password)) {
+        return res.status(401).json({ message: 'Email ou mot de passe incorrect' });
+      }
+
+      const token = jwt.sign(
+        { id: fallbackUser.id, email: fallbackUser.email, role: fallbackUser.role, province: fallbackUser.province },
+        JWT_SECRET,
+        { expiresIn: '24h' }
+      );
+
+      return res.json({
+        token,
+        user: { id: fallbackUser.id, nom: fallbackUser.nom, prenom: fallbackUser.prenom, email: fallbackUser.email, role: fallbackUser.role, province: fallbackUser.province },
+      });
     }
 
     return res.status(500).json({ message: 'Erreur serveur' });
@@ -488,9 +540,15 @@ app.get('/api/beneficiaires/ventes-semences/stats', authenticateToken, async (re
   }
 });
 
-app.get('/api/beneficiaires/:id', authenticateToken, async (req, res) => {
+app.get('/api/beneficiaires/:id(\\d+)', authenticateToken, async (req, res) => {
   try {
-    const beneficiaire = await getBeneficiaireById(Number(req.params.id));
+    const beneficiaireId = Number(req.params.id);
+
+    if (!Number.isInteger(beneficiaireId) || beneficiaireId <= 0) {
+      return res.status(400).json({ message: 'Identifiant de bénéficiaire invalide' });
+    }
+
+    const beneficiaire = await getBeneficiaireById(beneficiaireId);
     if (!beneficiaire) {
       return res.status(404).json({ message: 'Bénéficiaire non trouvé' });
     }
@@ -511,11 +569,11 @@ app.post('/api/beneficiaires', authenticateToken, (_req, res) => {
   res.status(405).json({ message: 'Le registre RNA est accessible en lecture seule depuis cette application' });
 });
 
-app.put('/api/beneficiaires/:id', authenticateToken, (_req, res) => {
+app.put('/api/beneficiaires/:id(\\d+)', authenticateToken, (_req, res) => {
   res.status(405).json({ message: 'Le registre RNA est accessible en lecture seule depuis cette application' });
 });
 
-app.delete('/api/beneficiaires/:id', authenticateToken, (_req, res) => {
+app.delete('/api/beneficiaires/:id(\\d+)', authenticateToken, (_req, res) => {
   res.status(405).json({ message: 'Le registre RNA est accessible en lecture seule depuis cette application' });
 });
 
@@ -709,7 +767,7 @@ app.get('/api/grm/stats', authenticateToken, async (_req, res) => {
   }
 });
 
-app.get('/api/grm/plaintes/:id', authenticateToken, async (req, res) => {
+app.get('/api/grm/plaintes/:id(\\d+)', authenticateToken, async (req, res) => {
   try {
     const plainte = await getPlainteById(Number(req.params.id));
     if (!plainte) {
@@ -818,7 +876,7 @@ app.get('/api/risques/alertes', authenticateToken, async (_req, res) => {
   }
 });
 
-app.put('/api/risques/alertes/:id/lue', authenticateToken, async (req, res) => {
+app.put('/api/risques/alertes/:id(\\d+)/lue', authenticateToken, async (req, res) => {
   try {
     const alerte = await markRisqueAlerteAsRead(Number(req.params.id));
     if (!alerte) {
@@ -837,7 +895,7 @@ app.put('/api/risques/alertes/:id/lue', authenticateToken, async (req, res) => {
   }
 });
 
-app.get('/api/risques/:id/actions', authenticateToken, async (req, res) => {
+app.get('/api/risques/:id(\\d+)/actions', authenticateToken, async (req, res) => {
   try {
     const risque = await getRisqueById(Number(req.params.id));
     if (!risque) {
@@ -856,7 +914,7 @@ app.get('/api/risques/:id/actions', authenticateToken, async (req, res) => {
   }
 });
 
-app.post('/api/risques/:id/actions', authenticateToken, async (req, res) => {
+app.post('/api/risques/:id(\\d+)/actions', authenticateToken, async (req, res) => {
   try {
     const action = await createRisqueAction(Number(req.params.id), {
       action: req.body.action ? String(req.body.action) : undefined,
@@ -883,7 +941,7 @@ app.post('/api/risques/:id/actions', authenticateToken, async (req, res) => {
   }
 });
 
-app.put('/api/risques/:risqueId/actions/:actionId', authenticateToken, async (req, res) => {
+app.put('/api/risques/:risqueId(\\d+)/actions/:actionId(\\d+)', authenticateToken, async (req, res) => {
   try {
     const action = await updateRisqueAction(Number(req.params.risqueId), Number(req.params.actionId), {
       action: req.body.action !== undefined ? String(req.body.action) : undefined,
@@ -910,7 +968,7 @@ app.put('/api/risques/:risqueId/actions/:actionId', authenticateToken, async (re
   }
 });
 
-app.get('/api/risques/:id', authenticateToken, async (req, res) => {
+app.get('/api/risques/:id(\\d+)', authenticateToken, async (req, res) => {
   try {
     const risque = await getRisqueById(Number(req.params.id));
     if (!risque) {
@@ -962,7 +1020,7 @@ app.post('/api/risques', authenticateToken, async (req, res) => {
   }
 });
 
-app.put('/api/risques/:id', authenticateToken, async (req, res) => {
+app.put('/api/risques/:id(\\d+)', authenticateToken, async (req, res) => {
   try {
     const risque = await updateRisque(Number(req.params.id), {
       code: req.body.code !== undefined ? String(req.body.code) : undefined,
@@ -999,7 +1057,7 @@ app.put('/api/risques/:id', authenticateToken, async (req, res) => {
   }
 });
 
-app.delete('/api/risques/:id', authenticateToken, async (req, res) => {
+app.delete('/api/risques/:id(\\d+)', authenticateToken, async (req, res) => {
   try {
     const deleted = await deleteRisque(Number(req.params.id));
     if (!deleted) {
@@ -1068,6 +1126,9 @@ const generateMockToken = (reportId: string) => {
   };
 };
 
+// A REMPLACER
+
+
 app.get('/api/powerbi/reports', authenticateToken, async (_req, res) => {
   try {
     return res.json(await getPowerBIReports());
@@ -1079,25 +1140,6 @@ app.get('/api/powerbi/reports', authenticateToken, async (_req, res) => {
     }
 
     return res.status(500).json({ message: 'Erreur lors du chargement des rapports Power BI' });
-  }
-});
-
-app.get('/api/powerbi/reports/:id', authenticateToken, async (req, res) => {
-  try {
-    const report = await getPowerBIReportById(req.params.id);
-    if (!report) {
-      return res.status(404).json({ message: 'Rapport non trouvé' });
-    }
-
-    return res.json(report);
-  } catch (error) {
-    console.error('GET /api/powerbi/reports/:id failed', error);
-
-    if (isDatabaseConnectivityError(error)) {
-      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
-    }
-
-    return res.status(500).json({ message: 'Erreur lors du chargement du rapport Power BI' });
   }
 });
 
@@ -1132,6 +1174,7 @@ app.get('/api/powerbi/dashboards', authenticateToken, async (_req, res) => {
 app.get('/api/powerbi/dashboards/:id', authenticateToken, async (req, res) => {
   try {
     const dashboard = await getPowerBIDashboardById(req.params.id);
+
     if (!dashboard) {
       return res.status(404).json({ message: 'Dashboard non trouvé' });
     }
@@ -1145,6 +1188,183 @@ app.get('/api/powerbi/dashboards/:id', authenticateToken, async (req, res) => {
     }
 
     return res.status(500).json({ message: 'Erreur lors du chargement du dashboard Power BI' });
+  }
+});
+
+app.get('/api/powerbi/embed/:reportId', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const requestedReportId = String(req.params.reportId ?? '').trim();
+
+    if (!requestedReportId) {
+      return res.status(400).json({ message: 'Identifiant de rapport manquant' });
+    }
+
+    const report = await findPowerBIReport(requestedReportId);
+
+    if (!report) {
+      return res.status(404).json({ message: 'Rapport non trouvé' });
+    }
+
+    const embedToken = await generatePowerBIEmbedToken(report.report_id, report.dataset_id);
+
+    return res.json({
+      reportId: report.report_id,
+      reportName: report.name,
+      embedUrl: buildPowerBIEmbedUrl(report.report_id),
+      token: embedToken.token,
+      expiration: embedToken.expiration,
+      mode: 'embed',
+    });
+  } catch (error) {
+    console.error('GET /api/powerbi/embed/:reportId failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({
+      message: "Erreur lors de la génération de la configuration d'embed",
+      details: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
+app.post('/api/powerbi/token/:reportId', authenticateToken, async (req, res) => {
+  try {
+    const requestedReportId = String(req.params.reportId ?? '').trim();
+
+    if (!requestedReportId) {
+      return res.status(400).json({ message: 'Identifiant de rapport manquant' });
+    }
+
+    const report = await findPowerBIReport(requestedReportId);
+
+    if (!report) {
+      return res.status(404).json({ message: 'Rapport non trouvé' });
+    }
+
+    return res.json(await generatePowerBIEmbedToken(report.report_id, report.dataset_id));
+  } catch (error) {
+    console.error('POST /api/powerbi/token/:reportId failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({
+      message: 'Erreur lors de la génération du token Power BI',
+      details: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
+app.post('/api/powerbi/refresh/:datasetId', authenticateToken, async (req, res) => {
+  try {
+    const report = await getPowerBIReportById(req.params.datasetId);
+    const datasetId = report?.datasetId ?? req.params.datasetId;
+
+    return res.json({
+      message: `Rafraîchissement du dataset ${datasetId} initié`,
+      status: 'processing',
+    });
+  } catch (error) {
+    console.error('POST /api/powerbi/refresh/:datasetId failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors du rafraîchissement du dataset Power BI' });
+  }
+});
+
+app.post('/api/powerbi/export/:reportId', authenticateToken, async (req, res) => {
+  try {
+    const report = await getPowerBIReportById(req.params.reportId);
+
+    if (!report) {
+      return res.status(404).json({ message: 'Rapport non trouvé' });
+    }
+
+    const pdfContent = `%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 44 >>
+stream
+BT /F1 24 Tf 100 700 Td (Rapport PNDA - ${report.reportId}) Tj ET
+endstream
+endobj
+xref
+0 5
+0000000000 65535 f
+0000000009 00000 n
+0000000058 00000 n
+0000000115 00000 n
+0000000210 00000 n
+trailer << /Size 5 /Root 1 0 R >>
+startxref
+299
+%%EOF`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=rapport_${report.reportId}.pdf`);
+    return res.send(Buffer.from(pdfContent));
+  } catch (error) {
+    console.error('POST /api/powerbi/export/:reportId failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: "Erreur lors de l'export du rapport Power BI" });
+  }
+});
+
+app.post('/api/powerbi/export/:reportId/ppt', authenticateToken, async (req, res) => {
+  try {
+    const report = await getPowerBIReportById(req.params.reportId);
+
+    if (!report) {
+      return res.status(404).json({ message: 'Rapport non trouvé' });
+    }
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
+    res.setHeader('Content-Disposition', `attachment; filename=rapport_${report.reportId}.pptx`);
+    return res.send(Buffer.from('Mock PPT content'));
+  } catch (error) {
+    console.error('POST /api/powerbi/export/:reportId/ppt failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: "Erreur lors de l'export PPT du rapport Power BI" });
+  }
+});
+
+app.get('/api/powerbi/reports/:reportId', authenticateToken, async (req, res) => {
+  try {
+    const report = await getPowerBIReportById(req.params.reportId);
+    if (!report) {
+      return res.status(404).json({ message: 'Rapport non trouvé' });
+    }
+    return res.json(report);
+  } catch (error) {
+    console.error('GET /api/powerbi/reports/:reportId failed', error);   
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors du chargement du rapport Power BI' });
   }
 });
 
@@ -1175,114 +1395,8 @@ app.get('/api/powerbi/embed/:reportId', authenticateToken, async (req, res) => {
   }
 });
 
-app.post('/api/powerbi/token/:reportId', authenticateToken, async (req, res) => {
-  try {
-    const report = await getPowerBIReportById(req.params.reportId);
-    if (!report) {
-      return res.status(404).json({ message: 'Rapport non trouvé' });
-    }
 
-    return res.json(generateMockToken(report.reportId));
-  } catch (error) {
-    console.error('POST /api/powerbi/token/:reportId failed', error);
 
-    if (isDatabaseConnectivityError(error)) {
-      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
-    }
-
-    return res.status(500).json({ message: 'Erreur lors de la génération du token Power BI' });
-  }
-});
-
-app.post('/api/powerbi/refresh/:datasetId', authenticateToken, async (req, res) => {
-  try {
-    const report = await getPowerBIReportById(req.params.datasetId);
-    const datasetId = report?.datasetId ?? req.params.datasetId;
-
-    return res.json({
-      message: `Rafraîchissement du dataset ${datasetId} initié`,
-      status: 'processing',
-    });
-  } catch (error) {
-    console.error('POST /api/powerbi/refresh/:datasetId failed', error);
-
-    if (isDatabaseConnectivityError(error)) {
-      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
-    }
-
-    return res.status(500).json({ message: 'Erreur lors du rafraîchissement du dataset Power BI' });
-  }
-});
-
-app.post('/api/powerbi/export/:reportId', authenticateToken, async (req, res) => {
-  try {
-    const report = await getPowerBIReportById(req.params.reportId);
-    if (!report) {
-      return res.status(404).json({ message: 'Rapport non trouvé' });
-    }
-
-  const pdfContent = `%PDF-1.4
-  1 0 obj
-  << /Type /Catalog /Pages 2 0 R >>
-  endobj
-  2 0 obj
-  << /Type /Pages /Kids [3 0 R] /Count 1 >>
-  endobj
-  3 0 obj
-  << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R >>
-  endobj
-  4 0 obj
-  << /Length 44 >>
-  stream
-  BT /F1 24 Tf 100 700 Td (Rapport PNDA - ${report.reportId}) Tj ET
-  endstream
-  endobj
-  xref
-  0 5
-  0000000000 65535 f
-  0000000009 00000 n
-  0000000058 00000 n
-  0000000115 00000 n
-  0000000210 00000 n
-  trailer << /Size 5 /Root 1 0 R >>
-  startxref
-  299
-  %%EOF`;
-
-  res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `attachment; filename=rapport_${report.reportId}.pdf`);
-  return res.send(Buffer.from(pdfContent));
-  } catch (error) {
-    console.error('POST /api/powerbi/export/:reportId failed', error);
-
-    if (isDatabaseConnectivityError(error)) {
-      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
-    }
-
-    return res.status(500).json({ message: 'Erreur lors de l\'export du rapport Power BI' });
-  }
-});
-
-app.post('/api/powerbi/export/:reportId/ppt', authenticateToken, async (req, res) => {
-  try {
-    const report = await getPowerBIReportById(req.params.reportId);
-    if (!report) {
-      return res.status(404).json({ message: 'Rapport non trouvé' });
-    }
-
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
-    res.setHeader('Content-Disposition', `attachment; filename=rapport_${report.reportId}.pptx`);
-    return res.send(Buffer.from('Mock PPT content'));
-  } catch (error) {
-    console.error('POST /api/powerbi/export/:reportId/ppt failed', error);
-
-    if (isDatabaseConnectivityError(error)) {
-      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
-    }
-
-    return res.status(500).json({ message: 'Erreur lors de l\'export PPT du rapport Power BI' });
-  }
-});
 
 app.get('/api/provinces', authenticateToken, async (_req, res) => {
   try {
@@ -1455,7 +1569,7 @@ app.get('/api/fournisseurs/stats', authenticateToken, async (_req, res) => {
   }
 });
 
-app.get('/api/fournisseurs/:id', authenticateToken, async (req, res) => {
+app.get('/api/fournisseurs/:id(\\d+)', authenticateToken, async (req, res) => {
   try {
     const item = await getFournisseurById(Number(req.params.id));
     if (!item) {
@@ -1507,7 +1621,7 @@ app.post('/api/fournisseurs', authenticateToken, async (req, res) => {
   }
 });
 
-app.put('/api/fournisseurs/:id', authenticateToken, async (req, res) => {
+app.put('/api/fournisseurs/:id(\\d+)', authenticateToken, async (req, res) => {
   try {
     const fournisseur = await updateFournisseur(Number(req.params.id), {
       nom: req.body.nom !== undefined ? String(req.body.nom) : undefined,
@@ -1546,7 +1660,7 @@ app.put('/api/fournisseurs/:id', authenticateToken, async (req, res) => {
   }
 });
 
-app.delete('/api/fournisseurs/:id', authenticateToken, async (req, res) => {
+app.delete('/api/fournisseurs/:id(\\d+)', authenticateToken, async (req, res) => {
   try {
     const deleted = await deleteFournisseur(Number(req.params.id));
     if (!deleted) {
@@ -1604,7 +1718,7 @@ app.get('/api/organisations/stats', authenticateToken, async (_req, res) => {
   }
 });
 
-app.get('/api/organisations/:id', authenticateToken, async (req, res) => {
+app.get('/api/organisations/:id(\\d+)', authenticateToken, async (req, res) => {
   try {
     const item = await getOrganisationById(Number(req.params.id));
     if (!item) {
@@ -1669,7 +1783,7 @@ app.post('/api/organisations', authenticateToken, async (req, res) => {
   }
 });
 
-app.put('/api/organisations/:id', authenticateToken, async (req, res) => {
+app.put('/api/organisations/:id(\\d+)', authenticateToken, async (req, res) => {
   try {
     const organisation = await updateOrganisation(Number(req.params.id), {
       code: req.body.code !== undefined ? String(req.body.code) : undefined,
@@ -1721,7 +1835,7 @@ app.put('/api/organisations/:id', authenticateToken, async (req, res) => {
   }
 });
 
-app.delete('/api/organisations/:id', authenticateToken, async (req, res) => {
+app.delete('/api/organisations/:id(\\d+)', authenticateToken, async (req, res) => {
   try {
     const deleted = await deleteOrganisation(Number(req.params.id));
     if (!deleted) {
@@ -1783,7 +1897,7 @@ app.get('/api/activites/stats', authenticateToken, async (_req, res) => {
   }
 });
 
-app.get('/api/activites/:id', authenticateToken, async (req, res) => {
+app.get('/api/activites/:id(\\d+)', authenticateToken, async (req, res) => {
   try {
     const item = await getActiviteById(Number(req.params.id));
     if (!item) {
@@ -1851,7 +1965,7 @@ app.post('/api/activites', authenticateToken, async (req, res) => {
   }
 });
 
-app.put('/api/activites/:id', authenticateToken, async (req, res) => {
+app.put('/api/activites/:id(\\d+)', authenticateToken, async (req, res) => {
   try {
     const activite = await updateActivite(Number(req.params.id), {
       code: req.body.code !== undefined ? String(req.body.code) : undefined,
@@ -1904,7 +2018,7 @@ app.put('/api/activites/:id', authenticateToken, async (req, res) => {
   }
 });
 
-app.delete('/api/activites/:id', authenticateToken, async (req, res) => {
+app.delete('/api/activites/:id(\\d+)', authenticateToken, async (req, res) => {
   try {
     const deleted = await deleteActivite(Number(req.params.id));
     if (!deleted) {
@@ -1948,9 +2062,15 @@ app.get('/api/utilisateurs', authenticateToken, async (req, res) => {
   }
 });
 
-app.get('/api/utilisateurs/:id', authenticateToken, async (req, res) => {
+app.get('/api/utilisateurs/:id(\\d+)', authenticateToken, async (req, res) => {
   try {
-    const utilisateur = await getUtilisateurById(Number(req.params.id));
+    const utilisateurId = Number(req.params.id);
+
+    if (!Number.isInteger(utilisateurId) || utilisateurId <= 0) {
+      return res.status(400).json({ message: 'Identifiant utilisateur invalide' });
+    }
+
+    const utilisateur = await getUtilisateurById(utilisateurId);
 
     if (!utilisateur) {
       return res.status(404).json({ message: 'Utilisateur non trouvé' });
@@ -2034,9 +2154,15 @@ app.post('/api/utilisateurs', authenticateToken, async (req, res) => {
   }
 });
 
-app.post('/api/utilisateurs/:id/reset-password', authenticateToken, async (req, res) => {
+app.post('/api/utilisateurs/:id(\\d+)/reset-password', authenticateToken, async (req, res) => {
   try {
-    const success = await resetUtilisateurPassword(Number(req.params.id));
+    const utilisateurId = Number(req.params.id);
+
+    if (!Number.isInteger(utilisateurId) || utilisateurId <= 0) {
+      return res.status(400).json({ message: 'Identifiant utilisateur invalide' });
+    }
+
+    const success = await resetUtilisateurPassword(utilisateurId);
 
     if (!success) {
       return res.status(404).json({ message: 'Utilisateur non trouvé' });
@@ -2054,9 +2180,15 @@ app.post('/api/utilisateurs/:id/reset-password', authenticateToken, async (req, 
   }
 });
 
-app.patch('/api/utilisateurs/:id/statut', authenticateToken, async (req, res) => {
+app.patch('/api/utilisateurs/:id(\\d+)/statut', authenticateToken, async (req, res) => {
   try {
-    const updated = await updateUtilisateurStatut(Number(req.params.id), String(req.body.statut ?? 'Actif'));
+    const utilisateurId = Number(req.params.id);
+
+    if (!Number.isInteger(utilisateurId) || utilisateurId <= 0) {
+      return res.status(400).json({ message: 'Identifiant utilisateur invalide' });
+    }
+
+    const updated = await updateUtilisateurStatut(utilisateurId, String(req.body.statut ?? 'Actif'));
 
     if (!updated) {
       return res.status(404).json({ message: 'Utilisateur non trouvé' });
@@ -2074,9 +2206,15 @@ app.patch('/api/utilisateurs/:id/statut', authenticateToken, async (req, res) =>
   }
 });
 
-app.put('/api/utilisateurs/:id', authenticateToken, async (req, res) => {
+app.put('/api/utilisateurs/:id(\\d+)', authenticateToken, async (req, res) => {
   try {
-    const updated = await updateUtilisateur(Number(req.params.id), {
+    const utilisateurId = Number(req.params.id);
+
+    if (!Number.isInteger(utilisateurId) || utilisateurId <= 0) {
+      return res.status(400).json({ message: 'Identifiant utilisateur invalide' });
+    }
+
+    const updated = await updateUtilisateur(utilisateurId, {
       nom: req.body.nom,
       prenom: req.body.prenom,
       email: req.body.email,
@@ -2105,9 +2243,15 @@ app.put('/api/utilisateurs/:id', authenticateToken, async (req, res) => {
   }
 });
 
-app.delete('/api/utilisateurs/:id', authenticateToken, async (req, res) => {
+app.delete('/api/utilisateurs/:id(\\d+)', authenticateToken, async (req, res) => {
   try {
-    const deleted = await deleteUtilisateur(Number(req.params.id));
+    const utilisateurId = Number(req.params.id);
+
+    if (!Number.isInteger(utilisateurId) || utilisateurId <= 0) {
+      return res.status(400).json({ message: 'Identifiant utilisateur invalide' });
+    }
+
+    const deleted = await deleteUtilisateur(utilisateurId);
 
     if (!deleted) {
       return res.status(404).json({ message: 'Utilisateur non trouvé' });
@@ -2497,7 +2641,7 @@ app.put('/api/notifications/read-all', authenticateToken, async (req, res) => {
   }
 });
 
-app.put('/api/notifications/:id/read', authenticateToken, async (req, res) => {
+app.put('/api/notifications/:id(\\d+)/read', authenticateToken, async (req, res) => {
   const currentUser = getRequestUser(req);
   if (!currentUser) {
     return res.status(401).json({ message: 'Utilisateur non authentifié' });
@@ -2549,7 +2693,7 @@ app.post('/api/grm/plaintes', authenticateToken, async (req, res) => {
   }
 });
 
-app.put('/api/grm/plaintes/:id', authenticateToken, async (req, res) => {
+app.put('/api/grm/plaintes/:id(\\d+)', authenticateToken, async (req, res) => {
   try {
     const plainte = await updatePlainte(Number(req.params.id), {
       type: req.body.type !== undefined ? String(req.body.type) : undefined,
@@ -2583,7 +2727,7 @@ app.put('/api/grm/plaintes/:id', authenticateToken, async (req, res) => {
   }
 });
 
-app.delete('/api/grm/plaintes/:id', authenticateToken, async (req, res) => {
+app.delete('/api/grm/plaintes/:id(\\d+)', authenticateToken, async (req, res) => {
   try {
     const deleted = await deletePlainte(Number(req.params.id));
     if (!deleted) {
@@ -2604,63 +2748,379 @@ app.delete('/api/grm/plaintes/:id', authenticateToken, async (req, res) => {
 
 // ==================== CALCULATEUR ROUTES ====================
 
+const CALCULATEUR_CODE_ALIASES: Record<string, string> = {
+  'ODP-1': 'IODP1.1',
+  'ODP-2': 'IODP2.1',
+  'ODP-2F': 'IODP2.2',
+  'ODP-3': 'IODP2.3',
+  'ODP-4': 'IODP2.4',
+  'ODP-5': 'IODP2.6',
+  'ODP-6': 'IODP3.2',
+  'ODP-7': 'IODP3.3',
+  'ODP-7F': 'IODP3.4',
+  'IR-1.1.1': 'IR1.1.1',
+  'IR-1.1.1F': 'IR1.1.2',
+  'IR-1.1.2': 'IR1.1.3',
+  'IR-1.1.3': 'IR1.1.4',
+  'IR-1.1.3F': 'IR1.1.5',
+  'IR-1.1.4': 'IR1.1.6',
+  'IR-2.1.1': 'IR2.1.1',
+  'IR-2.1.2': 'IR2.1.4',
+  'IR-2.1.3': 'IR2.1.5',
+  'IR-2.1.4': 'IR2.1.6',
+  'IR-2.2.1': 'IR2.2.1',
+  'IR-2.2.1F': 'IR2.2.2',
+  'IR-2.2.2': 'IR2.2.7',
+  'IR-2.2.2F': 'IR2.2.8',
+  'IR-2.2.3': 'IR2.2.3',
+  'IR-2.2.4': 'IR2.2.4',
+  'IR-3.1.1': 'IR3.1.1',
+  'IR-3.1.2': 'IR3.1.4',
+  'IR-3.1.3': 'IR3.1.5',
+  'IR-4.1': 'IR4.1',
+};
+
+const CALCULATEUR_CODE_REVERSE_ALIASES = Object.fromEntries(
+  Object.entries(CALCULATEUR_CODE_ALIASES).map(([cadreCode, calculateurCode]) => [calculateurCode, cadreCode])
+);
+
+function toCalculateurCode(code: string): string {
+  return CALCULATEUR_CODE_ALIASES[code] ?? code;
+}
+
+function getCalculateurLookupCodes(code: string): string[] {
+  return [code, toCalculateurCode(code), CALCULATEUR_CODE_REVERSE_ALIASES[code] ?? code];
+}
+
 const calculateurHistorique: unknown[] = [];
 
-app.get('/api/calculateur/indicateurs', authenticateToken, (_req, res) => {
-  getLegacyIndicateurs()
-    .then((indicateurs) => {
-      res.json(indicateurs.map((ind) => ({
-        id: ind.id,
-        code: ind.code,
-        nom: ind.nom,
-        description: ind.description,
-        formule: ind.formule,
-        unite: ind.unite,
-        frequence: ind.frequence,
-        type: ind.est_iodp ? 'iodp' : 'ir',
-        composante: ind.id_composante === 1 ? 'Productivite agricole' : ind.id_composante === 2 ? 'Acces au marche' : ind.id_composante === 3 ? 'Services publics agricoles' : 'Intervention d\'urgence agricole',
-        cible: ind.cible,
-        champs: getChampsPourIndicateur(ind.code),
-      })));
-    })
-    .catch((error) => {
-      console.error('GET /api/calculateur/indicateurs failed', error);
-      const message = error instanceof Error ? error.message : 'Erreur de connexion a la base de donnees';
-      if (message.startsWith('Database configuration is missing') || isDatabaseConnectivityError(error)) {
-        return res.status(503).json({ message });
-      }
-      return res.status(500).json({ message: 'Impossible de recuperer le catalogue du calculateur' });
+// backend/src/app.ts
+// Les routes calculateur existent déjà, mais vérifions qu'elles sont complètes
+
+// ==================== CALCULATEUR ROUTES ====================
+
+// Obtenir tous les indicateurs pour le calculateur
+app.get('/api/calculateur/indicateurs', authenticateToken, async (_req: Request, res: Response) => {
+  try {
+    // Récupérer les indicateurs depuis la table cadre_resultats
+    const [rows] = await getDbPool().query(`
+      SELECT 
+        id,
+        code,
+        nom,
+        COALESCE(NULLIF(sous_composante, ''), NULLIF(reference_value, ''), '') as description,
+        '' as formule,
+        unite,
+        frequence,
+        est_odp as type,
+        composante,
+        final_prevu as cible,
+        source_donnees,
+        methodologie_collecte
+      FROM cadre_resultats
+      ORDER BY code
+    `);
+    
+    // Transformer les données
+    const indicateurs = (rows as any[]).map(row => {
+      const code = toCalculateurCode(row.code);
+
+      return {
+      id: row.id,
+      code,
+      nom: row.nom,
+      description: row.description || '',
+      formule: getFormuleForCode(code),
+      unite: row.unite,
+      frequence: row.frequence || 'annuelle',
+      type: row.type === 1 ? 'iodp' : 'ir',
+      composante: row.composante,
+      cible: row.cible !== null ? Number(row.cible) : null,
+      champs: getChampsForIndicateur(code),
+    };
     });
+    
+    res.json(indicateurs);
+  } catch (error) {
+    console.error('GET /api/calculateur/indicateurs failed', error);
+    res.status(500).json({ message: 'Erreur lors du chargement des indicateurs' });
+  }
 });
 
-app.get('/api/calculateur/indicateurs/:code', authenticateToken, async (req, res) => {
+// Obtenir un indicateur par code
+app.get('/api/calculateur/indicateurs/:code', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const indicateur = await getLegacyIndicateurByCode(req.params.code);
-    if (!indicateur) {
-      return res.status(404).json({ message: 'Indicateur non trouve' });
+    const lookupCodes = getCalculateurLookupCodes(req.params.code);
+    const [rows] = await getDbPool().query(
+      `SELECT id, code, nom, COALESCE(NULLIF(sous_composante, ''), NULLIF(reference_value, ''), '') as description, unite, frequence, est_odp as type, composante, final_prevu as cible
+       FROM cadre_resultats WHERE code IN (?, ?, ?) LIMIT 1`,
+      lookupCodes
+    );
+    
+    if ((rows as any[]).length === 0) {
+      return res.status(404).json({ message: 'Indicateur non trouvé' });
     }
-
-    return res.json({
-      id: indicateur.id,
-      code: indicateur.code,
-      nom: indicateur.nom,
-      description: indicateur.description,
-      formule: indicateur.formule,
-      unite: indicateur.unite,
-      frequence: indicateur.frequence,
-      type: indicateur.est_iodp ? 'iodp' : 'ir',
-      composante: indicateur.id_composante === 1 ? 'Productivite agricole' : indicateur.id_composante === 2 ? 'Acces au marche' : indicateur.id_composante === 3 ? 'Services publics agricoles' : 'Intervention d\'urgence agricole',
-      champs: getChampsPourIndicateur(indicateur.code),
+    
+    const row = (rows as any[])[0];
+    const code = toCalculateurCode(row.code);
+    res.json({
+      id: row.id,
+      code,
+      nom: row.nom,
+      description: row.description || '',
+      formule: getFormuleForCode(code),
+      unite: row.unite,
+      frequence: row.frequence || 'annuelle',
+      type: row.type === 1 ? 'iodp' : 'ir',
+      composante: row.composante,
+      cible: row.cible !== null ? Number(row.cible) : null,
+      champs: getChampsForIndicateur(code),
     });
   } catch (error) {
     console.error('GET /api/calculateur/indicateurs/:code failed', error);
-    const message = error instanceof Error ? error.message : 'Erreur de connexion a la base de donnees';
-    if (message.startsWith('Database configuration is missing') || isDatabaseConnectivityError(error)) {
-      return res.status(503).json({ message });
-    }
-    return res.status(500).json({ message: 'Impossible de recuperer cet indicateur du calculateur' });
+    res.status(500).json({ message: 'Erreur lors du chargement de l\'indicateur' });
   }
 });
+
+// Calculer un indicateur
+app.post('/api/calculateur/calculer/:code', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const requestedCode = req.params.code;
+    const code = toCalculateurCode(requestedCode);
+    const donnees = req.body;
+    const lookupCodes = getCalculateurLookupCodes(requestedCode);
+    
+    // Récupérer l'indicateur
+    const [rows] = await getDbPool().query(
+      `SELECT id, code, nom, unite, final_prevu as cible FROM cadre_resultats WHERE code IN (?, ?, ?) LIMIT 1`,
+      lookupCodes
+    );
+    
+    if ((rows as any[]).length === 0) {
+      return res.status(404).json({ message: 'Indicateur non trouvé' });
+    }
+    
+    const indicateur = (rows as any[])[0];
+    let valeur = 0;
+    let interpretation = '';
+    const recommandations: string[] = [];
+    
+    // Calcul selon le code
+    switch (code) {
+      case 'IODP1.1':
+        valeur = ((donnees.surplus_t / donnees.surplus_t0) - 1) * 100;
+        interpretation = valeur > 0 ? `Hausse de ${valeur.toFixed(1)}% des ventes` : `Baisse de ${Math.abs(valeur).toFixed(1)}% des ventes`;
+        break;
+      case 'IODP2.1':
+        valeur = (donnees.nouveaux || 0) + (donnees.cumul_anterieur || 0);
+        interpretation = `Total cumulé de ${valeur.toLocaleString()} exploitants ayant adopté les technologies`;
+        break;
+      case 'IODP2.3':
+        valeur = ((donnees.rendement_t - donnees.rendement_t0) / donnees.rendement_t0) * 100;
+        interpretation = valeur > 0 ? `Augmentation de ${valeur.toFixed(1)}% du rendement` : `Baisse de ${Math.abs(valeur).toFixed(1)}% du rendement`;
+        break;
+      case 'IODP2.6':
+        valeur = (1 - (donnees.taux_t / donnees.taux_t0)) * 100;
+        interpretation = valeur > 0 ? `Réduction de ${valeur.toFixed(1)}% de la mortalité` : 'Augmentation de la mortalité';
+        if (valeur < 20) recommandations.push("Renforcer les campagnes de vaccination", "Améliorer la formation des éleveurs");
+        break;
+      case 'IR1.1.1':
+        valeur = (donnees.nouveaux || 0) + (donnees.cumul_anterieur || 0);
+        interpretation = `${valeur.toLocaleString()} agriculteurs atteints au total`;
+        break;
+      case 'IR2.1.1':
+        valeur = (donnees.routes_nationales || 0) + (donnees.routes_provinciales || 0) + (donnees.routes_desserte || 0);
+        interpretation = `${valeur.toLocaleString()} km de routes réhabilitées`;
+        break;
+      case 'IR3.1.4':
+        valeur = (donnees.traitees_delai / donnees.recues) * 100;
+        interpretation = `${valeur.toFixed(1)}% des plaintes traitées dans les délais`;
+        if (valeur < 80) recommandations.push("Renforcer l'équipe GRM", 'Améliorer les procédures de traitement');
+        break;
+      case 'IR3.1.7':
+        valeur = (donnees.satisfaits / donnees.total_adoptants) * 100;
+        interpretation = `${valeur.toFixed(1)}% des fermiers sont satisfaits`;
+        break;
+      default:
+        // Calcul générique: somme de toutes les valeurs
+        valeur = Object.values(donnees).reduce((sum: number, val: any) => sum + (Number(val) || 0), 0);
+        interpretation = `Valeur calculée: ${valeur.toLocaleString()} ${indicateur.unite}`;
+    }
+    
+    valeur = Math.round(valeur * 10) / 10;
+    const progression = indicateur.cible > 0 ? (valeur / indicateur.cible) * 100 : undefined;
+    
+    // Sauvegarder le calcul dans l'historique
+    await getDbPool().query(
+      `INSERT INTO calculateur_historique (user_id, indicateur_code, indicateur_nom, valeur, unite, interpretation, donnees)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [(req as any).user?.id, code, indicateur.nom, valeur, indicateur.unite, interpretation, JSON.stringify(donnees)]
+    );
+    
+    res.json({
+      valeur,
+      unite: indicateur.unite,
+      progression,
+      cible: indicateur.cible,
+      interpretation,
+      recommandations,
+    });
+  } catch (error) {
+    console.error('POST /api/calculateur/calculer/:code failed', error);
+    res.status(500).json({ message: 'Erreur lors du calcul' });
+  }
+});
+
+// Obtenir l'historique des calculs
+app.get('/api/calculateur/historique', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const [rows] = await getDbPool().query(
+      `SELECT id, indicateur_code, indicateur_nom, valeur, unite, interpretation, created_at as date
+       FROM calculateur_historique
+       WHERE user_id = ?
+       ORDER BY created_at DESC
+       LIMIT 50`,
+      [(req as any).user?.id]
+    );
+    res.json(rows);
+  } catch (error) {
+    console.error('GET /api/calculateur/historique failed', error);
+    // Retourner un tableau vide si la table n'existe pas
+    res.json([]);
+  }
+});
+
+// Sauvegarder un calcul
+app.post('/api/calculateur/sauvegarder', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { code, donnees, resultat } = req.body;
+    const [rows] = await getDbPool().query(
+      `SELECT nom FROM cadre_resultats WHERE code = ?`,
+      [code]
+    );
+    const nom = (rows as any[])[0]?.nom || code;
+    
+    await getDbPool().query(
+      `INSERT INTO calculateur_historique (user_id, indicateur_code, indicateur_nom, valeur, unite, interpretation, donnees)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [(req as any).user?.id, code, nom, resultat.valeur, resultat.unite, resultat.interpretation, JSON.stringify(donnees)]
+    );
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('POST /api/calculateur/sauvegarder failed', error);
+    res.status(500).json({ message: 'Erreur lors de la sauvegarde' });
+  }
+});
+
+// Exporter les calculs
+app.get('/api/calculateur/export/:format', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const format = req.params.format;
+    const [rows] = await getDbPool().query(
+      `SELECT indicateur_code, indicateur_nom, valeur, unite, interpretation, created_at as date
+       FROM calculateur_historique
+       WHERE user_id = ?
+       ORDER BY created_at DESC`,
+      [(req as any).user?.id]
+    );
+    
+    if (format === 'excel') {
+      const csvRows = [
+        ['Date', 'Code', 'Indicateur', 'Valeur', 'Unité', 'Interprétation'],
+        ...(rows as any[]).map(row => [
+          new Date(row.date).toLocaleString('fr-FR'),
+          row.indicateur_code,
+          row.indicateur_nom,
+          row.valeur,
+          row.unite,
+          row.interpretation,
+        ]),
+      ];
+      
+      const csv = csvRows.map(row => row.join(',')).join('\n');
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename=calculs_indicateurs_${new Date().toISOString().split('T')[0]}.csv`);
+      res.send('\uFEFF' + csv);
+    } else {
+      res.status(400).json({ message: 'Format non supporté' });
+    }
+  } catch (error) {
+    console.error('GET /api/calculateur/export/:format failed', error);
+    res.status(500).json({ message: 'Erreur lors de l\'export' });
+  }
+});
+
+// Fonctions utilitaires
+function getFormuleForCode(code: string): string {
+  const normalizedCode = toCalculateurCode(code);
+  const formules: Record<string, string> = {
+    'IODP1.1': '((Surplus vendu année t / Surplus vendu année référence) − 1) × 100',
+    'IODP2.1': 'Nouveaux adoptants + Cumul années précédentes',
+    'IODP2.2': 'Nouvelles femmes adoptantes + Cumul périodes précédentes',
+    'IODP2.3': '((Rendement t − Rendement t0) / Rendement t0) × 100',
+    'IODP2.4': '((Rendement t − Rendement t0) / Rendement t0) × 100',
+    'IODP2.5': '((Rendement t − Rendement t0) / Rendement t0) × 100',
+    'IODP2.6': '(1 − (Taux mortalité t / Taux mortalité t0)) × 100',
+    'IR1.1.1': 'Nouveaux bénéficiaires + Cumul périodes précédentes',
+    'IR2.1.1': 'Routes nationales + Routes provinciales + Routes de desserte',
+    'IR3.1.4': '(Plaintes traitées dans délai / Plaintes reçues) × 100',
+    'IR3.1.7': '(Fermiers satisfaits / Total fermiers ayant adopté) × 100',
+  };
+  return formules[normalizedCode] || 'Valeur saisie';
+}
+
+function getChampsForIndicateur(code: string): Array<{ id: string; label: string; type: string; required: boolean }> {
+  const normalizedCode = toCalculateurCode(code);
+  const champs: Record<string, Array<{ id: string; label: string; type: string; required: boolean }>> = {
+    'IODP1.1': [
+      { id: 'surplus_t', label: 'Surplus vendu année t (kg)', type: 'number', required: true },
+      { id: 'surplus_t0', label: 'Surplus vendu année référence (kg)', type: 'number', required: true },
+    ],
+    'IODP2.1': [
+      { id: 'nouveaux', label: 'Nouveaux adoptants cette année', type: 'number', required: true },
+      { id: 'cumul_anterieur', label: 'Cumul des années précédentes', type: 'number', required: true },
+    ],
+    'IODP2.2': [
+      { id: 'femmes_t', label: 'Nouvelles femmes adoptantes', type: 'number', required: true },
+      { id: 'cumul_anterieur', label: 'Cumul périodes précédentes', type: 'number', required: true },
+    ],
+    'IODP2.3': [
+      { id: 'rendement_t', label: 'Rendement année t (kg/ha)', type: 'number', required: true },
+      { id: 'rendement_t0', label: 'Rendement année référence (kg/ha)', type: 'number', required: true },
+    ],
+    'IODP2.4': [
+      { id: 'rendement_t', label: 'Rendement année t (kg/ha)', type: 'number', required: true },
+      { id: 'rendement_t0', label: 'Rendement année référence (kg/ha)', type: 'number', required: true },
+    ],
+    'IODP2.5': [
+      { id: 'rendement_t', label: 'Rendement année t (kg/ha)', type: 'number', required: true },
+      { id: 'rendement_t0', label: 'Rendement année référence (kg/ha)', type: 'number', required: true },
+    ],
+    'IODP2.6': [
+      { id: 'taux_t', label: 'Taux mortalité année t (%)', type: 'number', required: true },
+      { id: 'taux_t0', label: 'Taux mortalité année référence (%)', type: 'number', required: true },
+    ],
+    'IR1.1.1': [
+      { id: 'nouveaux', label: 'Nouveaux bénéficiaires cette période', type: 'number', required: true },
+      { id: 'cumul_anterieur', label: 'Cumul des périodes précédentes', type: 'number', required: true },
+    ],
+    'IR2.1.1': [
+      { id: 'routes_nationales', label: 'Routes nationales (km)', type: 'number', required: true },
+      { id: 'routes_provinciales', label: 'Routes provinciales (km)', type: 'number', required: true },
+      { id: 'routes_desserte', label: 'Routes de desserte (km)', type: 'number', required: true },
+    ],
+    'IR3.1.4': [
+      { id: 'traitees_delai', label: 'Plaintes traitées dans les délais', type: 'number', required: true },
+      { id: 'recues', label: 'Plaintes reçues', type: 'number', required: true },
+    ],
+    'IR3.1.7': [
+      { id: 'satisfaits', label: 'Fermiers satisfaits', type: 'number', required: true },
+      { id: 'total_adoptants', label: 'Total fermiers ayant adopté', type: 'number', required: true },
+    ],
+  };
+  return champs[normalizedCode] || [{ id: 'valeur', label: 'Valeur', type: 'number', required: true }];
+}
 
 function getChampsPourIndicateur(code: string) {
   const champsMap: Record<string, { id: string; label: string; type: string; required: boolean }[]> = {
@@ -2679,36 +3139,7 @@ function getChampsPourIndicateur(code: string) {
   return champsMap[code] || [{ id: 'valeur', label: 'Valeur', type: 'number', required: true }];
 }
 
-app.post('/api/calculateur/calculer/:code', authenticateToken, async (req, res) => {
-  const { code } = req.params;
-  const donnees = req.body;
-  const indicateur = await getLegacyIndicateurByCode(code);
-  if (!indicateur) return res.status(404).json({ message: 'Indicateur non trouvé' });
 
-  let valeur = 0;
-  let interpretation = '';
-  switch (code) {
-    case 'IODP1.1': valeur = ((donnees.surplus_t / donnees.surplus_t0) - 1) * 100; interpretation = `Hausse de ${valeur.toFixed(1)}% des ventes`; break;
-    case 'IODP2.1': valeur = donnees.nouveaux + donnees.cumul_anterieur; interpretation = `Total cumulé: ${valeur.toLocaleString()} exploitants`; break;
-    case 'IODP2.3': valeur = ((donnees.rendement_t - donnees.rendement_t0) / donnees.rendement_t0) * 100; interpretation = `Hausse de ${valeur.toFixed(1)}% du rendement maïs`; break;
-    case 'IODP2.4': valeur = ((donnees.rendement_t - donnees.rendement_t0) / donnees.rendement_t0) * 100; interpretation = `Hausse de ${valeur.toFixed(1)}% du rendement manioc`; break;
-    case 'IODP2.6': valeur = (1 - (donnees.taux_t / donnees.taux_t0)) * 100; interpretation = `Réduction de ${valeur.toFixed(1)}% de la mortalité`; break;
-    case 'IR1.1.1': valeur = donnees.nouveaux + donnees.cumul_anterieur; interpretation = `${valeur.toLocaleString()} bénéficiaires atteints`; break;
-    case 'IR2.1.1': valeur = donnees.routes_nationales + donnees.routes_provinciales + donnees.routes_desserte; interpretation = `${valeur} km de routes réhabilitées`; break;
-    case 'IR3.1.4': valeur = (donnees.traitees_delai / donnees.recues) * 100; interpretation = `${valeur.toFixed(1)}% des plaintes traitées dans les délais`; break;
-    case 'IR3.1.7': valeur = (donnees.satisfaits / donnees.total_adoptants) * 100; interpretation = `${valeur.toFixed(1)}% des fermiers satisfaits`; break;
-    default: valeur = donnees.valeur || 0; interpretation = 'Valeur enregistrée';
-  }
-  valeur = Math.round(valeur * 10) / 10;
-  const progression = indicateur.cible > 0 ? Math.min((valeur / indicateur.cible) * 100, 150) : undefined;
-  const result = { valeur, unite: indicateur.unite, progression, cible: indicateur.cible, interpretation, recommandations: progression && progression < 50 ? ['Intensifier les efforts sur le terrain', 'Revoir la stratégie de mise en œuvre'] : [] };
-  calculateurHistorique.unshift({ ...result, code, nom: indicateur.nom, date: new Date().toISOString() });
-  res.json(result);
-});
-
-app.get('/api/calculateur/historique', authenticateToken, (_req, res) => {
-  res.json(calculateurHistorique.slice(0, 50));
-});
 
 // ==================== OT (OPÉRATEURS TECHNIQUES) ROUTES ====================
 app.get('/api/ot/data', authenticateToken, async (_req, res) => {
@@ -2789,7 +3220,7 @@ app.post('/api/ot/rapports', authenticateToken, async (req, res) => {
   }
 });
 
-app.put('/api/ot/activites/:id', authenticateToken, async (req, res) => {
+app.put('/api/ot/activites/:id(\\d+)', authenticateToken, async (req, res) => {
   try {
     const activite = await updateOTActivite(Number(req.params.id), {
       type: req.body.type !== undefined ? String(req.body.type) : undefined,
@@ -2961,7 +3392,7 @@ app.get('/api/indicateurs-database/stats', authenticateToken, async (_req, res) 
   }
 });
 
-app.get('/api/indicateurs-database/:id', authenticateToken, async (req, res) => {
+app.get('/api/indicateurs-database/:id(\\d+)', authenticateToken, async (req, res) => {
   try {
     const indicateur = await getIndicateurDatabaseById(Number(req.params.id));
     if (!indicateur) {
@@ -2978,7 +3409,7 @@ app.get('/api/indicateurs-database/:id', authenticateToken, async (req, res) => 
   }
 });
 
-app.put('/api/indicateurs-database/:id', authenticateToken, async (req, res) => {
+app.put('/api/indicateurs-database/:id(\\d+)', authenticateToken, async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (req.body?.valeurs?.actuelle !== undefined) {
@@ -2999,7 +3430,7 @@ app.put('/api/indicateurs-database/:id', authenticateToken, async (req, res) => 
   }
 });
 
-app.put('/api/indicateurs-database/:id/valeur', authenticateToken, async (req, res) => {
+app.put('/api/indicateurs-database/:id(\\d+)/valeur', authenticateToken, async (req, res) => {
   try {
     const id = Number(req.params.id);
     const { valeur, periode } = req.body;
@@ -3258,6 +3689,11 @@ app.get('/api/beneficiaires/ptech-stats', authenticateToken, async (req: Request
 app.get('/api/beneficiaires/cartes-ventes-stats', authenticateToken, async (req: Request, res: Response) => {
   try {
     const { saison, province, territoire, secteur, groupement, village } = req.query;
+
+    await Promise.all([
+      getCartesAgriculteursStats(),
+      getVentesSemencesStats(),
+    ]);
     
     let whereClause = 'WHERE 1=1';
     const params: any[] = [];
@@ -3292,11 +3728,11 @@ app.get('/api/beneficiaires/cartes-ventes-stats', authenticateToken, async (req:
       SELECT 
         a.province,
         COUNT(*) AS total_producteurs,
-        SUM(CASE WHEN dc.statut = 'distribuee' THEN 1 ELSE 0 END) AS cartes_distribuees,
-        SUM(CASE WHEN dc.statut = 'en_attente' THEN 1 ELSE 0 END) AS cartes_attente,
-        SUM(CASE WHEN dc.statut = 'a_imprimer' THEN 1 ELSE 0 END) AS cartes_imprimer
+        SUM(CASE WHEN COALESCE(dc.statut_carte, 'a_imprimer') = 'distribuee' THEN 1 ELSE 0 END) AS cartes_distribuees,
+        SUM(CASE WHEN COALESCE(dc.statut_carte, 'a_imprimer') = 'en_attente' THEN 1 ELSE 0 END) AS cartes_attente,
+        SUM(CASE WHEN COALESCE(dc.statut_carte, 'a_imprimer') = 'a_imprimer' THEN 1 ELSE 0 END) AS cartes_imprimer
       FROM agriculteurs a
-      LEFT JOIN distribution_cartes dc ON dc.rna_id = CAST(a.farmer_id AS CHAR)
+      LEFT JOIN cartes_agriculteurs dc ON dc.rna_id = CAST(a.farmer_id AS CHAR)
       ${whereClause}
       GROUP BY a.province
       ORDER BY a.province
@@ -3307,9 +3743,9 @@ app.get('/api/beneficiaires/cartes-ventes-stats', authenticateToken, async (req:
       SELECT 
         vs.province,
         COUNT(DISTINCT vs.rna_id) AS producteurs_acheteurs,
-        SUM(vs.quantite_kg) AS total_kg,
-        SUM(vs.montant_usd) AS total_usd,
-        SUM(vs.montant_cdf) AS total_cdf
+        COALESCE(SUM(vs.quantite_kg), 0) AS total_kg,
+        COALESCE(SUM(vs.montant_usd), 0) AS total_usd,
+        0 AS total_cdf
       FROM ventes_semences vs
       JOIN agriculteurs a ON a.farmer_id = CAST(vs.rna_id AS UNSIGNED)
       ${whereClause}
@@ -3322,39 +3758,28 @@ app.get('/api/beneficiaires/cartes-ventes-stats', authenticateToken, async (req:
       SELECT 
         a.village,
         COUNT(*) AS total_producteurs,
-        SUM(CASE WHEN dc.statut = 'distribuee' THEN 1 ELSE 0 END) AS ont_recu_carte,
+        SUM(CASE WHEN COALESCE(dc.statut_carte, 'a_imprimer') = 'distribuee' THEN 1 ELSE 0 END) AS ont_recu_carte,
         COUNT(DISTINCT vs.rna_id) AS ont_achete_semences
       FROM agriculteurs a
-      LEFT JOIN distribution_cartes dc ON dc.rna_id = CAST(a.farmer_id AS CHAR)
+      LEFT JOIN cartes_agriculteurs dc ON dc.rna_id = CAST(a.farmer_id AS CHAR)
       LEFT JOIN ventes_semences vs ON vs.rna_id = CAST(a.farmer_id AS CHAR)
       ${whereClause}
       GROUP BY a.village
       ORDER BY a.village
     `, params);
     
-    // Ventes par fournisseur
-    const [fournisseurRows] = await getDbPool().query<RowDataPacket[]>(`
-      SELECT 
-        vs.fournisseur,
-        SUM(vs.quantite_kg) AS total_kg,
-        SUM(vs.montant_cdf) AS total_cdf
-      FROM ventes_semences vs
-      ${whereClause.replace('a.', '')}
-      WHERE vs.fournisseur IS NOT NULL
-      GROUP BY vs.fournisseur
-      ORDER BY total_kg DESC
-    `, params);
+    const fournisseurRows: RowDataPacket[] = [];
     
     // Widgets globaux
     const [widgetRows] = await getDbPool().query<RowDataPacket[]>(`
       SELECT 
         COUNT(DISTINCT a.farmer_id) AS producteurs_avec_ptech,
-        SUM(CASE WHEN dc.statut = 'distribuee' THEN 1 ELSE 0 END) AS ont_recu_carte,
+        SUM(CASE WHEN COALESCE(dc.statut_carte, 'a_imprimer') = 'distribuee' THEN 1 ELSE 0 END) AS ont_recu_carte,
         COUNT(DISTINCT vs.rna_id) AS ont_achete_semences,
-        COUNT(DISTINCT vs.fournisseur) AS fournisseurs_actifs,
-        SUM(vs.quantite_kg) AS kg_semences_vendues
+        0 AS fournisseurs_actifs,
+        COALESCE(SUM(vs.quantite_kg), 0) AS kg_semences_vendues
       FROM agriculteurs a
-      LEFT JOIN distribution_cartes dc ON dc.rna_id = CAST(a.farmer_id AS CHAR)
+      LEFT JOIN cartes_agriculteurs dc ON dc.rna_id = CAST(a.farmer_id AS CHAR)
       LEFT JOIN ventes_semences vs ON vs.rna_id = CAST(a.farmer_id AS CHAR)
       ${whereClause}
     `, params);
@@ -3667,7 +4092,7 @@ app.get('/api/plans-attenuation/stats', authenticateToken, async (_req: Request,
 });
 
 // Mettre à jour le plan d'atténuation d'un risque
-app.put('/api/plans-attenuation/:id', authenticateToken, async (req: Request, res: Response) => {
+app.put('/api/plans-attenuation/:id(\\d+)', authenticateToken, async (req: Request, res: Response) => {
   try {
     const id = Number(req.params.id);
     const { plan_attenuation, actions_prevues, indicateurs_surveillance } = req.body;
@@ -3695,7 +4120,7 @@ app.put('/api/plans-attenuation/:id', authenticateToken, async (req: Request, re
 });
 
 // Ajouter une action à un risque
-app.post('/api/plans-attenuation/:id/actions', authenticateToken, async (req: Request, res: Response) => {
+app.post('/api/plans-attenuation/:id(\\d+)/actions', authenticateToken, async (req: Request, res: Response) => {
   try {
     const idRisque = Number(req.params.id);
     const { action, responsable, date_debut, date_fin, statut, resultat } = req.body;
@@ -3719,7 +4144,7 @@ app.post('/api/plans-attenuation/:id/actions', authenticateToken, async (req: Re
 });
 
 // Mettre à jour une action
-app.put('/api/plans-attenuation/actions/:id', authenticateToken, async (req: Request, res: Response) => {
+app.put('/api/plans-attenuation/actions/:id(\\d+)', authenticateToken, async (req: Request, res: Response) => {
   try {
     const id = Number(req.params.id);
     const { action, responsable, date_debut, date_fin, statut, resultat } = req.body;
@@ -3744,7 +4169,7 @@ app.put('/api/plans-attenuation/actions/:id', authenticateToken, async (req: Req
 });
 
 // Supprimer une action
-app.delete('/api/plans-attenuation/actions/:id', authenticateToken, async (req: Request, res: Response) => {
+app.delete('/api/plans-attenuation/actions/:id(\\d+)', authenticateToken, async (req: Request, res: Response) => {
   try {
     const id = Number(req.params.id);
     await getDbPool().query('DELETE FROM risque_actions WHERE id = ?', [id]);
@@ -3903,7 +4328,7 @@ app.get('/api/cartes-agriculteurs/stats', authenticateToken, async (req: Request
 });
 
 // Mettre à jour le statut d'une carte
-app.put('/api/cartes-agriculteurs/:id', authenticateToken, async (req: Request, res: Response) => {
+app.put('/api/cartes-agriculteurs/:id(\\d+)', authenticateToken, async (req: Request, res: Response) => {
   try {
     const id = Number(req.params.id);
     const { numero_carte, date_distribution, agent_distribution, statut, observations } = req.body;
@@ -4031,6 +4456,313 @@ app.get('/api/cartes-agriculteurs/export/:format', authenticateToken, async (req
   }
 });
 
+// ==================== ACTIVITÉS DATABASE ROUTES ====================
+
+// Obtenir toutes les activités avec pagination et filtres
+app.get('/api/activites-database', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const search = req.query.search ? String(req.query.search) : '';
+    const type = req.query.type ? String(req.query.type) : '';
+    const statut = req.query.statut ? String(req.query.statut) : '';
+    const province = req.query.province ? String(req.query.province) : '';
+    const page = Math.max(Number(req.query.page ?? 0), 0);
+    const limit = Math.max(Number(req.query.limit ?? 10), 1);
+    const offset = page * limit;
+
+    let whereClause = 'WHERE 1=1';
+    const params: any[] = [];
+
+    if (search) {
+      whereClause += ' AND (code LIKE ? OR titre LIKE ? OR description LIKE ? OR responsable LIKE ?)';
+      const searchParam = `%${search}%`;
+      params.push(searchParam, searchParam, searchParam, searchParam);
+    }
+    if (type) {
+      whereClause += ' AND type = ?';
+      params.push(type);
+    }
+    if (statut) {
+      whereClause += ' AND statut = ?';
+      params.push(statut);
+    }
+    if (province) {
+      whereClause += ' AND province = ?';
+      params.push(province);
+    }
+
+    // Compter le total
+    const [countRows] = await getDbPool().query(
+      `SELECT COUNT(*) AS total FROM activites ${whereClause}`,
+      params
+    );
+    const total = Number((countRows as any[])[0]?.total ?? 0);
+
+    // Récupérer les données
+    const [rows] = await getDbPool().query(
+      `SELECT 
+        id, code, titre, description, type, composante, statut, priorite,
+        date_debut, date_fin, lieu, province, territoire, commune, village,
+        responsable, responsable_contact, equipe,
+        participants_prevus, participants_reels,
+        budget_prevu, budget_reel,
+        objectifs, resultats_attendus, resultats_obtenus,
+        difficultes, lecons_apprises, documents, photos,
+        created_by, beneficiaires_cibles, beneficiaires_atteints, taux_execution,
+        created_at, updated_at
+      FROM activites
+      ${whereClause}
+      ORDER BY date_debut DESC, id DESC
+      LIMIT ? OFFSET ?`,
+      [...params, limit, offset]
+    );
+
+    // Transformer les données JSON
+    const activites = (rows as any[]).map(row => ({
+      ...row,
+      objectifs: row.objectifs ? JSON.parse(row.objectifs) : [],
+      resultats_attendus: row.resultats_attendus ? JSON.parse(row.resultats_attendus) : [],
+      documents: row.documents ? JSON.parse(row.documents) : [],
+      photos: row.photos ? JSON.parse(row.photos) : [],
+      equipe: row.equipe ? JSON.parse(row.equipe) : [],
+    }));
+
+    res.json({ data: activites, total, page, totalPages: Math.ceil(total / limit) });
+  } catch (error) {
+    console.error('GET /api/activites-database failed', error);
+    res.status(500).json({ message: 'Erreur lors du chargement des activités' });
+  }
+});
+
+// Obtenir les statistiques des activités
+app.get('/api/activites-database/stats', authenticateToken, async (_req: Request, res: Response) => {
+  try {
+    const [typeRows] = await getDbPool().query(
+      `SELECT type, COUNT(*) AS total FROM activites GROUP BY type`
+    );
+    
+    const [statutRows] = await getDbPool().query(
+      `SELECT statut, COUNT(*) AS total FROM activites GROUP BY statut`
+    );
+    
+    const [provinceRows] = await getDbPool().query(
+      `SELECT province, COUNT(*) AS total FROM activites GROUP BY province`
+    );
+    
+    const [monthRows] = await getDbPool().query(
+      `SELECT DATE_FORMAT(date_debut, '%Y-%m') AS mois, COUNT(*) AS total
+       FROM activites
+       WHERE date_debut IS NOT NULL
+       GROUP BY DATE_FORMAT(date_debut, '%Y-%m')
+       ORDER BY mois DESC
+       LIMIT 6`
+    );
+    
+    const [budgetRows] = await getDbPool().query<RowDataPacket[]>(
+      `SELECT 
+        SUM(budget_prevu) AS budget_total,
+        SUM(budget_reel) AS budget_depense,
+        SUM(participants_reels) AS participants_total,
+        AVG(taux_execution) AS taux_realisation
+      FROM activites`
+    );
+    
+    const parType: Record<string, number> = {};
+    (typeRows as any[]).forEach(row => { parType[row.type] = row.total; });
+    
+    const parStatut: Record<string, number> = {};
+    (statutRows as any[]).forEach(row => { parStatut[row.statut] = row.total; });
+    
+    const parProvince: Record<string, number> = {};
+    (provinceRows as any[]).forEach(row => { parProvince[row.province] = row.total; });
+    
+    const parMois = (monthRows as any[]).map(row => ({
+      mois: new Date(row.mois).toLocaleString('fr-FR', { month: 'short' }),
+      total: row.total
+    })).reverse();
+    
+    const budget = budgetRows[0] ?? {};
+    
+    res.json({
+      total: (typeRows as any[]).reduce((acc, row) => acc + row.total, 0),
+      par_type: parType,
+      par_statut: parStatut,
+      par_province: parProvince,
+      par_mois: parMois,
+      budget_total: budget?.budget_total || 0,
+      budget_depense: budget?.budget_depense || 0,
+      participants_total: budget?.participants_total || 0,
+      taux_realisation: Math.round(budget?.taux_realisation || 0)
+    });
+  } catch (error) {
+    console.error('GET /api/activites-database/stats failed', error);
+    res.status(500).json({ message: 'Erreur lors du chargement des statistiques' });
+  }
+});
+
+// Obtenir une activité par ID
+app.get('/api/activites-database/:id(\\d+)', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const [rows] = await getDbPool().query(
+      `SELECT * FROM activites WHERE id = ?`,
+      [req.params.id]
+    );
+    
+    if ((rows as any[]).length === 0) {
+      return res.status(404).json({ message: 'Activité non trouvée' });
+    }
+    
+    const row = (rows as any[])[0];
+    res.json({
+      ...row,
+      objectifs: row.objectifs ? JSON.parse(row.objectifs) : [],
+      resultats_attendus: row.resultats_attendus ? JSON.parse(row.resultats_attendus) : [],
+      documents: row.documents ? JSON.parse(row.documents) : [],
+      photos: row.photos ? JSON.parse(row.photos) : [],
+      equipe: row.equipe ? JSON.parse(row.equipe) : [],
+    });
+  } catch (error) {
+    console.error('GET /api/activites-database/:id failed', error);
+    res.status(500).json({ message: 'Erreur lors du chargement de l\'activité' });
+  }
+});
+
+// Créer une activité
+app.post('/api/activites-database', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const {
+      code, titre, description, type, composante, statut, priorite,
+      date_debut, date_fin, lieu, province, territoire, commune, village,
+      responsable, responsable_contact, equipe,
+      participants_prevus, participants_reels,
+      budget_prevu, budget_reel,
+      objectifs, resultats_attendus, resultats_obtenus,
+      difficultes, lecons_apprises, documents, photos,
+      created_by, beneficiaires_cibles, beneficiaires_atteints, taux_execution
+    } = req.body;
+    
+    // Générer un code si non fourni
+    let finalCode = code;
+    if (!finalCode) {
+      const year = new Date().getFullYear();
+      const [lastCode] = await getDbPool().query(
+        `SELECT code FROM activites WHERE code LIKE 'ACT-${year}-%' ORDER BY code DESC LIMIT 1`
+      );
+      let nextNum = 1;
+      if ((lastCode as any[]).length > 0) {
+        const match = (lastCode as any[])[0].code.match(/\d+$/);
+        if (match) nextNum = parseInt(match[0]) + 1;
+      }
+      finalCode = `ACT-${year}-${String(nextNum).padStart(3, '0')}`;
+    }
+    
+    const [result] = await getDbPool().query(
+      `INSERT INTO activites (
+        code, titre, description, type, composante, statut, priorite,
+        date_debut, date_fin, lieu, province, territoire, commune, village,
+        responsable, responsable_contact, equipe,
+        participants_prevus, participants_reels,
+        budget_prevu, budget_reel,
+        objectifs, resultats_attendus, resultats_obtenus,
+        difficultes, lecons_apprises, documents, photos,
+        created_by, beneficiaires_cibles, beneficiaires_atteints, taux_execution
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        finalCode, titre, description, type, composante, statut || 'planifiee', priorite || 'moyenne',
+        date_debut, date_fin, lieu, province, territoire, commune, village,
+        responsable, responsable_contact, equipe ? JSON.stringify(equipe) : null,
+        participants_prevus || 0, participants_reels || null,
+        budget_prevu || 0, budget_reel || null,
+        objectifs ? JSON.stringify(objectifs) : null,
+        resultats_attendus ? JSON.stringify(resultats_attendus) : null,
+        resultats_obtenus, difficultes, lecons_apprises,
+        documents ? JSON.stringify(documents) : null,
+        photos ? JSON.stringify(photos) : null,
+        created_by, beneficiaires_cibles || 0, beneficiaires_atteints || 0, taux_execution || 0
+      ]
+    );
+    
+    res.status(201).json({ id: (result as any).insertId, code: finalCode });
+  } catch (error) {
+    console.error('POST /api/activites-database failed', error);
+    res.status(500).json({ message: 'Erreur lors de la création de l\'activité' });
+  }
+});
+
+// Mettre à jour une activité
+app.put('/api/activites-database/:id(\\d+)', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const id = Number(req.params.id);
+    const updates = req.body;
+    const fields: string[] = [];
+    const values: any[] = [];
+    
+    const allowedFields = [
+      'titre', 'description', 'type', 'composante', 'statut', 'priorite',
+      'date_debut', 'date_fin', 'lieu', 'province', 'territoire', 'commune', 'village',
+      'responsable', 'responsable_contact', 'participants_prevus', 'participants_reels',
+      'budget_prevu', 'budget_reel', 'resultats_obtenus', 'difficultes', 'lecons_apprises',
+      'created_by', 'beneficiaires_cibles', 'beneficiaires_atteints', 'taux_execution'
+    ];
+    
+    for (const field of allowedFields) {
+      if (updates[field] !== undefined) {
+        fields.push(`${field} = ?`);
+        values.push(updates[field]);
+      }
+    }
+    
+    // Champs JSON
+    if (updates.objectifs !== undefined) {
+      fields.push('objectifs = ?');
+      values.push(JSON.stringify(updates.objectifs));
+    }
+    if (updates.resultats_attendus !== undefined) {
+      fields.push('resultats_attendus = ?');
+      values.push(JSON.stringify(updates.resultats_attendus));
+    }
+    if (updates.equipe !== undefined) {
+      fields.push('equipe = ?');
+      values.push(JSON.stringify(updates.equipe));
+    }
+    if (updates.documents !== undefined) {
+      fields.push('documents = ?');
+      values.push(JSON.stringify(updates.documents));
+    }
+    if (updates.photos !== undefined) {
+      fields.push('photos = ?');
+      values.push(JSON.stringify(updates.photos));
+    }
+    
+    if (fields.length === 0) {
+      return res.status(400).json({ message: 'Aucune donnée à mettre à jour' });
+    }
+    
+    values.push(id);
+    await getDbPool().query(
+      `UPDATE activites SET ${fields.join(', ')}, updated_at = NOW() WHERE id = ?`,
+      values
+    );
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('PUT /api/activites-database/:id failed', error);
+    res.status(500).json({ message: 'Erreur lors de la mise à jour de l\'activité' });
+  }
+});
+
+// Supprimer une activité
+app.delete('/api/activites-database/:id(\\d+)', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const [result] = await getDbPool().query('DELETE FROM activites WHERE id = ?', [req.params.id]);
+    if ((result as any).affectedRows === 0) {
+      return res.status(404).json({ message: 'Activité non trouvée' });
+    }
+    res.json({ message: 'Activité supprimée avec succès' });
+  } catch (error) {
+    console.error('DELETE /api/activites-database/:id failed', error);
+    res.status(500).json({ message: 'Erreur lors de la suppression' });
+  }
+});
 // ==================== DÉMARRAGE DU SERVEUR ====================
 
 app.listen(PORT, () => {

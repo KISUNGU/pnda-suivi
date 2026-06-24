@@ -337,6 +337,7 @@ export const IndicateursDatabase: React.FC = () => {
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [selectedIndicateur, setSelectedIndicateur] = useState<IndicateurComplet | null>(null);
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
+  const [updateIndicateurId, setUpdateIndicateurId] = useState('');
   const [newValeur, setNewValeur] = useState('');
   const [newPeriode, setNewPeriode] = useState('');
   const [tabValue, setTabValue] = useState(0);
@@ -405,9 +406,29 @@ export const IndicateursDatabase: React.FC = () => {
 
   const handleOpenUpdate = (indicateur: IndicateurComplet) => {
     setSelectedIndicateur(indicateur);
+    setUpdateIndicateurId(String(indicateur.id));
     setNewValeur(indicateur.valeurs.actuelle.toString());
     setNewPeriode('');
     setUpdateDialogOpen(true);
+  };
+
+  const handleOpenNewValue = () => {
+    setSelectedIndicateur(null);
+    setUpdateIndicateurId('');
+    setNewValeur('');
+    setNewPeriode('');
+    setUpdateDialogOpen(true);
+  };
+
+  const handleUpdateIndicateurChange = (indicateurId: string) => {
+    setUpdateIndicateurId(indicateurId);
+
+    const indicateur = indicateurs.find((item) => item.id === Number(indicateurId)) ?? null;
+    setSelectedIndicateur(indicateur);
+
+    if (indicateur) {
+      setNewValeur(indicateur.valeurs.actuelle.toString());
+    }
   };
 
   const handleUpdateValeur = async () => {
@@ -528,6 +549,9 @@ export const IndicateursDatabase: React.FC = () => {
                 <MenuItem onClick={() => handleExport('pdf')}><GoogleIcon name="picture_as_pdf" size={18} sx={{ mr: 1 }} /> Exporter en PDF</MenuItem>
                 <MenuItem onClick={() => handleExport('excel')}><GoogleIcon name="table_chart" size={18} sx={{ mr: 1 }} /> Exporter en Excel</MenuItem>
               </Menu>
+              <Button variant="contained" startIcon={<GoogleIcon name="add" size={18} />} onClick={handleOpenNewValue} sx={{ bgcolor: '#2E7D32' }}>
+                Nouvelle valeur
+              </Button>
               <Tooltip title="Rafraîchir">
                 <IconButton onClick={loadData}>
                   <Refresh />
@@ -868,16 +892,36 @@ export const IndicateursDatabase: React.FC = () => {
       {/* Dialog mise à jour valeur */}
       <Dialog open={updateDialogOpen} onClose={() => setUpdateDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>
-          Mettre à jour - {selectedIndicateur?.code}
+          {selectedIndicateur ? `Mettre à jour - ${selectedIndicateur.code}` : 'Nouvelle valeur indicateur'}
         </DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2 }}>
-            <Alert severity="info" sx={{ mb: 2 }}>
-              <strong>Indicateur:</strong> {selectedIndicateur?.nom}<br />
-              <strong>Unité:</strong> {selectedIndicateur?.unite}<br />
-              <strong>Cible annuelle:</strong> {(selectedIndicateur?.valeurs.cible_annuelle ?? selectedIndicateur?.valeurs.cible)?.toLocaleString()} {selectedIndicateur?.unite}<br />
-              <strong>Cible finale:</strong> {selectedIndicateur?.valeurs.cible.toLocaleString()} {selectedIndicateur?.unite}
-            </Alert>
+            <FormControl fullWidth sx={{ mb: 2 }}>
+              <InputLabel>Indicateur</InputLabel>
+              <Select
+                value={updateIndicateurId}
+                label="Indicateur"
+                onChange={(e) => handleUpdateIndicateurChange(String(e.target.value))}
+              >
+                {indicateurs.map((indicateur) => (
+                  <MenuItem key={indicateur.id} value={String(indicateur.id)}>
+                    {indicateur.code} - {indicateur.nom}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            {selectedIndicateur ? (
+              <Alert severity="info" sx={{ mb: 2 }}>
+                <strong>Indicateur:</strong> {selectedIndicateur.nom}<br />
+                <strong>Unité:</strong> {selectedIndicateur.unite}<br />
+                <strong>Cible annuelle:</strong> {(selectedIndicateur.valeurs.cible_annuelle ?? selectedIndicateur.valeurs.cible).toLocaleString()} {selectedIndicateur.unite}<br />
+                <strong>Cible finale:</strong> {selectedIndicateur.valeurs.cible.toLocaleString()} {selectedIndicateur.unite}
+              </Alert>
+            ) : (
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                Sélectionnez d'abord un indicateur à mettre à jour.
+              </Alert>
+            )}
             <TextField
               fullWidth
               label="Nouvelle valeur"
@@ -885,6 +929,7 @@ export const IndicateursDatabase: React.FC = () => {
               value={newValeur}
               onChange={(e) => setNewValeur(e.target.value)}
               sx={{ mb: 2 }}
+              disabled={!selectedIndicateur}
             />
             <FormControl fullWidth>
               <InputLabel>Période</InputLabel>
@@ -892,6 +937,7 @@ export const IndicateursDatabase: React.FC = () => {
                 value={newPeriode}
                 label="Période"
                 onChange={(e) => setNewPeriode(e.target.value)}
+                disabled={!selectedIndicateur}
               >
                 <MenuItem value="T1 2026">T1 2026 (Janvier-Mars)</MenuItem>
                 <MenuItem value="T2 2026">T2 2026 (Avril-Juin)</MenuItem>
@@ -902,7 +948,7 @@ export const IndicateursDatabase: React.FC = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setUpdateDialogOpen(false)}>Annuler</Button>
-          <Button variant="contained" onClick={handleUpdateValeur} sx={{ bgcolor: '#2E7D32' }}>
+          <Button variant="contained" onClick={handleUpdateValeur} disabled={!selectedIndicateur || !newValeur} sx={{ bgcolor: '#2E7D32' }}>
             Enregistrer
           </Button>
         </DialogActions>

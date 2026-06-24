@@ -36,150 +36,11 @@ import {
 } from '@mui/material';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip as RechartTooltip, ResponsiveContainer, ReferenceLine,
+  Tooltip as RechartTooltip, ResponsiveContainer,
 } from 'recharts';
 import GoogleIcon from '../../../components/common/GoogleIcon';
 import { calculateurService } from '../../../services/calculateur.service';
-import type { IndicateurDefinition, CalculResult } from '../../../services/calculateur.service';
-
-// ---------------------------------------------------------------------------
-// Données mockées des indicateurs
-// ---------------------------------------------------------------------------
-const mockIndicateurs: IndicateurDefinition[] = [
-  {
-    id: 1,
-    code: 'IODP1.1',
-    nom: 'Hausse des ventes sur les marchés formels',
-    description: 'Augmentation en pourcentage des ventes des petits exploitants sur les marchés formels',
-    formule: '((Surplus vendu année t / Surplus vendu année 0) − 1) × 100',
-    unite: '%',
-    frequence: 'annuelle',
-    type: 'iodp',
-    composante: 'Accès au marché',
-    champs: [
-      { id: 'surplus_t',  label: 'Surplus vendu année t (kg)',            type: 'number', required: true },
-      { id: 'surplus_t0', label: 'Surplus vendu année de référence (kg)', type: 'number', required: true },
-    ],
-  },
-  {
-    id: 2,
-    code: 'IODP2.1',
-    nom: "Nombre d'exploitants ayant adopté une technologie améliorée",
-    description: "Nombre cumulé de petits exploitants ayant adopté une technologie agricole améliorée",
-    formule: 'Nouveaux adoptants + Cumul années précédentes',
-    unite: 'exploitants',
-    frequence: 'annuelle',
-    type: 'iodp',
-    composante: 'Productivité agricole',
-    champs: [
-      { id: 'nouveaux',         label: 'Nouveaux adoptants cette année',   type: 'number', required: true },
-      { id: 'cumul_anterieur',  label: 'Cumul des années précédentes',     type: 'number', required: true },
-    ],
-  },
-  {
-    id: 3,
-    code: 'IODP2.3',
-    nom: 'Hausse du rendement de maïs (AIC)',
-    description: "Augmentation en pourcentage du rendement de maïs grâce aux pratiques AIC",
-    formule: '((Rendement t − Rendement t0) / Rendement t0) × 100',
-    unite: '%',
-    frequence: 'annuelle',
-    type: 'iodp',
-    composante: 'Productivité agricole',
-    champs: [
-      { id: 'rendement_t',  label: 'Rendement maïs année t (kg/ha)',        type: 'number', required: true },
-      { id: 'rendement_t0', label: 'Rendement maïs année référence (kg/ha)', type: 'number', required: true },
-    ],
-  },
-  {
-    id: 4,
-    code: 'IODP2.6',
-    nom: 'Réduction du taux de mortalité animale',
-    description: 'Réduction en pourcentage du taux de mortalité animale',
-    formule: '(1 − (Taux mort. t / Taux mort. t0)) × 100',
-    unite: '%',
-    frequence: 'annuelle',
-    type: 'iodp',
-    composante: 'Productivité agricole',
-    champs: [
-      { id: 'taux_t',  label: 'Taux mortalité année t (%)',         type: 'number', required: true },
-      { id: 'taux_t0', label: 'Taux mortalité année référence (%)', type: 'number', required: true },
-    ],
-  },
-  {
-    id: 5,
-    code: 'IR1.1.1',
-    nom: 'Petits exploitants atteints par des actifs agricoles',
-    description: "Nombre de petits exploitants ayant reçu des actifs ou services agricoles",
-    formule: 'Nouveaux bénéficiaires + Cumul périodes précédentes',
-    unite: 'personnes',
-    frequence: 'semestrielle',
-    type: 'ir',
-    composante: 'Productivité agricole',
-    champs: [
-      { id: 'nouveaux',        label: 'Nouveaux bénéficiaires cette période', type: 'number', required: true },
-      { id: 'cumul_anterieur', label: 'Cumul des périodes précédentes',        type: 'number', required: true },
-    ],
-  },
-  {
-    id: 6,
-    code: 'IR2.1.1',
-    nom: 'Kilomètres de routes réhabilitées',
-    description: 'Total des routes réhabilitées par le programme',
-    formule: 'Routes nationales + Routes provinciales + Routes de desserte',
-    unite: 'km',
-    frequence: 'annuelle',
-    type: 'ir',
-    composante: 'Accès au marché',
-    champs: [
-      { id: 'routes_nationales',  label: 'Routes nationales (km)',           type: 'number', required: true },
-      { id: 'routes_provinciales', label: 'Routes provinciales (km)',        type: 'number', required: true },
-      { id: 'routes_desserte',    label: 'Routes de desserte agricole (km)', type: 'number', required: true },
-    ],
-  },
-  {
-    id: 7,
-    code: 'IR3.1.4',
-    nom: 'Traitement des réclamations GRM',
-    description: 'Pourcentage des plaintes traitées dans les délais',
-    formule: '(Plaintes traitées dans délai / Plaintes reçues) × 100',
-    unite: '%',
-    frequence: 'annuelle',
-    type: 'ir',
-    composante: 'Services publics agricoles',
-    champs: [
-      { id: 'traitees_delai', label: 'Plaintes traitées dans les délais', type: 'number', required: true },
-      { id: 'recues',         label: 'Plaintes reçues',                   type: 'number', required: true },
-    ],
-  },
-  {
-    id: 8,
-    code: 'IR3.1.7',
-    nom: 'Fermiers satisfaits des technologies',
-    description: "Pourcentage de fermiers satisfaits des technologies adoptées",
-    formule: '(Fermiers satisfaits / Total fermiers ayant adopté) × 100',
-    unite: '%',
-    frequence: 'annuelle',
-    type: 'ir',
-    composante: 'Services publics agricoles',
-    champs: [
-      { id: 'satisfaits',       label: 'Fermiers satisfaits',           type: 'number', required: true },
-      { id: 'total_adoptants',  label: "Total fermiers ayant adopté",   type: 'number', required: true },
-    ],
-  },
-];
-
-// Cibles par indicateur
-const CIBLES: Record<string, { cible: number; seuil_ok: number }> = {
-  'IODP1.1': { cible: 30, seuil_ok: 20 },
-  'IODP2.1': { cible: 50000, seuil_ok: 35000 },
-  'IODP2.3': { cible: 30, seuil_ok: 20 },
-  'IODP2.6': { cible: 20, seuil_ok: 10 },
-  'IR1.1.1': { cible: 80000, seuil_ok: 60000 },
-  'IR2.1.1': { cible: 500, seuil_ok: 300 },
-  'IR3.1.4': { cible: 90, seuil_ok: 75 },
-  'IR3.1.7': { cible: 80, seuil_ok: 65 },
-};
+import type { IndicateurDefinition, CalculResult, HistoriqueCalculEntry } from '../../../services/calculateur.service';
 
 interface HistoriqueEntry {
   date: string;
@@ -189,6 +50,25 @@ interface HistoriqueEntry {
   unite: string;
   interpretation: string;
 }
+
+const formatHistoriqueDate = (value: string) => {
+  const parsedDate = new Date(value);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return value;
+  }
+
+  return parsedDate.toLocaleString('fr-FR');
+};
+
+const mapHistoriqueEntry = (entry: HistoriqueCalculEntry): HistoriqueEntry => ({
+  date: formatHistoriqueDate(entry.date),
+  code: entry.indicateur_code,
+  nom: entry.indicateur_nom,
+  valeur: Number(entry.valeur),
+  unite: entry.unite,
+  interpretation: entry.interpretation,
+});
 
 const getCategorieColor = (type: string) => type === 'iodp' ? '#2E7D32' : '#1976D2';
 
@@ -203,24 +83,33 @@ const getStatutLabel = (progression: number) => {
 export const IndicateurCalculator: React.FC = () => {
   const [indicateurs, setIndicateurs] = useState<IndicateurDefinition[]>([]);
   const [selectedIndicateur, setSelectedIndicateur] = useState<IndicateurDefinition | null>(null);
-  const [donnees, setDonnees] = useState<Record<string, number>>({});
+  const [donnees, setDonnees] = useState<Record<string, number | undefined>>({});
   const [resultat, setResultat] = useState<CalculResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [historique, setHistorique] = useState<HistoriqueEntry[]>([
-    { date: '29/03/2026 14:30', code: 'IODP1.1', nom: 'Hausse des ventes', valeur: 15, unite: '%', interpretation: 'Hausse positive des ventes' },
-    { date: '28/03/2026 10:15', code: 'IODP2.3', nom: 'Hausse rendement maïs', valeur: 23, unite: '%', interpretation: 'Augmentation du rendement' },
-    { date: '27/03/2026 09:00', code: 'IR2.1.1', nom: 'Routes réhabilitées', valeur: 300, unite: 'km', interpretation: '300 km de routes réhabilitées' },
-  ]);
+  const [historique, setHistorique] = useState<HistoriqueEntry[]>([]);
   const [historiqueOpen, setHistoriqueOpen] = useState(false);
   const [filtreType, setFiltreType] = useState<'tous' | 'iodp' | 'ir'>('tous');
   const [filtreRecherche, setFiltreRecherche] = useState('');
 
   useEffect(() => {
-    calculateurService.getIndicateurs()
-      .then(res => setIndicateurs(res.data?.length ? res.data : mockIndicateurs))
-      .catch(() => setIndicateurs(mockIndicateurs))
-      .finally(() => setLoading(false));
+    const loadCalculateurData = async () => {
+      try {
+        const [indicateursRes, historiqueRes] = await Promise.all([
+          calculateurService.getIndicateurs(),
+          calculateurService.getHistorique(),
+        ]);
+
+        setIndicateurs(indicateursRes.data);
+        setHistorique(historiqueRes.data.map(mapHistoriqueEntry));
+      } catch {
+        setError('Impossible de charger les indicateurs du calculateur.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadCalculateurData();
   }, []);
 
   const handleSelectIndicateur = (ind: IndicateurDefinition) => {
@@ -231,14 +120,35 @@ export const IndicateurCalculator: React.FC = () => {
   };
 
   const handleFieldChange = (fieldId: string, value: string) => {
-    setDonnees(prev => ({ ...prev, [fieldId]: parseFloat(value) || 0 }));
+    setDonnees((prev) => ({
+      ...prev,
+      [fieldId]: value === '' ? undefined : Number.parseFloat(value),
+    }));
+  };
+
+  const handleExport = async () => {
+    try {
+      const response = await calculateurService.exporter('excel');
+      const blob = new Blob([response.data], { type: 'text/csv;charset=utf-8;' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+
+      link.href = url;
+      link.download = `calculs_indicateurs_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      setError('Impossible d’exporter l’historique des calculs.');
+    }
   };
 
   const handleCalculer = async () => {
     if (!selectedIndicateur) return;
 
     const champsManquants = selectedIndicateur.champs
-      .filter(c => c.required && !donnees[c.id])
+      .filter((champ) => champ.required && (donnees[champ.id] === undefined || Number.isNaN(donnees[champ.id] ?? NaN)))
       .map(c => c.label);
     if (champsManquants.length > 0) {
       setError(`Veuillez renseigner : ${champsManquants.join(', ')}`);
@@ -248,78 +158,17 @@ export const IndicateurCalculator: React.FC = () => {
     setLoading(true);
     setError(null);
 
-    let res: CalculResult;
     try {
       const apiRes = await calculateurService.calculer(selectedIndicateur.code, donnees);
-      res = apiRes.data;
+      setResultat(apiRes.data);
+
+      const historiqueRes = await calculateurService.getHistorique();
+      setHistorique(historiqueRes.data.map(mapHistoriqueEntry));
     } catch {
-      // Calcul local en fallback
-      let valeur = 0;
-      let interpretation = '';
-      const recommandations: string[] = [];
-
-      switch (selectedIndicateur.code) {
-        case 'IODP1.1':
-          valeur = ((donnees.surplus_t / donnees.surplus_t0) - 1) * 100;
-          interpretation = valeur > 0 ? `Hausse de ${valeur.toFixed(1)}% des ventes` : `Baisse de ${Math.abs(valeur).toFixed(1)}% des ventes`;
-          if (valeur < 10) recommandations.push("Renforcer l'accès aux marchés", 'Améliorer la qualité des produits');
-          break;
-        case 'IODP2.1':
-          valeur = donnees.nouveaux + donnees.cumul_anterieur;
-          interpretation = `Total cumulé de ${valeur.toLocaleString()} exploitants ayant adopté les technologies`;
-          break;
-        case 'IODP2.3':
-          valeur = ((donnees.rendement_t - donnees.rendement_t0) / donnees.rendement_t0) * 100;
-          interpretation = valeur > 0 ? `Augmentation de ${valeur.toFixed(1)}% du rendement` : `Baisse de ${Math.abs(valeur).toFixed(1)}% du rendement`;
-          break;
-        case 'IODP2.6':
-          valeur = (1 - (donnees.taux_t / donnees.taux_t0)) * 100;
-          interpretation = valeur > 0 ? `Réduction de ${valeur.toFixed(1)}% de la mortalité` : 'Augmentation de la mortalité';
-          break;
-        case 'IR1.1.1':
-          valeur = donnees.nouveaux + donnees.cumul_anterieur;
-          interpretation = `${valeur.toLocaleString()} petits exploitants atteints au total`;
-          break;
-        case 'IR2.1.1':
-          valeur = donnees.routes_nationales + donnees.routes_provinciales + donnees.routes_desserte;
-          interpretation = `${valeur.toLocaleString()} km de routes réhabilitées`;
-          break;
-        case 'IR3.1.4':
-          valeur = (donnees.traitees_delai / donnees.recues) * 100;
-          interpretation = `${valeur.toFixed(1)}% des plaintes traitées dans les délais`;
-          if (valeur < 80) recommandations.push("Renforcer l'équipe GRM", 'Améliorer les procédures de traitement');
-          break;
-        case 'IR3.1.7':
-          valeur = (donnees.satisfaits / donnees.total_adoptants) * 100;
-          interpretation = `${valeur.toFixed(1)}% des fermiers sont satisfaits`;
-          break;
-        default:
-          valeur = 0;
-          interpretation = 'Calcul non disponible';
-      }
-
-      valeur = Math.round(valeur * 10) / 10;
-      const cibleInfo = CIBLES[selectedIndicateur.code];
-      res = {
-        valeur,
-        unite: selectedIndicateur.unite,
-        progression: cibleInfo ? Math.min((valeur / cibleInfo.cible) * 100, 150) : undefined,
-        cible: cibleInfo?.cible,
-        interpretation,
-        recommandations,
-      };
+      setError('Impossible de calculer cet indicateur avec les données de la base.');
+    } finally {
+      setLoading(false);
     }
-
-    setResultat(res);
-    setHistorique(prev => [{
-      date: new Date().toLocaleString('fr-FR'),
-      code: selectedIndicateur.code,
-      nom: selectedIndicateur.nom,
-      valeur: res.valeur,
-      unite: res.unite,
-      interpretation: res.interpretation,
-    }, ...prev]);
-    setLoading(false);
   };
 
   const filteredIndicateurs = indicateurs.filter(ind => {
@@ -330,11 +179,12 @@ export const IndicateurCalculator: React.FC = () => {
   });
 
   // Données pour le mini-graphique de comparaison
-  const chartData = selectedIndicateur && resultat && CIBLES[selectedIndicateur.code]
+  const cibleCourante = resultat?.cible ?? selectedIndicateur?.cible ?? null;
+
+  const chartData = selectedIndicateur && resultat && typeof cibleCourante === 'number'
     ? [
         { name: 'Réalisé', valeur: resultat.valeur, fill: '#2E7D32' },
-        { name: 'Cible', valeur: CIBLES[selectedIndicateur.code].cible, fill: '#E0E0E0' },
-        { name: 'Seuil OK', valeur: CIBLES[selectedIndicateur.code].seuil_ok, fill: '#81C784' },
+        { name: 'Cible', valeur: cibleCourante, fill: '#E0E0E0' },
       ]
     : [];
 
@@ -357,6 +207,10 @@ export const IndicateurCalculator: React.FC = () => {
           Calcul automatique des indicateurs IODP et IR selon les formules du manuel de suivi-évaluation
         </Typography>
       </Box>
+
+      {error && indicateurs.length === 0 && (
+        <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>
+      )}
 
       {/* Cartes résumé */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
@@ -492,10 +346,9 @@ export const IndicateurCalculator: React.FC = () => {
                     >
                       {selectedIndicateur.formule}
                     </Typography>
-                    {CIBLES[selectedIndicateur.code] && (
+                    {typeof selectedIndicateur.cible === 'number' && (
                       <Stack direction="row" spacing={2} sx={{ mt: 1.5 }}>
-                        <Chip size="small" label={`Cible : ${CIBLES[selectedIndicateur.code].cible} ${selectedIndicateur.unite}`} color="success" variant="outlined" />
-                        <Chip size="small" label={`Seuil acceptable : ${CIBLES[selectedIndicateur.code].seuil_ok} ${selectedIndicateur.unite}`} color="warning" variant="outlined" />
+                        <Chip size="small" label={`Cible : ${selectedIndicateur.cible} ${selectedIndicateur.unite}`} color="success" variant="outlined" />
                       </Stack>
                     )}
                   </AccordionDetails>
@@ -536,8 +389,8 @@ export const IndicateurCalculator: React.FC = () => {
                     {loading ? 'Calcul…' : 'Calculer'}
                   </Button>
                   {resultat && (
-                    <Button variant="outlined" startIcon={<GoogleIcon name="save" size={18} />}>
-                      Sauvegarder
+                    <Button variant="outlined" startIcon={<GoogleIcon name="cloud_done" size={18} />} disabled>
+                      Sauvegardé automatiquement
                     </Button>
                   )}
                   <Button
@@ -552,8 +405,8 @@ export const IndicateurCalculator: React.FC = () => {
 
               {/* ── Résultat ── */}
               {resultat && (() => {
-                const cibleInfo = CIBLES[selectedIndicateur.code];
-                const prog = resultat.progression ?? 0;
+                const cible = resultat.cible ?? selectedIndicateur.cible ?? null;
+                const prog = resultat.progression ?? (typeof cible === 'number' && cible > 0 ? (resultat.valeur / cible) * 100 : 0);
                 const statut = getStatutLabel(prog);
                 return (
                   <Paper sx={{ p: 3, borderRadius: 2, border: `2px solid ${statut.color}20` }}>
@@ -568,7 +421,7 @@ export const IndicateurCalculator: React.FC = () => {
 
                     <Grid container spacing={3}>
                       {/* Valeur principale */}
-                      <Grid size={{ xs: 12, md: cibleInfo ? 6 : 12 }}>
+                      <Grid size={{ xs: 12, md: typeof cible === 'number' ? 6 : 12 }}>
                         <Box sx={{ bgcolor: `${statut.color}08`, borderRadius: 2, p: 2.5, height: '100%' }}>
                           <Typography variant="caption" color="text.secondary" fontWeight={600}>VALEUR CALCULÉE</Typography>
                           <Typography variant="h2" fontWeight={800} sx={{ color: statut.color, lineHeight: 1.1, my: 1 }}>
@@ -582,7 +435,7 @@ export const IndicateurCalculator: React.FC = () => {
                       </Grid>
 
                       {/* Progression vers cible */}
-                      {cibleInfo && (
+                      {typeof cible === 'number' && (
                         <Grid size={{ xs: 12, md: 6 }}>
                           <Box sx={{ bgcolor: '#F5F5F5', borderRadius: 2, p: 2.5, height: '100%' }}>
                             <Typography variant="caption" color="text.secondary" fontWeight={600}>PROGRESSION VERS LA CIBLE</Typography>
@@ -600,11 +453,8 @@ export const IndicateurCalculator: React.FC = () => {
                             />
                             <Stack direction="row" justifyContent="space-between">
                               <Typography variant="caption" color="text.secondary">0</Typography>
-                              <Typography variant="caption" sx={{ color: '#81C784' }}>
-                                Seuil : {cibleInfo.seuil_ok} {resultat.unite}
-                              </Typography>
                               <Typography variant="caption" color="text.secondary">
-                                Cible : {cibleInfo.cible} {resultat.unite}
+                                Cible : {cible} {resultat.unite}
                               </Typography>
                             </Stack>
                           </Box>
@@ -625,12 +475,7 @@ export const IndicateurCalculator: React.FC = () => {
                             <XAxis type="number" tickFormatter={(v) => v.toLocaleString()} />
                             <YAxis type="category" dataKey="name" width={70} />
                             <RechartTooltip formatter={(v) => `${Number(v ?? 0).toLocaleString()} ${resultat.unite}`} />
-                            <Bar dataKey="valeur" radius={[0, 4, 4, 0]}>
-                              {chartData.map((entry, i) => (
-                                <rect key={i} fill={entry.fill} />
-                              ))}
-                            </Bar>
-                            <ReferenceLine x={cibleInfo?.seuil_ok} stroke="#FF9800" strokeDasharray="4 2" label={{ value: 'Seuil', position: 'insideTopRight', fontSize: 11 }} />
+                            <Bar dataKey="valeur" radius={[0, 4, 4, 0]} />
                           </BarChart>
                         </ResponsiveContainer>
                       </>
@@ -690,7 +535,7 @@ export const IndicateurCalculator: React.FC = () => {
         <DialogContent dividers sx={{ p: 0 }}>
           {historique.length === 0 ? (
             <Box sx={{ p: 4, textAlign: 'center' }}>
-              <Typography color="text.secondary">Aucun calcul effectué dans cette session</Typography>
+              <Typography color="text.secondary">Aucun calcul enregistré</Typography>
             </Box>
           ) : (
             <TableContainer>
@@ -726,7 +571,7 @@ export const IndicateurCalculator: React.FC = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setHistoriqueOpen(false)}>Fermer</Button>
-          <Button variant="contained" sx={{ bgcolor: '#2E7D32' }} startIcon={<GoogleIcon name="download" size={18} />}>
+          <Button variant="contained" sx={{ bgcolor: '#2E7D32' }} startIcon={<GoogleIcon name="download" size={18} />} onClick={handleExport}>
             Exporter
           </Button>
         </DialogActions>

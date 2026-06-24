@@ -100,7 +100,7 @@ export const LoginPage: React.FC = () => {
                     </IconButton>
                   </InputAdornment>
                 ),
-              }}
+              }} 
             />
 
             <Button

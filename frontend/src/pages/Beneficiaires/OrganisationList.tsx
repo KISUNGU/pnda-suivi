@@ -29,7 +29,8 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import PersonIcon from '@mui/icons-material/Person';
 import { organisationService } from '../../services/organisation.service';
 import type { Organisation, OrganisationFilters, OrganisationStats } from '../../services/organisation.service';
-import GoogleIcon from '../../components/common/GoogleIcon';
+// import GoogleIcon from '../../components/common/GoogleIcon';
+import ChildCareIcon from '@mui/icons-material/ChildCare';
 import { GradientWidget } from '../../components/common/Widget/GradientWidget';
 import { moduleGridStyles } from '../../components/common/Layout/moduleGridStyles';
 import { ExportToolbar } from '../../components/common/ExportToolbar/ExportToolbar';
@@ -267,7 +268,7 @@ export const OrganisationList: React.FC = () => {
             <GradientWidget
               title="Jeunes membres"
               value={stats.jeunes_membres.toLocaleString('fr-FR')}
-              icon={<GoogleIcon name="young" size={36} />}
+              icon={<ChildCareIcon sx={{ fontSize: 36 }} />}
               trend={{ value: stats.total_membres > 0 ? Math.round((stats.jeunes_membres / stats.total_membres) * 100) : 0, direction: 'up', period: 'du total' }}
               color="warning"
             />

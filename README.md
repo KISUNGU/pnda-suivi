@@ -34,7 +34,7 @@ DB_HOST=127.0.0.1
 DB_PORT=3306
 DB_USER=root
 DB_PASSWORD=
-DB_NAME=pnda
+DB_NAME=pnda_se
 JWT_SECRET=pnda_secret_key_2026
 ```
 
@@ -42,6 +42,7 @@ Notes :
 
 - Le frontend cible par defaut `http://localhost:3000/api`.
 - Si MySQL tourne en local sur Windows, `127.0.0.1` est plus fiable que `localhost` en cas de resolution IPv6.
+- Sur cette machine de travail, la base validee pour le backend est `pnda_se`.
 - Le backend renvoie `GET /api/health` pour verifier rapidement que l'API repond.
 - La table `cadre_resultats` est creee et initialisee automatiquement au premier appel des endpoints `/api/cadre-resultats` et `/api/cadre-resultats/stats`.
 

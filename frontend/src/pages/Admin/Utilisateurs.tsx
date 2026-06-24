@@ -1,4 +1,5 @@
 // frontend/src/pages/Admin/Utilisateurs.tsx
+
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Box,
@@ -33,6 +34,7 @@ import {
   DialogActions,
   Avatar,
   Menu,
+  Snackbar,
 } from '@mui/material';
 import {
   Search,
@@ -66,123 +68,8 @@ const rolesConfig: Record<string, { label: string; color: string; icon: string; 
   invite: { label: 'Invité', color: '#757575', icon: 'visibility', level: 20 },
 };
 
-// Données mockées
-const mockUtilisateurs: Utilisateur[] = [
-  {
-    id: 1,
-    nom: 'MUKENDI',
-    prenom: 'Jean',
-    email: 'admin@pnda.cd',
-    role: 'admin',
-    role_label: 'Administrateur',
-    telephone: '+243812345678',
-    statut: 'actif',
-    derniere_connexion: '2026-03-31T10:30:00Z',
-    date_creation: '2024-01-15',
-    created_by: 'Système',
-    permissions: ['*'],
-  },
-  {
-    id: 2,
-    nom: 'KABEYA',
-    prenom: 'Marie',
-    email: 'uncp@pnda.cd',
-    role: 'uncp',
-    role_label: 'UNCP',
-    telephone: '+243823456789',
-    province: 'Kinshasa',
-    statut: 'actif',
-    derniere_connexion: '2026-03-30T14:20:00Z',
-    date_creation: '2024-02-10',
-    created_by: 'admin@pnda.cd',
-    permissions: ['dashboard', 'indicateurs', 'beneficiaires', 'rapports'],
-  },
-  {
-    id: 3,
-    nom: 'TSHIBOLA',
-    prenom: 'Albert',
-    email: 'upep.kwilu@pnda.cd',
-    role: 'upep',
-    role_label: 'UPEP',
-    telephone: '+243834567890',
-    province: 'Kwilu',
-    statut: 'actif',
-    derniere_connexion: '2026-03-29T09:15:00Z',
-    date_creation: '2024-02-20',
-    created_by: 'uncp@pnda.cd',
-    permissions: ['dashboard', 'indicateurs', 'beneficiaires', 'collecte'],
-  },
-  {
-    id: 4,
-    nom: 'LUBALA',
-    prenom: 'Pauline',
-    email: 'ot.kongo@pnda.cd',
-    role: 'ot',
-    role_label: 'Opérateur Technique',
-    telephone: '+243845678901',
-    province: 'Kongo Central',
-    statut: 'actif',
-    derniere_connexion: '2026-03-28T16:45:00Z',
-    date_creation: '2024-03-05',
-    created_by: 'uncp@pnda.cd',
-    permissions: ['collecte', 'beneficiaires', 'rapports_terrain'],
-  },
-  {
-    id: 5,
-    nom: 'KALONJI',
-    prenom: 'David',
-    email: 'partenaire@banquemondiale.org',
-    role: 'partenaire',
-    role_label: 'Partenaire',
-    telephone: '+243856789012',
-    statut: 'actif',
-    derniere_connexion: '2026-03-27T11:00:00Z',
-    date_creation: '2024-03-15',
-    created_by: 'admin@pnda.cd',
-    permissions: ['dashboard', 'rapports'],
-  },
-  {
-    id: 6,
-    nom: 'NGOMA',
-    prenom: 'Béatrice',
-    email: 'invite@consultant.cd',
-    role: 'invite',
-    role_label: 'Invité',
-    telephone: '+243867890123',
-    statut: 'inactif',
-    derniere_connexion: '2026-02-15T09:00:00Z',
-    date_creation: '2024-04-10',
-    created_by: 'admin@pnda.cd',
-    permissions: ['dashboard'],
-  },
-];
-
-const mockStats: UtilisateurStats = {
-  total: 156,
-  par_role: {
-    admin: 3,
-    uncp: 12,
-    upep: 28,
-    ot: 85,
-    partenaire: 18,
-    invite: 10,
-  },
-  par_statut: {
-    actif: 142,
-    inactif: 10,
-    suspendu: 4,
-  },
-  par_province: {
-    Kinshasa: 32,
-    'Kongo Central': 28,
-    Kwilu: 25,
-    Kasaï: 22,
-    'Haut-Lomami': 18,
-    Tanganyika: 15,
-  },
-  actifs_30j: 98,
-  nouveaux_mois: 12,
-};
+const provinces = ['Kinshasa', 'Kongo Central', 'Kwilu', 'Kasaï', 'Haut-Lomami', 'Tanganyika'];
+const statuses = ['actif', 'inactif', 'suspendu'];
 
 type UtilisateurFormData = Partial<Utilisateur> & {
   password?: string;
@@ -210,11 +97,10 @@ export const Utilisateurs: React.FC = () => {
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [selectedUtilisateur, setSelectedUtilisateur] = useState<Utilisateur | null>(null);
   const [formData, setFormData] = useState<UtilisateurFormData>({});
-  const [newPassword, setNewPassword] = useState('');
   const [exportAnchorEl, setExportAnchorEl] = useState<null | HTMLElement>(null);
+  const [saving, setSaving] = useState(false);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
 
-  const provinces = ['Kinshasa', 'Kongo Central', 'Kwilu', 'Kasaï', 'Haut-Lomami', 'Tanganyika'];
-  const statuses = ['actif', 'inactif', 'suspendu'];
   const userNotifications = useMemo(
     () => notifications.filter((notification) => notification.type === 'user'),
     [notifications],
@@ -230,21 +116,19 @@ export const Utilisateurs: React.FC = () => {
         utilisateursService.getAll(filters),
         utilisateursService.getStats(),
       ]);
-      const d = usersRes.data;
-      setUtilisateurs(d.data?.length ? d.data : mockUtilisateurs);
-      setTotal(d.total ?? mockUtilisateurs.length);
-      setStats(statsRes.data || mockStats);
-    } catch {
-      setUtilisateurs(mockUtilisateurs);
-      setTotal(mockUtilisateurs.length);
-      setStats(mockStats);
+      setUtilisateurs(usersRes.data.data);
+      setTotal(usersRes.data.total);
+      setStats(statsRes.data);
+    } catch (err) {
+      console.error('Erreur chargement utilisateurs:', err);
+      setError('Impossible de charger les données des utilisateurs');
     } finally {
       setLoading(false);
     }
   }, [filters]);
 
   useEffect(() => {
-    void loadData();
+    loadData();
   }, [loadData]);
 
   const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -290,31 +174,43 @@ export const Utilisateurs: React.FC = () => {
 
   const handleOpenReset = (utilisateur: Utilisateur) => {
     setSelectedUtilisateur(utilisateur);
-    setNewPassword('');
     setResetDialogOpen(true);
   };
 
   const handleSave = async () => {
+    setSaving(true);
     try {
       if (selectedUtilisateur) {
         await utilisateursService.update(selectedUtilisateur.id, formData);
+        setSnackbar({ open: true, message: 'Utilisateur mis à jour avec succès', severity: 'success' });
       } else {
         await utilisateursService.create(formData);
+        setSnackbar({ open: true, message: 'Utilisateur créé avec succès', severity: 'success' });
       }
       setFormDialogOpen(false);
       loadData();
     } catch (err) {
       console.error(err);
+      setSnackbar({ open: true, message: 'Erreur lors de l\'enregistrement', severity: 'error' });
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleResetPassword = async () => {
+    setSaving(true);
     try {
-      if (selectedUtilisateur) await utilisateursService.resetPassword(selectedUtilisateur.id);
+      if (selectedUtilisateur) {
+        await utilisateursService.resetPassword(selectedUtilisateur.id);
+        setSnackbar({ open: true, message: `Mot de passe réinitialisé pour ${selectedUtilisateur.email}`, severity: 'success' });
+      }
       setResetDialogOpen(false);
-      alert(`Mot de passe réinitialisé pour ${selectedUtilisateur?.email}`);
+      loadData();
     } catch (err) {
       console.error(err);
+      setSnackbar({ open: true, message: 'Erreur lors de la réinitialisation', severity: 'error' });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -323,9 +219,11 @@ export const Utilisateurs: React.FC = () => {
     if (window.confirm(`Voulez-vous ${newStatut === 'actif' ? 'activer' : 'désactiver'} cet utilisateur ?`)) {
       try {
         await utilisateursService.toggleStatut(id, newStatut as 'actif' | 'inactif');
+        setSnackbar({ open: true, message: `Utilisateur ${newStatut === 'actif' ? 'activé' : 'désactivé'} avec succès`, severity: 'success' });
         loadData();
       } catch (err) {
         console.error(err);
+        setSnackbar({ open: true, message: 'Erreur lors du changement de statut', severity: 'error' });
       }
     }
   };
@@ -334,8 +232,12 @@ export const Utilisateurs: React.FC = () => {
     if (window.confirm('Êtes-vous sûr de vouloir supprimer cet utilisateur ?')) {
       try {
         await utilisateursService.delete(id);
-      } catch { /* recharge quand même */ }
-      loadData();
+        setSnackbar({ open: true, message: 'Utilisateur supprimé avec succès', severity: 'success' });
+        loadData();
+      } catch (err) {
+        console.error(err);
+        setSnackbar({ open: true, message: 'Erreur lors de la suppression', severity: 'error' });
+      }
     }
   };
 
@@ -348,10 +250,19 @@ export const Utilisateurs: React.FC = () => {
   const handleExport = async (format: 'pdf' | 'excel') => {
     setExportAnchorEl(null);
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      alert(`Export ${format.toUpperCase()} démarré`);
+      const response = await utilisateursService.exporter(format);
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `utilisateurs_${new Date().toISOString().split('T')[0]}.${format === 'excel' ? 'csv' : 'pdf'}`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      setSnackbar({ open: true, message: `Export ${format.toUpperCase()} terminé avec succès`, severity: 'success' });
     } catch (err) {
       console.error(err);
+      setSnackbar({ open: true, message: 'Erreur lors de l\'export', severity: 'error' });
     }
   };
 
@@ -371,6 +282,8 @@ export const Utilisateurs: React.FC = () => {
       <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>
         Gestion des comptes utilisateurs, rôles et permissions d'accès au système
       </Typography>
+
+      {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
 
       {userNotifications.length > 0 && (
         <Alert
@@ -410,25 +323,25 @@ export const Utilisateurs: React.FC = () => {
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <GradientWidget
               title="Utilisateurs actifs"
-              value={stats.par_statut.actif.toLocaleString('fr-FR')}
+              value={(stats.par_statut?.actif || 0).toLocaleString('fr-FR')}
               icon={<GoogleIcon name="verified_user" size={36} />}
-              trend={{ value: stats.total > 0 ? Math.round((stats.par_statut.actif / stats.total) * 100) : 0, direction: 'up', period: 'comptes actifs' }}
+              trend={{ value: stats.total > 0 ? Math.round(((stats.par_statut?.actif || 0) / stats.total) * 100) : 0, direction: 'up', period: 'comptes actifs' }}
               color="success"
             />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <GradientWidget
               title="Opérateurs terrain"
-              value={stats.par_role.ot.toLocaleString('fr-FR')}
+              value={(stats.par_role?.ot || 0).toLocaleString('fr-FR')}
               icon={<GoogleIcon name="engineering" size={36} />}
-              trend={{ value: stats.total > 0 ? Math.round((stats.par_role.ot / stats.total) * 100) : 0, direction: 'up', period: 'du total' }}
+              trend={{ value: stats.total > 0 ? Math.round(((stats.par_role?.ot || 0) / stats.total) * 100) : 0, direction: 'up', period: 'du total' }}
               color="warning"
             />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <GradientWidget
               title="Administrateurs"
-              value={stats.par_role.admin.toLocaleString('fr-FR')}
+              value={(stats.par_role?.admin || 0).toLocaleString('fr-FR')}
               icon={<GoogleIcon name="admin_panel_settings" size={36} />}
               trend={{ value: warningUserNotifications.length, direction: warningUserNotifications.length > 0 ? 'down' : 'up', period: warningUserNotifications.length > 0 ? 'alertes admin' : 'accès complet' }}
               color="danger"
@@ -471,8 +384,7 @@ export const Utilisateurs: React.FC = () => {
                 Exporter
               </Button>
               <Menu anchorEl={exportAnchorEl} open={Boolean(exportAnchorEl)} onClose={() => setExportAnchorEl(null)}>
-                <MenuItem onClick={() => handleExport('pdf')}><GoogleIcon name="picture_as_pdf" size={18} sx={{ mr: 1 }} /> Exporter en PDF</MenuItem>
-                <MenuItem onClick={() => handleExport('excel')}><GoogleIcon name="table_chart" size={18} sx={{ mr: 1 }} /> Exporter en Excel</MenuItem>
+                <MenuItem onClick={() => handleExport('excel')}><GoogleIcon name="table_chart" size={18} sx={{ mr: 1 }} /> Exporter en CSV</MenuItem>
               </Menu>
               <Button variant="contained" startIcon={<Add />} onClick={() => handleOpenForm()} sx={{ bgcolor: '#2E7D32' }}>
                 Nouvel utilisateur
@@ -497,9 +409,7 @@ export const Utilisateurs: React.FC = () => {
         </Box>
       )}
 
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-
-      {/* Tableau des utilisateurs */}
+      {/* Export Toolbar */}
       <ExportToolbar
         title="Gestion des Utilisateurs"
         subtitle="Liste des comptes utilisateurs du système"
@@ -510,20 +420,21 @@ export const Utilisateurs: React.FC = () => {
           { header: 'Rôle', key: 'role', width: 14 },
           { header: 'Province', key: 'province', width: 18 },
           { header: 'Statut', key: 'statut', width: 12 },
-          { header: 'Dernière connexion', key: 'derniere_connexion', width: 20,
-            formatter: (v) => v ? new Date(String(v)).toLocaleDateString('fr-FR') : 'Jamais' },
+          { header: 'Dernière connexion', key: 'derniere_connexion', width: 20 },
         ]}
         getData={() => utilisateurs.map((u) => ({
           nom: u.nom,
           prenom: u.prenom,
           email: u.email,
-          role: u.role,
+          role: rolesConfig[u.role]?.label || u.role,
           province: u.province ?? '',
-          statut: u.statut,
-          derniere_connexion: u.derniere_connexion,
+          statut: u.statut === 'actif' ? 'Actif' : u.statut === 'inactif' ? 'Inactif' : 'Suspendu',
+          derniere_connexion: u.derniere_connexion ? new Date(u.derniere_connexion).toLocaleDateString('fr-FR') : 'Jamais',
         }))}
         filename="utilisateurs"
       />
+
+      {/* Tableau des utilisateurs */}
       <TableContainer component={Paper} sx={{ borderRadius: 2, overflow: 'hidden' }}>
         <Table>
           <TableHead sx={{ bgcolor: '#F1F8E9' }}>
@@ -538,79 +449,87 @@ export const Utilisateurs: React.FC = () => {
             </TableRow>
           </TableHead>
           <TableBody>
-            {utilisateurs.map((user) => (
-              <TableRow key={user.id} hover>
-                <TableCell>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Avatar sx={{ bgcolor: rolesConfig[user.role]?.color || '#757575', width: 32, height: 32 }}>
-                      <GoogleIcon name={rolesConfig[user.role]?.icon || 'person'} size={18} />
-                    </Avatar>
-                    <Box>
-                      <Typography variant="body2" fontWeight={500}>
-                        {user.nom} {user.prenom}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        ID: {user.id}
-                      </Typography>
-                    </Box>
-                  </Box>
-                </TableCell>
-                <TableCell>
-                  <Typography variant="body2">{user.email}</Typography>
-                  {user.telephone && (
-                    <Typography variant="caption" color="text.secondary">{user.telephone}</Typography>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <Chip 
-                    label={rolesConfig[user.role]?.label || user.role}
-                    size="small"
-                    sx={{ bgcolor: `${rolesConfig[user.role]?.color}20`, color: rolesConfig[user.role]?.color }}
-                  />
-                </TableCell>
-                <TableCell>{user.province || '-'}</TableCell>
-                <TableCell>
-                  <Chip 
-                    label={user.statut === 'actif' ? 'Actif' : user.statut === 'inactif' ? 'Inactif' : 'Suspendu'}
-                    size="small"
-                    sx={{ 
-                      bgcolor: user.statut === 'actif' ? '#E8F5E9' : user.statut === 'inactif' ? '#FFEBEE' : '#FFF3E0',
-                      color: user.statut === 'actif' ? '#2E7D32' : user.statut === 'inactif' ? '#F44336' : '#FF8F00'
-                    }}
-                  />
-                </TableCell>
-                <TableCell>
-                  {user.derniere_connexion ? new Date(user.derniere_connexion).toLocaleDateString() : 'Jamais'}
-                </TableCell>
-                <TableCell align="center">
-                  <Tooltip title="Voir détails">
-                    <IconButton size="small" onClick={() => { setSelectedUtilisateur(user); setDetailDialogOpen(true); }}>
-                      <Visibility fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title="Modifier">
-                    <IconButton size="small" onClick={() => handleOpenForm(user)}>
-                      <Edit fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title="Réinitialiser mot de passe">
-                    <IconButton size="small" onClick={() => handleOpenReset(user)}>
-                      <LockReset fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title={user.statut === 'actif' ? 'Désactiver' : 'Activer'}>
-                    <IconButton size="small" onClick={() => handleToggleStatut(user.id, user.statut)}>
-                      {user.statut === 'actif' ? <Cancel fontSize="small" color="error" /> : <CheckCircle fontSize="small" color="success" />}
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title="Supprimer">
-                    <IconButton size="small" color="error" onClick={() => handleDelete(user.id)}>
-                      <Delete fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
+            {utilisateurs.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
+                  <Typography color="text.secondary">Aucun utilisateur trouvé</Typography>
                 </TableCell>
               </TableRow>
-            ))}
+            ) : (
+              utilisateurs.map((user) => (
+                <TableRow key={user.id} hover>
+                  <TableCell>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Avatar sx={{ bgcolor: rolesConfig[user.role]?.color || '#757575', width: 32, height: 32 }}>
+                        <GoogleIcon name={rolesConfig[user.role]?.icon || 'person'} size={18} />
+                      </Avatar>
+                      <Box>
+                        <Typography variant="body2" fontWeight={500}>
+                          {user.nom} {user.prenom}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          ID: {user.id}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2">{user.email}</Typography>
+                    {user.telephone && (
+                      <Typography variant="caption" color="text.secondary">{user.telephone}</Typography>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <Chip 
+                      label={rolesConfig[user.role]?.label || user.role}
+                      size="small"
+                      sx={{ bgcolor: `${rolesConfig[user.role]?.color}20`, color: rolesConfig[user.role]?.color }}
+                    />
+                  </TableCell>
+                  <TableCell>{user.province || '-'}</TableCell>
+                  <TableCell>
+                    <Chip 
+                      label={user.statut === 'actif' ? 'Actif' : user.statut === 'inactif' ? 'Inactif' : 'Suspendu'}
+                      size="small"
+                      sx={{ 
+                        bgcolor: user.statut === 'actif' ? '#E8F5E9' : user.statut === 'inactif' ? '#FFEBEE' : '#FFF3E0',
+                        color: user.statut === 'actif' ? '#2E7D32' : user.statut === 'inactif' ? '#F44336' : '#FF8F00'
+                      }}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    {user.derniere_connexion ? new Date(user.derniere_connexion).toLocaleDateString() : 'Jamais'}
+                  </TableCell>
+                  <TableCell align="center">
+                    <Tooltip title="Voir détails">
+                      <IconButton size="small" onClick={() => { setSelectedUtilisateur(user); setDetailDialogOpen(true); }}>
+                        <Visibility fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Modifier">
+                      <IconButton size="small" onClick={() => handleOpenForm(user)}>
+                        <Edit fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Réinitialiser mot de passe">
+                      <IconButton size="small" onClick={() => handleOpenReset(user)}>
+                        <LockReset fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title={user.statut === 'actif' ? 'Désactiver' : 'Activer'}>
+                      <IconButton size="small" onClick={() => handleToggleStatut(user.id, user.statut)}>
+                        {user.statut === 'actif' ? <Cancel fontSize="small" color="error" /> : <CheckCircle fontSize="small" color="success" />}
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Supprimer">
+                      <IconButton size="small" color="error" onClick={() => handleDelete(user.id)}>
+                        <Delete fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
         <TablePagination
@@ -733,13 +652,13 @@ export const Utilisateurs: React.FC = () => {
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid size={{ xs: 12, md: 6 }}>
-              <TextField fullWidth label="Nom" value={formData.nom || ''} onChange={(e) => setFormData({ ...formData, nom: e.target.value })} />
+              <TextField fullWidth label="Nom" value={formData.nom || ''} onChange={(e) => setFormData({ ...formData, nom: e.target.value })} required />
             </Grid>
             <Grid size={{ xs: 12, md: 6 }}>
-              <TextField fullWidth label="Prénom" value={formData.prenom || ''} onChange={(e) => setFormData({ ...formData, prenom: e.target.value })} />
+              <TextField fullWidth label="Prénom" value={formData.prenom || ''} onChange={(e) => setFormData({ ...formData, prenom: e.target.value })} required />
             </Grid>
             <Grid size={{ xs: 12 }}>
-              <TextField fullWidth label="Email" type="email" value={formData.email || ''} onChange={(e) => setFormData({ ...formData, email: e.target.value })} />
+              <TextField fullWidth label="Email" type="email" value={formData.email || ''} onChange={(e) => setFormData({ ...formData, email: e.target.value })} required />
             </Grid>
             <Grid size={{ xs: 12, md: 6 }}>
               <TextField fullWidth label="Téléphone" value={formData.telephone || ''} onChange={(e) => setFormData({ ...formData, telephone: e.target.value })} />
@@ -782,8 +701,8 @@ export const Utilisateurs: React.FC = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setFormDialogOpen(false)}>Annuler</Button>
-          <Button variant="contained" onClick={handleSave} sx={{ bgcolor: '#2E7D32' }}>
-            {selectedUtilisateur ? 'Mettre à jour' : 'Créer'}
+          <Button variant="contained" onClick={handleSave} disabled={saving || !formData.nom || !formData.prenom || !formData.email} sx={{ bgcolor: '#2E7D32' }}>
+            {saving ? 'Enregistrement...' : (selectedUtilisateur ? 'Mettre à jour' : 'Créer')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -795,22 +714,25 @@ export const Utilisateurs: React.FC = () => {
           <Typography variant="body2" sx={{ mb: 2 }}>
             Utilisateur: <strong>{selectedUtilisateur?.nom} {selectedUtilisateur?.prenom}</strong> ({selectedUtilisateur?.email})
           </Typography>
-          <TextField
-            fullWidth
-            label="Nouveau mot de passe"
-            type="password"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            helperText="Laissez vide pour générer un mot de passe aléatoire"
-          />
+          <Alert severity="info" sx={{ mt: 2 }}>
+            Le mot de passe sera réinitialisé à <strong>password123</strong>. L'utilisateur devra le changer à sa première connexion.
+          </Alert>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setResetDialogOpen(false)}>Annuler</Button>
-          <Button variant="contained" onClick={handleResetPassword} sx={{ bgcolor: '#2E7D32' }}>
-            Réinitialiser
+          <Button variant="contained" onClick={handleResetPassword} disabled={saving} sx={{ bgcolor: '#2E7D32' }}>
+            {saving ? 'Réinitialisation...' : 'Réinitialiser'}
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Snackbar */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        message={snackbar.message}
+      />
     </Box>
   );
 };

@@ -459,7 +459,7 @@ export const RisqueList: React.FC = () => {
               >
                 <Box>
                   <Typography variant="body2" fontWeight={alerte.est_lue ? 400 : 600}>
-                    [{alerte.risque_code}] {alerte.message}
+                    [{alerte.risque_code ?? risques.find((risque) => risque.id === alerte.id_risque)?.code ?? `R-${alerte.id_risque}`}] {alerte.message}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
                     {new Date(alerte.date_alerte).toLocaleString()}

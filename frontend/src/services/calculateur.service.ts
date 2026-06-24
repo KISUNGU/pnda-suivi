@@ -1,20 +1,5 @@
 // frontend/src/services/calculateur.service.ts
-import axios from 'axios';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
-
-const api = axios.create({
-  baseURL: API_URL,
-  headers: { 'Content-Type': 'application/json' },
-});
-
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+import { api } from './api';
 
 export interface IndicateurDefinition {
   id: number;
@@ -26,6 +11,7 @@ export interface IndicateurDefinition {
   frequence: string;
   type: 'iodp' | 'ir';
   composante: string;
+  cible?: number | null;
   champs: Array<{
     id: string;
     label: string;
@@ -44,6 +30,16 @@ export interface CalculResult {
   recommandations?: string[];
 }
 
+export interface HistoriqueCalculEntry {
+  id: number;
+  indicateur_code: string;
+  indicateur_nom: string;
+  valeur: number;
+  unite: string;
+  interpretation: string;
+  date: string;
+}
+
 export const calculateurService = {
   // Récupérer tous les indicateurs disponibles
   getIndicateurs: () => api.get<IndicateurDefinition[]>('/calculateur/indicateurs'),
@@ -56,7 +52,7 @@ export const calculateurService = {
     api.post<CalculResult>(`/calculateur/calculer/${code}`, donnees),
   
   // Récupérer l'historique des calculs
-  getHistorique: () => api.get('/calculateur/historique'),
+  getHistorique: () => api.get<HistoriqueCalculEntry[]>('/calculateur/historique'),
   
   // Sauvegarder un calcul
   sauvegarderCalcul: (code: string, donnees: Record<string, any>, resultat: CalculResult) =>

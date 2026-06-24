@@ -485,8 +485,8 @@ export const BeneficiaireDatabase: React.FC = () => {
                 <MenuItem onClick={() => handleExport('pdf')}><PictureAsPdf sx={{ mr: 1 }} /> Exporter en PDF</MenuItem>
                 <MenuItem onClick={() => handleExport('excel')}><TableChart sx={{ mr: 1 }} /> Exporter en Excel</MenuItem>
               </Menu>
-              <Button variant="outlined" component="label" startIcon={<CloudUpload />} disabled={importing}>
-                Importer
+              <Button variant="contained" component="label" startIcon={<CloudUpload />} disabled={importing} sx={{ bgcolor: '#2E7D32' }}>
+                {importing ? 'Import en cours...' : 'Nouvel import'}
                 <input type="file" hidden accept=".csv,.xlsx" onChange={handleImport} />
               </Button>
               <Tooltip title="Rafraîchir">

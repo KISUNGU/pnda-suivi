@@ -38,6 +38,10 @@ export const GradientWidget: React.FC<GradientWidgetProps> = ({
         background: gradientMap[color],
         borderRadius: 4,
         p: 2.5,
+        minHeight: 168,
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
         color: 'white',
         transition: 'transform 0.2s, box-shadow 0.2s',
         cursor: onClick ? 'pointer' : 'default',
@@ -50,7 +54,7 @@ export const GradientWidget: React.FC<GradientWidgetProps> = ({
         },
       }}
     >
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2, height: '100%' }}>
         <Box>
           <Typography variant="body2" sx={{ opacity: 0.8, mb: 1 }}>
             {title}
@@ -66,7 +70,7 @@ export const GradientWidget: React.FC<GradientWidgetProps> = ({
             </Box>
           )}
         </Box>
-        <Box sx={{ fontSize: 40, opacity: 0.8 }}>{icon}</Box>
+        <Box sx={{ fontSize: 40, opacity: 0.8, display: 'flex', alignItems: 'flex-start' }}>{icon}</Box>
       </Box>
     </Paper>
   );
