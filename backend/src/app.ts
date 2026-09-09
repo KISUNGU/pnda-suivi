@@ -1,13 +1,31 @@
 // backend/src/app.ts
-import path from 'path';
 import express, { NextFunction, Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
-import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
+
+import { JWT_SECRET, corsAllowedOrigins } from './config/env';
+import {
+  authenticateToken,
+  getTokenUser,
+  requireRole,
+  type AppRole,
+  type AuthenticatedRequest,
+  type TokenUser,
+} from './middleware/auth';
+import { ROLES_NATIONAUX, refuseHorsProvince, scopeProvince } from './middleware/scope';
 import type { RowDataPacket } from './db/types';
+import type { AlerteRisque, CountRow } from './types/app.types';
+import {
+  inferBeneficiaireType,
+  mapBeneficiaireToDatabaseRecord,
+  mapRisqueToApi,
+  parseDocumentsBody,
+  parseStringArrayBody,
+  splitBeneficiaireName,
+} from './utils/mappers';
 import {
   authenticateUtilisateur,
   changeUtilisateurPassword,
@@ -144,94 +162,9 @@ import {
   getDbPool,
 } from './db';
 
-// .env.local surcharge .env pour le dev local (ignoré si les variables sont déjà définies, ex. Docker)
-dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
-dotenv.config();
+// Le chargement de .env vit dans config/env.ts, importe ci-dessus.
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-
-/**
- * Clé de signature des jetons. Aucune valeur de repli : une clé codée en dur
- * dans le dépôt permettrait de forger un jeton administrateur. Le serveur
- * refuse de démarrer si la variable est absente ou trop courte.
- */
-const JWT_SECRET = (() => {
-  const secret = process.env.JWT_SECRET;
-
-  if (!secret || secret.length < 32) {
-    console.error(
-      "[config] JWT_SECRET manquant ou trop court (32 caracteres minimum).\n" +
-      "         Generer une cle : node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"\n" +
-      "         puis la renseigner dans backend/.env"
-    );
-    process.exit(1);
-  }
-
-  return secret;
-})();
-const DEFAULT_ALLOWED_ORIGINS = [
-  'http://localhost',
-  'http://localhost:5173',
-  'http://127.0.0.1:5173',
-  'http://localhost:5174',
-  'http://127.0.0.1:5174',
-];
-const allowedOrigins = (process.env.CORS_ORIGIN || '')
-  .split(',')
-  .map((origin) => origin.trim())
-  .filter(Boolean);
-const corsAllowedOrigins = allowedOrigins.length > 0 ? allowedOrigins : DEFAULT_ALLOWED_ORIGINS;
-
-/**
- * Roles applicatifs, alignes sur la table DEFAULT_HOME de frontend/src/App.tsx.
- * 'invite' est le repli quand mapDbRoleToAppRole ne reconnait pas le profil.
- */
-type AppRole = 'super_admin' | 'admin' | 'uncp' | 'upep' | 'ot' | 'partenaire' | 'invite';
-
-interface TokenUser {
-  id: number;
-  email: string;
-  role: AppRole;
-  province: string | null;
-}
-
-interface AuthenticatedRequest extends Request {
-  user?: unknown;
-}
-
-interface CountRow extends RowDataPacket {
-  total: number;
-}
-
-interface Risque {
-  id: number;
-  code: string;
-  nom: string;
-  description: string;
-  categorie: 'gestion' | 'technique' | 'politique' | 'socio_economique' | 'environnemental' | 'sante_securite';
-  probabilite: 1 | 2 | 3 | 4 | 5;
-  impact: 1 | 2 | 3 | 4 | 5;
-  niveau: 'Faible' | 'Modéré' | 'Élevé' | 'Critique';
-  statut: 'identifie' | 'en_cours' | 'atténue' | 'cloture';
-  plan_atténuation: string;
-  responsable: string;
-  date_identification: string;
-  date_cloture?: string;
-  province?: string;
-  actions_prevues?: string[];
-  indicateurs_surveillance?: string[];
-  dernier_suivi?: string;
-}
-
-interface AlerteRisque {
-  id: number;
-  id_risque: number;
-  message: string;
-  date_alerte: string;
-  est_lue: boolean;
-  niveau: 'info' | 'warning' | 'danger';
-}
 
 // Middleware
 app.use(helmet());
@@ -258,198 +191,6 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
-// ==================== DONNÉES MOCKÉES ====================
-
-// ==================== MIDDLEWARE D'AUTHENTIFICATION ====================
-
-const authenticateToken = (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-
-  if (!token) {
-    return res.status(401).json({ message: 'Token manquant' });
-  }
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = decoded;
-    next();
-  } catch (error) {
-    return res.status(403).json({ message: 'Token invalide ou expiré' });
-  }
-};
-
-// ==================== AUTORISATION ====================
-
-const KNOWN_ROLES: readonly AppRole[] = ['super_admin', 'admin', 'uncp', 'upep', 'ot', 'partenaire', 'invite'];
-
-/** Lit l'utilisateur du jeton verifie. Retourne null si la forme est inattendue. */
-const getTokenUser = (req: Request): TokenUser | null => {
-  const decoded = (req as AuthenticatedRequest).user as Record<string, unknown> | undefined;
-
-  if (!decoded || typeof decoded !== 'object') {
-    return null;
-  }
-
-  const role = typeof decoded.role === 'string' && (KNOWN_ROLES as readonly string[]).includes(decoded.role)
-    ? (decoded.role as AppRole)
-    : 'invite';
-
-  return {
-    id: Number(decoded.id ?? 0),
-    email: typeof decoded.email === 'string' ? decoded.email : '',
-    role,
-    province: typeof decoded.province === 'string' && decoded.province.trim() ? decoded.province.trim() : null,
-  };
-};
-
-/**
- * Restreint une route a une liste de roles. A monter APRES authenticateToken :
- *   app.delete('/api/utilisateurs/:id', authenticateToken, requireRole('super_admin'), handler)
- */
-const requireRole = (...roles: AppRole[]) => (req: Request, res: Response, next: NextFunction) => {
-  const user = getTokenUser(req);
-
-  if (!user) {
-    return res.status(401).json({ message: 'Authentification requise' });
-  }
-
-  if (!roles.includes(user.role)) {
-    return res.status(403).json({ message: 'Accès refusé : rôle insuffisant pour cette opération' });
-  }
-
-  return next();
-};
-
-/** Roles autorises a consulter toutes les provinces. */
-const ROLES_NATIONAUX: readonly AppRole[] = ['super_admin', 'admin', 'uncp'];
-
-/**
- * Cloisonnement provincial. Un UPEP ou un OT ne voit que sa propre province :
- * la valeur du jeton ecrase le parametre ?province= de la requete.
- * Retourne undefined pour les roles nationaux (= toutes provinces).
- */
-const scopeProvince = (req: Request): string | undefined => {
-  const user = getTokenUser(req);
-  const demandee = req.query.province ? String(req.query.province) : undefined;
-
-  if (!user || ROLES_NATIONAUX.includes(user.role)) {
-    return demandee;
-  }
-
-  return user.province ?? demandee;
-};
-
-/**
- * Verifie qu'un role provincial n'ecrit pas hors de sa province.
- * Retourne un message d'erreur, ou null si l'ecriture est permise.
- */
-const refuseHorsProvince = (req: Request, provinceCible: string | null | undefined): string | null => {
-  const user = getTokenUser(req);
-
-  if (!user || ROLES_NATIONAUX.includes(user.role) || !user.province || !provinceCible) {
-    return null;
-  }
-
-  return provinceCible.trim().toLowerCase() === user.province.toLowerCase()
-    ? null
-    : `Accès refusé : opération limitée à la province ${user.province}`;
-};
-
-const splitBeneficiaireName = (nomComplet: string) => {
-  const parts = nomComplet.trim().split(/\s+/).filter(Boolean);
-  return {
-    nom: parts[0] ?? nomComplet,
-    prenom: parts.slice(1).join(' '),
-  };
-};
-
-const inferBeneficiaireType = (beneficiaire: SqlBeneficiaire): 'agriculteur' | 'eleveur' | 'pisciculteur' | 'mixte' => {
-  const source = `${beneficiaire.ptech} ${beneficiaire.saison}`.toLowerCase();
-
-  if (source.includes('pisc')) {
-    return 'pisciculteur';
-  }
-
-  if (source.includes('elev')) {
-    return 'eleveur';
-  }
-
-  if (source.includes('mix')) {
-    return 'mixte';
-  }
-
-  return 'agriculteur';
-};
-
-const mapBeneficiaireToDatabaseRecord = (beneficiaire: SqlBeneficiaire) => {
-  const { nom, prenom } = splitBeneficiaireName(beneficiaire.nom_complet);
-  const typeExploitant = inferBeneficiaireType(beneficiaire);
-  const technologies = beneficiaire.ptech
-    .split(/[;,]/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-
-  return {
-    id: beneficiaire.id,
-    rna_id: beneficiaire.rna_id,
-    nom,
-    prenom,
-    sexe: beneficiaire.sexe,
-    date_naissance: '',
-    age: 0,
-    telephone: '',
-    province: beneficiaire.province,
-    territoire: beneficiaire.territoire,
-    commune: '',
-    village: beneficiaire.village,
-    type_exploitant: typeExploitant,
-    est_jeune: false,
-    superficie_totale: 0,
-    superficie_cultivee: 0,
-    principales_cultures: beneficiaire.saison ? [beneficiaire.saison] : [],
-    technologies_adoptees: technologies,
-    est_beneficiaire_subvention: false,
-    date_adhesion: beneficiaire.created_at.split('T')[0] ?? '',
-    created_at: beneficiaire.created_at,
-    updated_at: beneficiaire.created_at,
-  };
-};
-
-const parseStringArrayBody = (value: unknown): string[] | undefined => {
-  if (!Array.isArray(value)) {
-    return undefined;
-  }
-
-  return value.map((item) => String(item)).map((item) => item.trim()).filter(Boolean);
-};
-
-const parseDocumentsBody = (value: unknown): Array<{ nom: string; url: string }> | undefined => {
-  if (!Array.isArray(value)) {
-    return undefined;
-  }
-
-  return value
-    .map((item) => {
-      if (!item || typeof item !== 'object') {
-        return null;
-      }
-
-      const nom = 'nom' in item ? String(item.nom ?? '').trim() : '';
-      const url = 'url' in item ? String(item.url ?? '').trim() : '';
-      if (!nom) {
-        return null;
-      }
-
-      return { nom, url };
-    })
-    .filter((item): item is { nom: string; url: string } => Boolean(item));
-};
-
-const mapRisqueToApi = (risque: Awaited<ReturnType<typeof getRisqueById>> extends infer T ? Exclude<T, null> : never) => ({
-  ...risque,
-  plan_atténuation: risque.plan_attenuation,
-});
 
 // ==================== ROUTES ====================
 
