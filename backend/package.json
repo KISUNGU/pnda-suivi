@@ -8,7 +8,8 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
-    "routes": "ts-node --transpile-only --files scripts/list-routes.ts"
+    "routes": "ts-node --transpile-only --files scripts/list-routes.ts",
+    "smoke": "ts-node --transpile-only --files scripts/smoke-get-routes.ts"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
