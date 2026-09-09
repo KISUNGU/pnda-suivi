@@ -5499,12 +5499,10 @@ app.put('/api/ptba/activites/:id', authenticateToken, requireRole('super_admin',
   }
 });
 
-// ==================== DÉMARRAGE DU SERVEUR ====================
+// ==================== EXPORT ====================
 
-app.listen(PORT, () => {
-  console.log(`🚀 Serveur démarré sur http://localhost:${PORT}`);
-  console.log(`📊 API PNDA opérationnelle`);
-  console.log(`🔐 Authentification: table MySQL utilisateur`);
-});
-
+// L'application est exportee sans etre demarree : le demarrage vit dans
+// server.ts. Cette separation permet de monter l'app dans un test ou dans
+// l'inventaire des routes sans ouvrir de port.
 export default app;
+export { app };
