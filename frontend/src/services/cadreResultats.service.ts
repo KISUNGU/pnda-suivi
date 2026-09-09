@@ -45,6 +45,8 @@ export interface IndicateurCadre {
   niveau_validation?: string | null;
   outils_mesure?: string | null;
   commentaires?: string | null;
+  /** Ancienne ligne « — Femmes » : les valeurs 2025+ viennent de la mère, sexe F. */
+  code_parent?: string | null;
   annees: {
     '2023': AnneeCadre;
     '2024': AnneeCadre;
