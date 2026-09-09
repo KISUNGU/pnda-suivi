@@ -7,7 +7,7 @@ import compression from 'compression';
 import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
-import { RowDataPacket } from 'mysql2/promise';
+import type { RowDataPacket } from './db/types';
 import {
   authenticateUtilisateur,
   changeUtilisateurPassword,
