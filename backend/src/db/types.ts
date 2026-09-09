@@ -37,3 +37,8 @@ export interface DbPool {
   query<T = unknown>(sql: string, params?: unknown[]): Promise<[T, unknown[]]>;
   execute<T = unknown>(sql: string, params?: unknown[]): Promise<[T, unknown[]]>;
 }
+
+/** Resultat d'un SELECT COUNT(*) AS total. */
+export interface CountRow extends RowDataPacket {
+  total: number;
+}
