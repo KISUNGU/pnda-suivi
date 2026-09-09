@@ -236,12 +236,32 @@ export const controlerCadre = async (): Promise<RapportCadre> => {
   ajouter('Realise depassant la cible de plus de 50 %', 'a_verifier', depassees,
     (l) => `${l.code_cadre} ${l.annee}${l.sexe ? ` (${l.sexe})` : ''} : ${l.realise} pour une cible de ${l.cible} (+${Math.round((Number(l.realise) / Number(l.cible) - 1) * 100)} %)`);
 
-  const [finals] = await pool.query<Array<Record<string, unknown>>>(
-    `select code as code_cadre, final_prevu, prevu_2027 from cadre_resultats
-      where final_prevu is not null and prevu_2027 is not null and final_prevu <> prevu_2027
-      order by code`);
-  ajouter('Deux chiffres pour la cible de fin de projet', 'a_verifier', finals,
-    (l) => `${l.code_cadre} : final_prevu ${l.final_prevu} contre prevu_2027 ${l.prevu_2027}`);
+  // La cible annuelle 2027 a ete supprimee par la migration 0008 pour les
+  // indicateurs dont la colonne « 2027 » des fiches portait en realite la cible
+  // finale cumulee. Aucune source qui fait foi ne donne la vraie cible 2027 :
+  // c'est une lacune a combler, pas une incoherence. Signalee une fois, pas une
+  // fois par indicateur.
+  //
+  // La colonne cadre_resultats.prevu_2027 n'est plus comparee a final_prevu :
+  // elle contient justement la cible finale mal rangee, et la confronter a la
+  // valeur correcte produirait un faux positif par indicateur.
+  const [sans2027] = await pool.query<Array<Record<string, unknown>>>(
+    `select count(*)::int as n from cadre_resultats c
+      where c.code_parent is null
+        and not exists (select 1 from cadre_valeur v
+                         where v.code_cadre = c.code and v.annee = 2027
+                           and v.province is null and v.sexe is null
+                           and v.cible is not null)`);
+  const manquants2027 = Number(sans2027[0]?.n ?? 0);
+  if (manquants2027 > 0) {
+    anomalies.push({
+      regle: 'Cible annuelle 2027 inconnue',
+      gravite: 'a_verifier',
+      code_cadre: '',
+      annee: 2027,
+      detail: `${manquants2027} indicateurs sans cible 2027. Les fiches rangeaient la cible finale cumulee dans cette colonne ; la vraie cible annuelle n'est donnee par aucune source qui fait foi.`,
+    });
+  }
 
   const [provinciales] = await pool.query<Array<Record<string, unknown>>>(
     `select p.code_cadre, p.annee, p.province, p.cible
