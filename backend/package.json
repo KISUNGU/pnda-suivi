@@ -9,7 +9,8 @@
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
     "routes": "ts-node --transpile-only --files scripts/list-routes.ts",
-    "smoke": "ts-node --transpile-only --files scripts/smoke-get-routes.ts"
+    "smoke": "ts-node --transpile-only --files scripts/smoke-get-routes.ts",
+    "controle:cadre": "ts-node --transpile-only --files scripts/controle-cadre.ts"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
