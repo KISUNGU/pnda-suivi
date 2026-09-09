@@ -79,10 +79,9 @@ router.get('/api/cadre-resultats/cibles-provinciales', authenticateToken, async 
 
 // ==================== VALEURS DESAGREGEES (modele cadre_valeur) ====================
 //
-// Introduites par la migration 0006. Les routes ci-dessus lisent toujours
-// cadre_resultats et son modele en colonnes : elles restent inchangees pour ne
-// rien casser cote ecrans. Celles-ci exposent le modele en lignes, seul capable
-// de porter la desagregation annee x province x sexe.
+// Depuis la bascule, GET /api/cadre-resultats et /stats lisent aussi cadre_valeur
+// (totaux nationaux, forme historique des ecrans). Les routes ci-dessous exposent
+// le modele en lignes, seul capable de porter annee x province x sexe.
 
 /**
  * Valeurs du cadre, filtrables par indicateur, annee et sexe.

@@ -184,9 +184,11 @@ province × sexe**, avec statut de validation, source, auteur et validateur. Les
 « — Femmes » y sont rattachées à leur indicateur mère par `code_parent` : ce ne sont plus des
 indicateurs autonomes mais des désagrégations.
 
-Les routes `/api/cadre-resultats`, `/stats` et `/cibles-provinciales` lisent encore l'ancien
-modèle et alimentent les écrans actuels. Les routes `/valeurs`, `/:code/valeurs` et `/controle`
-lisent le nouveau. La bascule se fait écran par écran.
+`GET /api/cadre-resultats` et `/stats` lisent désormais `cadre_valeur` (totaux nationaux,
+désagrégation femmes via `code_parent`) tout en conservant la forme historique des écrans.
+Les colonnes `prevu_*` / `realise_*` de `cadre_resultats` ne sont plus la source affichée.
+Les routes `/valeurs`, `/:code/valeurs` et `/controle` restent le modèle en lignes.
+`/cibles-provinciales` lit encore `cadre_cibles_provinciales`.
 
 **Contrôle de cohérence.** `npm run controle:cadre` applique six règles qui portent sur le sens
 des valeurs et qu'aucune contrainte de base ne peut exprimer : un sous-total femmes supérieur à

@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 
+import { getCadreValeurs, type CadreValeur } from './db/cadre';
 import { estConnexionPerdue, getDbPool } from './db/core';
 import { parseNullableNumber, toDateOnly, toIsoString } from './db/helpers';
 import type { CountRow, ResultSetHeader, RowDataPacket } from './db/types';
@@ -2045,6 +2046,8 @@ export interface IndicateurCadre {
   niveau_validation?: string | null;
   outils_mesure?: string | null;
   commentaires?: string | null;
+  /** Renseigne pour une ancienne ligne « — Femmes » : les valeurs viennent alors de la mère, sexe = F. */
+  code_parent?: string | null;
   annees: {
     '2023': AnneeCadre;
     '2024': AnneeCadre;
@@ -2321,6 +2324,7 @@ interface CadreResultatRow extends RowDataPacket {
   niveau_validation: string | null;
   outils_mesure: string | null;
   commentaires: string | null;
+  code_parent: string | null;
   prevu_2023: number | string | null;
   realise_2023: number | string | null;
   prevu_2024: number | string | null;
@@ -2886,6 +2890,7 @@ const mapCadreResultatRow = (row: CadreResultatRow): IndicateurCadre => ({
   niveau_validation: row.niveau_validation ?? null,
   outils_mesure: row.outils_mesure ?? null,
   commentaires: row.commentaires ?? null,
+  code_parent: row.code_parent ?? null,
   annees: {
     '2023': { prevu: parseNullableNumber(row.prevu_2023), realise: parseNullableNumber(row.realise_2023) },
     '2024': { prevu: parseNullableNumber(row.prevu_2024), realise: parseNullableNumber(row.realise_2024) },
@@ -2896,6 +2901,50 @@ const mapCadreResultatRow = (row: CadreResultatRow): IndicateurCadre => ({
   final_prevu: parseNullableNumber(row.final_prevu),
   final_realise: parseNullableNumber(row.final_realise),
 });
+
+const ANNEES_CADRE: CadreYear[] = ['2023', '2024', '2025', '2026', '2027'];
+
+/**
+ * Remplace les colonnes prevu_/realise_ de cadre_resultats par les totaux
+ * nationaux de cadre_valeur — seule source qui fait foi depuis la 0008.
+ *
+ * Une ancienne fiche « — Femmes » (code_parent renseigne) lit les lignes
+ * sexe = 'F' de sa mere. S'il n'existe aucune ligne cadre_valeur pour le
+ * code, les colonnes historiques sont conservees (table absente / vide).
+ */
+const appliquerValeursCadre = (indicateurs: IndicateurCadre[], valeurs: CadreValeur[]): IndicateurCadre[] => {
+  const nationales = valeurs.filter((valeur) => valeur.province === null);
+  const parCode = new Map<string, CadreValeur[]>();
+
+  for (const valeur of nationales) {
+    const liste = parCode.get(valeur.code_cadre);
+    if (liste) {
+      liste.push(valeur);
+    } else {
+      parCode.set(valeur.code_cadre, [valeur]);
+    }
+  }
+
+  return indicateurs.map((indicateur) => {
+    const codeSource = indicateur.code_parent ?? indicateur.code;
+    const lignes = parCode.get(codeSource);
+    if (!lignes?.length) {
+      return indicateur;
+    }
+
+    const sexe = indicateur.code_parent ? 'F' : null;
+    const annees = { ...indicateur.annees };
+
+    for (const annee of ANNEES_CADRE) {
+      const ligne = lignes.find((valeur) => valeur.annee === Number(annee) && valeur.sexe === sexe);
+      annees[annee] = ligne
+        ? { prevu: ligne.cible, realise: ligne.realise }
+        : { ...ANNEE_CADRE_VIDE };
+    }
+
+    return { ...indicateur, annees };
+  });
+};
 
 const buildCadreSeedValues = (indicateur: IndicateurCadre): Array<number | string | boolean | null> => [
   indicateur.id,
@@ -6868,6 +6917,7 @@ export const getCadreResultats = async (filters: CadreResultatsFilters = {}): Pr
         niveau_validation,
         outils_mesure,
         commentaires,
+        code_parent,
         prevu_2023,
         realise_2023,
         prevu_2024,
@@ -6886,7 +6936,15 @@ export const getCadreResultats = async (filters: CadreResultatsFilters = {}): Pr
     values,
   );
 
-  return rows.map(mapCadreResultatRow);
+  const fiches = rows.map(mapCadreResultatRow);
+
+  try {
+    return appliquerValeursCadre(fiches, await getCadreValeurs());
+  } catch (error) {
+    // cadre_valeur absente (migration 0006 non appliquee) : on garde les colonnes.
+    console.error('GET cadre_valeur failed, falling back to cadre_resultats columns', error);
+    return fiches;
+  }
 };
 
 export const getCadreResultatsStats = async (year: CadreYear = '2025'): Promise<CadreStats> => {
