@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "typecheck": "tsc -b",
+    "lint:budget": "node scripts/lint-budget.mjs"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",

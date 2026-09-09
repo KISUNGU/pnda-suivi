@@ -1,0 +1,74 @@
+name: CI
+
+# Verifications minimales du socle (Phase 0) : le code compile, l'API expose
+# toujours les memes routes, et la dette de lint du frontend ne grossit pas.
+on:
+  push:
+    branches: [main, 'chantier/**']
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    name: Backend — types et inventaire des routes
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      # L'application refuse de demarrer sans cle de signature. Valeur factice
+      # propre a la CI : aucune signature de jeton reelle n'est produite ici.
+      JWT_SECRET: cle-de-test-ci-uniquement-32-caracteres-minimum
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - name: Verification des types
+        run: npm run typecheck
+      - name: Inventaire des routes inchange
+        # Echoue si une route disparait ou apparait sans mise a jour de
+        # scripts/routes.snapshot.txt. C'est le filet de securite du
+        # decoupage par domaine.
+        run: npm run routes -- --check
+
+  frontend:
+    name: Frontend — types et budget de lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Verification des types
+        run: npm run typecheck
+      - name: Dette de lint non croissante
+        run: npm run lint:budget
+      - name: Build de production
+        run: npx vite build
+
+  secrets:
+    name: Aucun secret ni donnee personnelle versionne
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fichiers interdits
+        # Les dumps database/*.sql contiennent des donnees nominatives de
+        # beneficiaires RNA : ils ne doivent jamais entrer dans le depot.
+        run: |
+          interdits=$(git ls-files | grep -E '(^|/)\.env$|(^|/)\.env\.(local|development|production)$|^database/(agriculteurs|pnda_se)\.sql$' || true)
+          if [ -n "$interdits" ]; then
+            echo "Fichiers interdits versionnes :"
+            echo "$interdits"
+            exit 1
+          fi
+          echo "OK : aucun fichier interdit."
