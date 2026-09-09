@@ -84,3 +84,28 @@ export const requireRole = (...roles: AppRole[]) => (req: Request, res: Response
 
   return next();
 };
+
+/**
+ * Variante historique de getTokenUser, utilisee par les notifications et les
+ * routes agent collecteur. Contrat plus permissif : le role n'est pas
+ * restreint a AppRole et l'identifiant doit etre un nombre.
+ *
+ * DETTE : les deux lectures du jeton devraient etre fusionnees. Fait a part
+ * pour ne pas changer de comportement pendant le decoupage.
+ */
+export type AppUser = { id: number; role: string; province: string | null; email?: string };
+
+export function getRequestUser(req: AuthenticatedRequest): AppUser | null {
+  const decoded = req.user as { id?: number; role?: string; province?: string | null; email?: string } | undefined;
+
+  if (!decoded || typeof decoded.id !== 'number') {
+    return null;
+  }
+
+  return {
+    id: decoded.id,
+    role: typeof decoded.role === 'string' ? decoded.role : 'invite',
+    province: typeof decoded.province === 'string' ? decoded.province : null,
+    email: typeof decoded.email === 'string' ? decoded.email : undefined,
+  };
+}

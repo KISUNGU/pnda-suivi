@@ -9,13 +9,20 @@ import bcrypt from 'bcryptjs';
 import { JWT_SECRET, corsAllowedOrigins } from './config/env';
 import {
   authenticateToken,
+  getRequestUser,
   getTokenUser,
   requireRole,
+  type AppUser,
   type AppRole,
   type AuthenticatedRequest,
   type TokenUser,
 } from './middleware/auth';
 import { ROLES_NATIONAUX, refuseHorsProvince, scopeProvince } from './middleware/scope';
+import agentRouter from './routes/agent.routes';
+import aideRouter from './routes/aide.routes';
+import configurationRouter from './routes/configuration.routes';
+import environnementRouter from './routes/environnement.routes';
+import ptbaRouter from './routes/ptba.routes';
 import type { RowDataPacket } from './db/types';
 import type { AlerteRisque, CountRow } from './types/app.types';
 import {
@@ -2332,7 +2339,6 @@ app.delete('/api/utilisateurs/:id(\\d+)', authenticateToken, requireRole('super_
 
 // ==================== NOTIFICATIONS ROUTES ====================
 
-type AppUser = { id: number; role: string; province: string | null; email?: string };
 
 type NotificationSeverity = 'info' | 'success' | 'warning' | 'danger';
 type NotificationType = 'risk' | 'complaint' | 'activity' | 'user';
@@ -2360,20 +2366,6 @@ interface NotificationSeed extends Omit<AppNotification, 'read'> {
 
 const nationalRoles = new Set(['admin', 'uncp', 'partenaire']);
 
-function getRequestUser(req: AuthenticatedRequest): AppUser | null {
-  const decoded = req.user as { id?: number; role?: string; province?: string | null; email?: string } | undefined;
-
-  if (!decoded || typeof decoded.id !== 'number') {
-    return null;
-  }
-
-  return {
-    id: decoded.id,
-    role: typeof decoded.role === 'string' ? decoded.role : 'invite',
-    province: typeof decoded.province === 'string' ? decoded.province : null,
-    email: typeof decoded.email === 'string' ? decoded.email : undefined,
-  };
-}
 
 function toIsoDate(value?: string | null): string {
   if (!value) {
@@ -4842,403 +4834,16 @@ app.delete('/api/activites-database/:id(\\d+)', authenticateToken, requireRole('
     res.status(500).json({ message: 'Erreur lors de la suppression' });
   }
 });
-// ==================== AGENT COLLECTEUR ROUTES ====================
+// ==================== MONTAGE DES ROUTERS PAR DOMAINE ====================
 
-app.get('/api/agent/profil', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const user = getRequestUser(req);
-    if (!user) {
-      return res.status(401).json({ message: 'Utilisateur non authentifié' });
-    }
-    const profil = await getAgentProfil(user.id);
-    if (!profil) {
-      return res.status(404).json({ message: 'Profil agent introuvable' });
-    }
-    return res.json(profil);
-  } catch (error) {
-    console.error('GET /api/agent/profil failed', error);
-    if (isDatabaseConnectivityError(error)) {
-      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
-    }
-    return res.status(500).json({ message: 'Erreur lors du chargement du profil agent' });
-  }
-});
-
-app.get('/api/agent/formulaires', authenticateToken, async (_req: Request, res: Response) => {
-  try {
-    return res.json(await getAgentFormulaires());
-  } catch (error) {
-    console.error('GET /api/agent/formulaires failed', error);
-    if (isDatabaseConnectivityError(error)) {
-      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
-    }
-    return res.status(500).json({ message: 'Erreur lors du chargement des formulaires' });
-  }
-});
-
-app.get('/api/agent/collectes', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const user = getRequestUser(req);
-    if (!user) {
-      return res.status(401).json({ message: 'Utilisateur non authentifié' });
-    }
-    const synced = typeof req.query.synced === 'string' ? req.query.synced === 'true' : undefined;
-    return res.json(await getAgentCollectes(user.id, {
-      page: req.query.page ? Number(req.query.page) : 0,
-      limit: req.query.limit ? Number(req.query.limit) : 10,
-      synced,
-    }));
-  } catch (error) {
-    console.error('GET /api/agent/collectes failed', error);
-    if (isDatabaseConnectivityError(error)) {
-      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
-    }
-    return res.status(500).json({ message: 'Erreur lors du chargement des collectes' });
-  }
-});
-
-app.post('/api/agent/collectes', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep', 'ot'), async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const user = getRequestUser(req);
-    if (!user) {
-      return res.status(401).json({ message: 'Utilisateur non authentifié' });
-    }
-    const collecte = await createAgentCollecte(user.id, req.body);
-    return res.status(201).json(collecte);
-  } catch (error) {
-    console.error('POST /api/agent/collectes failed', error);
-    if (isDatabaseConnectivityError(error)) {
-      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
-    }
-    return res.status(500).json({ message: 'Erreur lors de l\'enregistrement de la collecte' });
-  }
-});
-
-app.get('/api/agent/beneficiaires', authenticateToken, async (req: Request, res: Response) => {
-  try {
-    return res.json(await getAgentBeneficiaires({
-      search: typeof req.query.search === 'string' ? req.query.search : undefined,
-      page: req.query.page ? Number(req.query.page) : 0,
-      limit: req.query.limit ? Number(req.query.limit) : 10,
-    }));
-  } catch (error) {
-    console.error('GET /api/agent/beneficiaires failed', error);
-    if (isDatabaseConnectivityError(error)) {
-      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
-    }
-    return res.status(500).json({ message: 'Erreur lors du chargement des bénéficiaires' });
-  }
-});
-
-app.get('/api/agent/stats', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const user = getRequestUser(req);
-    if (!user) {
-      return res.status(401).json({ message: 'Utilisateur non authentifié' });
-    }
-    return res.json(await getAgentStats(user.id));
-  } catch (error) {
-    console.error('GET /api/agent/stats failed', error);
-    if (isDatabaseConnectivityError(error)) {
-      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
-    }
-    return res.status(500).json({ message: 'Erreur lors du chargement des statistiques agent' });
-  }
-});
-
-app.post('/api/agent/sync', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep', 'ot'), async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const user = getRequestUser(req);
-    if (!user) {
-      return res.status(401).json({ message: 'Utilisateur non authentifié' });
-    }
-    const synced = await syncAgentCollectes(user.id);
-    return res.json({ synced });
-  } catch (error) {
-    console.error('POST /api/agent/sync failed', error);
-    if (isDatabaseConnectivityError(error)) {
-      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
-    }
-    return res.status(500).json({ message: 'Erreur lors de la synchronisation' });
-  }
-});
-
-// ==================== ENVIRONNEMENT / VBG ROUTES ====================
-
-app.get('/api/environnement/indicateurs', authenticateToken, async (_req: Request, res: Response) => {
-  try {
-    return res.json(await getEnvironnementIndicateurs());
-  } catch (error) {
-    console.error('GET /api/environnement/indicateurs failed', error);
-    if (isDatabaseConnectivityError(error)) {
-      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
-    }
-    return res.status(500).json({ message: 'Erreur lors du chargement des indicateurs environnementaux' });
-  }
-});
-
-app.get('/api/environnement/plaintes', authenticateToken, async (req: Request, res: Response) => {
-  try {
-    return res.json(await getEnvironnementPlaintes({
-      type: typeof req.query.type === 'string' ? req.query.type : undefined,
-      statut: typeof req.query.statut === 'string' ? req.query.statut : undefined,
-      province: scopeProvince(req),
-    }));
-  } catch (error) {
-    console.error('GET /api/environnement/plaintes failed', error);
-    if (isDatabaseConnectivityError(error)) {
-      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
-    }
-    return res.status(500).json({ message: 'Erreur lors du chargement des plaintes' });
-  }
-});
-
-app.put('/api/environnement/plaintes/:id(\\d+)', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep'), async (req: Request, res: Response) => {
-  try {
-    const plainte = await updatePlainte(Number(req.params.id), req.body);
-    if (!plainte) {
-      return res.status(404).json({ message: 'Plainte non trouvée' });
-    }
-    return res.json(plainte);
-  } catch (error) {
-    console.error('PUT /api/environnement/plaintes/:id failed', error);
-    if (isDatabaseConnectivityError(error)) {
-      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
-    }
-    return res.status(500).json({ message: 'Erreur lors de la mise à jour de la plainte' });
-  }
-});
-
-app.get('/api/environnement/formations', authenticateToken, async (_req: Request, res: Response) => {
-  try {
-    return res.json(await getEnvironnementFormations());
-  } catch (error) {
-    console.error('GET /api/environnement/formations failed', error);
-    if (isDatabaseConnectivityError(error)) {
-      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
-    }
-    return res.status(500).json({ message: 'Erreur lors du chargement des formations' });
-  }
-});
-
-app.post('/api/environnement/formations', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep'), async (req: Request, res: Response) => {
-  try {
-    const formation = await addEnvironnementFormation(req.body);
-    return res.status(201).json(formation);
-  } catch (error) {
-    console.error('POST /api/environnement/formations failed', error);
-    if (isDatabaseConnectivityError(error)) {
-      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
-    }
-    return res.status(500).json({ message: 'Erreur lors de la création de la formation' });
-  }
-});
-
-app.get('/api/environnement/stats', authenticateToken, async (_req: Request, res: Response) => {
-  try {
-    return res.json(await getEnvironnementStats());
-  } catch (error) {
-    console.error('GET /api/environnement/stats failed', error);
-    if (isDatabaseConnectivityError(error)) {
-      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
-    }
-    return res.status(500).json({ message: 'Erreur lors du chargement des statistiques environnement' });
-  }
-});
-
-// ==================== AIDE / DOCUMENTATION ROUTES ====================
-
-app.get('/api/aide/guides', authenticateToken, async (_req: Request, res: Response) => {
-  try {
-    return res.json(await getAideGuides());
-  } catch (error) {
-    console.error('GET /api/aide/guides failed', error);
-    if (isDatabaseConnectivityError(error)) {
-      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
-    }
-    return res.status(500).json({ message: 'Erreur lors du chargement des guides' });
-  }
-});
-
-app.get('/api/aide/guides/:id(\\d+)', authenticateToken, async (req: Request, res: Response) => {
-  try {
-    const guide = await getAideGuideById(Number(req.params.id));
-    if (!guide) {
-      return res.status(404).json({ message: 'Guide non trouvé' });
-    }
-    return res.json(guide);
-  } catch (error) {
-    console.error('GET /api/aide/guides/:id failed', error);
-    if (isDatabaseConnectivityError(error)) {
-      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
-    }
-    return res.status(500).json({ message: 'Erreur lors du chargement du guide' });
-  }
-});
-
-app.get('/api/aide/faq', authenticateToken, async (_req: Request, res: Response) => {
-  try {
-    return res.json(await getAideFAQ());
-  } catch (error) {
-    console.error('GET /api/aide/faq failed', error);
-    if (isDatabaseConnectivityError(error)) {
-      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
-    }
-    return res.status(500).json({ message: 'Erreur lors du chargement de la FAQ' });
-  }
-});
-
-app.get('/api/aide/faq/:categorie', authenticateToken, async (req: Request, res: Response) => {
-  try {
-    return res.json(await getAideFAQ(req.params.categorie));
-  } catch (error) {
-    console.error('GET /api/aide/faq/:categorie failed', error);
-    if (isDatabaseConnectivityError(error)) {
-      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
-    }
-    return res.status(500).json({ message: 'Erreur lors du chargement de la FAQ' });
-  }
-});
-
-app.get('/api/aide/tutoriels', authenticateToken, async (_req: Request, res: Response) => {
-  try {
-    return res.json(await getAideTutoriels());
-  } catch (error) {
-    console.error('GET /api/aide/tutoriels failed', error);
-    if (isDatabaseConnectivityError(error)) {
-      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
-    }
-    return res.status(500).json({ message: 'Erreur lors du chargement des tutoriels' });
-  }
-});
-
-app.get('/api/aide/tutoriels/:id(\\d+)', authenticateToken, async (req: Request, res: Response) => {
-  try {
-    const tutoriel = await getAideTutorielById(Number(req.params.id));
-    if (!tutoriel) {
-      return res.status(404).json({ message: 'Tutoriel non trouvé' });
-    }
-    return res.json(tutoriel);
-  } catch (error) {
-    console.error('GET /api/aide/tutoriels/:id failed', error);
-    if (isDatabaseConnectivityError(error)) {
-      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
-    }
-    return res.status(500).json({ message: 'Erreur lors du chargement du tutoriel' });
-  }
-});
-
-app.get('/api/aide/support', authenticateToken, (_req: Request, res: Response) => {
-  return res.json(getAideContactSupport());
-});
-
-app.post('/api/aide/demande', authenticateToken, async (req: Request, res: Response) => {
-  try {
-    const { sujet, message, email } = req.body ?? {};
-    if (!sujet || !message || !email) {
-      return res.status(400).json({ message: 'Sujet, message et email requis' });
-    }
-    await createAideDemande({ sujet, message, email });
-    return res.status(201).json({ message: 'Demande envoyée avec succès' });
-  } catch (error) {
-    console.error('POST /api/aide/demande failed', error);
-    if (isDatabaseConnectivityError(error)) {
-      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
-    }
-    return res.status(500).json({ message: 'Erreur lors de l\'envoi de la demande' });
-  }
-});
-
-app.get('/api/aide/recherche', authenticateToken, async (req: Request, res: Response) => {
-  try {
-    const query = typeof req.query.q === 'string' ? req.query.q : '';
-    if (!query.trim()) {
-      return res.json([]);
-    }
-    return res.json(await searchAide(query));
-  } catch (error) {
-    console.error('GET /api/aide/recherche failed', error);
-    if (isDatabaseConnectivityError(error)) {
-      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
-    }
-    return res.status(500).json({ message: 'Erreur lors de la recherche' });
-  }
-});
-
-// ==================== CONFIGURATION ROUTES ====================
-
-app.get('/api/configuration', authenticateToken, requireRole('super_admin'), async (_req: Request, res: Response) => {
-  try {
-    return res.json(await getConfiguration());
-  } catch (error) {
-    console.error('GET /api/configuration failed', error);
-    if (isDatabaseConnectivityError(error)) {
-      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
-    }
-    return res.status(500).json({ message: 'Erreur lors du chargement de la configuration' });
-  }
-});
-
-app.put('/api/configuration/:section', authenticateToken, requireRole('super_admin'), async (req: Request, res: Response) => {
-  try {
-    const section = req.params.section;
-    if (!['generale', 'alertes', 'integration', 'provincesActives'].includes(section)) {
-      return res.status(400).json({ message: 'Section de configuration invalide' });
-    }
-    await updateConfigurationSection(section, req.body);
-    return res.json({ message: 'Configuration mise à jour avec succès' });
-  } catch (error) {
-    console.error('PUT /api/configuration/:section failed', error);
-    if (isDatabaseConnectivityError(error)) {
-      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
-    }
-    return res.status(500).json({ message: 'Erreur lors de la mise à jour de la configuration' });
-  }
-});
-
-// ==================== SUIVI DU PTBA ====================
-
-app.get('/api/ptba/suivi', authenticateToken, async (req: Request, res: Response) => {
-  try {
-    const annee = req.query.annee ? Number.parseInt(String(req.query.annee), 10) : 2026;
-    if (!Number.isFinite(annee)) {
-      return res.status(400).json({ message: 'Année invalide' });
-    }
-    return res.json(await getPtbaSuivi(annee));
-  } catch (error) {
-    console.error('GET /api/ptba/suivi failed', error);
-    if (isDatabaseConnectivityError(error)) {
-      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
-    }
-    return res.status(500).json({ message: 'Erreur lors du chargement du suivi du PTBA' });
-  }
-});
-
-app.put('/api/ptba/activites/:id', authenticateToken, requireRole('super_admin', 'admin', 'uncp'), async (req: Request, res: Response) => {
-  try {
-    const id = Number.parseInt(req.params.id, 10);
-    if (!Number.isFinite(id)) {
-      return res.status(400).json({ message: 'Identifiant invalide' });
-    }
-    const input: Record<string, unknown> = {};
-    for (const champ of ['prevu', 'realise', 'commentaire'] as const) {
-      if (champ in req.body) {
-        input[champ] = req.body[champ];
-      }
-    }
-    const updated = await updatePtbaActivite(id, input);
-    if (!updated) {
-      return res.status(404).json({ message: 'Activité PTBA introuvable' });
-    }
-    return res.json({ message: 'Activité PTBA mise à jour' });
-  } catch (error) {
-    console.error('PUT /api/ptba/activites/:id failed', error);
-    if (isDatabaseConnectivityError(error)) {
-      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
-    }
-    return res.status(500).json({ message: 'Erreur lors de la mise à jour de l\'activité PTBA' });
-  }
-});
+// Les routers sont montes a la racine : chaque fichier declare des chemins
+// absolus (/api/...), identiques a ceux qu'ils avaient dans app.ts. L'ordre
+// de montage reproduit l'ordre de declaration d'origine.
+app.use(agentRouter);
+app.use(environnementRouter);
+app.use(aideRouter);
+app.use(configurationRouter);
+app.use(ptbaRouter);
 
 // ==================== EXPORT ====================
 
