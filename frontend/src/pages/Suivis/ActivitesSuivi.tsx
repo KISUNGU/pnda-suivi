@@ -67,7 +67,7 @@ import {
   CloudUpload,
   PictureAsPdf,
   TableChart,
-} from '@mui/icons-material';
+} from '../../components/common/PageIcons';
 import GoogleIcon from '../../components/common/GoogleIcon';
 import { GradientWidget } from '../../components/common/Widget/GradientWidget';
 import { moduleGridStyles } from '../../components/common/Layout/moduleGridStyles';
@@ -375,6 +375,7 @@ export const ActivitesSuivi: React.FC = () => {
               icon={<GoogleIcon name="assignment" size={36} />}
               trend={{ value: stats.taux_realisation, direction: 'up', period: 'taux de réalisation' }}
               color="primary"
+              onClick={() => { setSelectedActivite(null); setFormData({}); setFormDialogOpen(true); }}
             />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
@@ -384,6 +385,7 @@ export const ActivitesSuivi: React.FC = () => {
               icon={<GoogleIcon name="groups" size={36} />}
               trend={{ value: stats.total > 0 ? Math.round(stats.participants_total / stats.total) : 0, direction: 'up', period: 'participants / activité' }}
               color="info"
+              onClick={() => { setSelectedActivite(null); setFormData({}); setFormDialogOpen(true); }}
             />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
@@ -392,6 +394,7 @@ export const ActivitesSuivi: React.FC = () => {
               value={stats.par_statut.terminee.toLocaleString('fr-FR')}
               icon={<GoogleIcon name="check_circle" size={36} />}
               trend={{ value: stats.total > 0 ? Math.round((stats.par_statut.terminee / stats.total) * 100) : 0, direction: 'up', period: 'du total' }}
+              onClick={() => setFilters({ ...filters, statut: 'terminee', page: 0 })}
               color="success"
             />
           </Grid>
@@ -401,6 +404,7 @@ export const ActivitesSuivi: React.FC = () => {
               value={stats.par_statut.en_cours.toLocaleString('fr-FR')}
               icon={<GoogleIcon name="pending_actions" size={36} />}
               trend={{ value: stats.total > 0 ? Math.round((stats.par_statut.en_cours / stats.total) * 100) : 0, direction: 'up', period: 'du total' }}
+              onClick={() => setFilters({ ...filters, statut: 'en_cours', page: 0 })}
               color="warning"
             />
           </Grid>
@@ -504,7 +508,7 @@ export const ActivitesSuivi: React.FC = () => {
       />
       <TableContainer component={Paper} sx={{ borderRadius: 2, overflow: 'hidden' }}>
         <Table>
-          <TableHead sx={{ bgcolor: '#F1F8E9' }}>
+          <TableHead sx={{ bgcolor: 'action.hover' }}>
             <TableRow>
               <TableCell>Code</TableCell>
               <TableCell>Titre</TableCell>

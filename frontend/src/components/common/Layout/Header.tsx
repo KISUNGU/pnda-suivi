@@ -12,21 +12,23 @@ import {
   Badge,
   Button,
   CircularProgress,
-  useTheme,
   Divider,
   ListItemIcon,
   ListItemText,
 } from '@mui/material';
+import Tooltip from '@mui/material/Tooltip';
 import { useNavigate } from 'react-router-dom';
 import GoogleIcon from '../GoogleIcon';
 import { useAuth } from '../../../context/AuthContext';
 import { PndaLogo } from '../PndaLogo';
+import { useThemeMode } from '../../../context/ThemeModeContext';
 import { useNotifications } from '../../../context/NotificationsContext';
 import type { NotificationItem } from '../../../services/notifications.service';
 import { formatNotificationRelativeDate } from '../../../utils/notificationTime';
 
 const roleLabels: Record<string, string> = {
-  admin: 'Administrateur système',
+  super_admin: 'Super administrateur',
+  admin: 'Administrateur',
   uncp: 'UNCP - Coordinateur S&E',
   upep: 'UPEP - Coordinateur provincial',
   ot: 'Opérateur Technique',
@@ -39,9 +41,9 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
-  const theme = useTheme();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const { mode, basculer } = useThemeMode();
   const { notifications, summary, loading, refresh, markAsRead, markAllAsRead } = useNotifications();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [notificationAnchor, setNotificationAnchor] = useState<null | HTMLElement>(null);
@@ -116,15 +118,9 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
   };
 
   return (
-    <AppBar
-      position="sticky"
-      elevation={0}
-      sx={{
-        bgcolor: 'background.paper',
-        color: 'text.primary',
-        borderBottom: `1px solid ${theme.palette.divider}`,
-      }}
-    >
+    // L'apparence vitrée de la barre vient du thème (MuiAppBar) : rien de
+    // codé en dur ici, pour que la bascule sombre/clair la suive.
+    <AppBar position="sticky" className="sans-impression">
       <Toolbar sx={{ justifyContent: 'space-between' }}>
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
           <IconButton
@@ -165,6 +161,14 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
             {getCurrentDate()}
           </Typography>
 
+          {/* Bascule sombre / clair — le sombre porte l'identité, le clair
+              sert les tableaux denses et les captures pour les bailleurs. */}
+          <Tooltip title={mode === 'dark' ? 'Passer en thème clair' : 'Passer en thème sombre'}>
+            <IconButton onClick={basculer} aria-label="Changer de thème">
+              <GoogleIcon name={mode === 'dark' ? 'light_mode' : 'dark_mode'} size={24} />
+            </IconButton>
+          </Tooltip>
+
           {/* Notifications */}
           <IconButton onClick={handleNotificationOpen}>
             <Badge badgeContent={summary.unread} color="error" max={99}>
@@ -175,12 +179,9 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
             anchorEl={notificationAnchor} 
             open={Boolean(notificationAnchor)} 
             onClose={handleNotificationClose}
-            PaperProps={{
-              style: { maxHeight: 400, overflow: 'auto' },
-              sx: { width: 320, borderRadius: '10px' }
-            }}
+            slotProps={{ paper: { sx: { width: 320, maxHeight: 400, overflow: 'auto' } } }}
           >
-            <Box sx={{ p: 2, borderBottom: '1px solid #E0E0E0' }}>
+            <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
                 <Box>
                   <Typography variant="subtitle1" fontWeight={600}>
@@ -209,7 +210,7 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
                     gap: 1.25,
                     py: 1.5,
                     whiteSpace: 'normal',
-                    bgcolor: notification.read ? 'transparent' : '#F7FBF7',
+                    bgcolor: notification.read ? 'transparent' : 'action.selected',
                   }}
                 >
                   <GoogleIcon name={getNotificationIcon(notification)} size={20} sx={{ color: notification.read ? 'text.secondary' : 'primary.main', mt: 0.25 }} />
@@ -266,10 +267,7 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
               anchorEl={anchorEl} 
               open={Boolean(anchorEl)} 
               onClose={handleMenuClose}
-              PaperProps={{
-                style: { maxHeight: 400, overflow: 'auto' },
-                sx: { width: 250, borderRadius: '10px' }
-              }}
+              slotProps={{ paper: { sx: { width: 250, maxHeight: 400, overflow: 'auto' } } }}
             >
               <MenuItem onClick={() => { handleMenuClose(); navigate('/profil'); }}>
                 <ListItemIcon>

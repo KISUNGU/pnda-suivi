@@ -24,6 +24,7 @@ import {
 import { ExportToolbar } from '../../components/common/ExportToolbar/ExportToolbar';
 import { moduleGridStyles } from '../../components/common/Layout/moduleGridStyles';
 import { GradientWidget } from '../../components/common/Widget/GradientWidget';
+import GoogleIcon from '../../components/common/GoogleIcon';
 import {
   venteSemenceService,
   type VenteSemence,
@@ -137,7 +138,7 @@ export const VentesSemencesPage: React.FC = () => {
           <GradientWidget
             title="Provinces actives"
             value={(stats?.provinces_actives ?? ventesParProvince.length).toLocaleString('fr-FR')}
-            icon={<Box component="span" sx={{ fontSize: 40 }}>🗺️</Box>}
+            icon={<GoogleIcon name="map" size={40} />}
             trend={{ value: ventesParProvince.length, direction: 'up', period: 'avec ventes' }}
             color="primary"
           />
@@ -146,7 +147,7 @@ export const VentesSemencesPage: React.FC = () => {
           <GradientWidget
             title="Producteurs enregistrés"
             value={(stats?.producteurs_enregistres ?? totalProducteurs).toLocaleString('fr-FR')}
-            icon={<Box component="span" sx={{ fontSize: 40 }}>👨‍🌾</Box>}
+            icon={<GoogleIcon name="agriculture" size={40} />}
             trend={{ value: totalProducteurs, direction: 'up', period: 'dans le filtre actif' }}
             color="success"
           />
@@ -155,7 +156,7 @@ export const VentesSemencesPage: React.FC = () => {
           <GradientWidget
             title="Semences vendues"
             value={`${(stats?.semences_vendues_kg ?? totalQuantite).toLocaleString('fr-FR')} kg`}
-            icon={<Box component="span" sx={{ fontSize: 40 }}>🌱</Box>}
+            icon={<GoogleIcon name="eco" size={40} />}
             trend={{ value: totalProducteurs > 0 ? Math.round(totalQuantite / totalProducteurs) : 0, direction: 'up', period: 'moyenne / producteur' }}
             color="warning"
           />
@@ -164,7 +165,7 @@ export const VentesSemencesPage: React.FC = () => {
           <GradientWidget
             title="Montant total"
             value={`${(stats?.montant_total_usd ?? totalMontant).toLocaleString('fr-FR')} USD`}
-            icon={<Box component="span" sx={{ fontSize: 40 }}>💵</Box>}
+            icon={<GoogleIcon name="payments" size={40} />}
             trend={{ value: totalQuantite > 0 ? Math.round(totalMontant / totalQuantite) : 0, direction: 'up', period: 'USD / kg' }}
             color="info"
           />
@@ -222,7 +223,7 @@ export const VentesSemencesPage: React.FC = () => {
         filename="ventes_semences"
       />
 
-      <Paper sx={{ borderRadius: 3, overflow: 'hidden' }}>
+      <Paper sx={{ borderRadius: 2.1, overflow: 'hidden' }}>
         <Tabs value={tab} onChange={(_event, value) => setTab(value)} sx={{ borderBottom: 1, borderColor: 'divider' }}>
           <Tab label="Par province" />
           <Tab label="Par producteur" />
@@ -233,7 +234,7 @@ export const VentesSemencesPage: React.FC = () => {
           {tab === 0 && (
             <TableContainer>
               <Table>
-                <TableHead sx={{ bgcolor: '#F1F8E9' }}>
+                <TableHead sx={{ bgcolor: 'action.hover' }}>
                   <TableRow>
                     <TableCell>Province</TableCell>
                     <TableCell align="right">Producteurs enregistrés</TableCell>
@@ -258,7 +259,7 @@ export const VentesSemencesPage: React.FC = () => {
           {tab === 1 && (
             <TableContainer>
               <Table>
-                <TableHead sx={{ bgcolor: '#F1F8E9' }}>
+                <TableHead sx={{ bgcolor: 'action.hover' }}>
                   <TableRow>
                     <TableCell>Producteur</TableCell>
                     <TableCell>Province</TableCell>
@@ -288,7 +289,7 @@ export const VentesSemencesPage: React.FC = () => {
           {tab === 2 && (
             <TableContainer>
               <Table>
-                <TableHead sx={{ bgcolor: '#F1F8E9' }}>
+                <TableHead sx={{ bgcolor: 'action.hover' }}>
                   <TableRow>
                     <TableCell>Date</TableCell>
                     <TableCell>Producteur</TableCell>

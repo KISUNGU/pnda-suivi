@@ -60,79 +60,18 @@ function TabPanel(props: TabPanelProps) {
   );
 }
 
-// Données mockées pour l'OT
-const mockOTData: OTData = {
-  id: 'ot-001',
-  nom: 'Opérateur Technique Agricole',
-  sigle: 'OTA',
-  region: 'Sud-Ouest',
-  provinces: ['Kwilu', 'Kongo Central', 'Kinshasa'],
-  responsable: {
-    nom: 'Jean-Pierre KABEYA',
-    email: 'jp.kabeya@ota.cd',
-    telephone: '+243812345678',
-  },
-  equipes: {
-    total: 24,
-    superviseurs: 4,
-    enqueteurs: 15,
-    techniciens: 5,
-  },
-  performances: {
-    taux_realisation: 78,
-    taux_satisfaction: 85,
-    qualite_donnees: 92,
-    ponctualite: 88,
-  },
-  activites: {
-    enquetes_realisees: 1245,
-    formations_dispensees: 32,
-    suivis_effectues: 156,
-    plaintes_traitees: 28,
-  },
-  indicateurs: {
-    production: 76,
-    adoption: 68,
-    satisfaction: 85,
-  },
-  objectifs: {
-    enquetes: { realises: 1245, cible: 1600 },
-    formations: { realises: 32, cible: 40 },
-    suivis: { realises: 156, cible: 200 },
-  },
-  zones: [
-    { province: 'Kwilu', territoire: 'Idiofa', villages: 45, enquetes: 520 },
-    { province: 'Kwilu', territoire: 'Masi-Manimba', villages: 38, enquetes: 380 },
-    { province: 'Kongo Central', territoire: 'Matadi', villages: 52, enquetes: 245 },
-    { province: 'Kongo Central', territoire: 'Boma', villages: 28, enquetes: 180 },
-    { province: 'Kinshasa', territoire: 'Mont Ngafula', villages: 12, enquetes: 120 },
-  ],
-  dernier_rapport: '2026-02-28',
-  dernier_suivi: '2026-03-28',
-};
-
-const mockActivites: ActiviteTerrain[] = [
-  { id: 1, type: 'enquete', titre: 'Enquête production maïs', description: 'Collecte des données de production dans la zone de Idiofa', date: '2026-03-25', province: 'Kwilu', territoire: 'Idiofa', village: 'Masi-Manimba', statut: 'terminee', responsable: 'Marie KABEYA', participants: 45, resultats: '450 enregistrements' },
-  { id: 2, type: 'formation', titre: 'Formation AIC', description: 'Formation aux techniques agricoles intelligentes face au climat', date: '2026-03-28', province: 'Kongo Central', territoire: 'Matadi', village: 'Kimpese', statut: 'en_cours', responsable: 'Joseph MUKENDI', participants: 28 },
-  { id: 3, type: 'suivi', titre: 'Suivi post-formation', description: 'Évaluation de l\'adoption des techniques après formation', date: '2026-03-30', province: 'Kinshasa', territoire: 'Mont Ngafula', village: 'Selembao', statut: 'planifiee', responsable: 'Albert TSHIBOLA' },
-  { id: 4, type: 'plainte', titre: 'Traitement plainte VBG', description: 'Suivi de plainte pour exploitation sexuelle', date: '2026-03-26', province: 'Kwilu', territoire: 'Idiofa', village: 'Kikwit', statut: 'en_cours', responsable: 'Pauline LUBALA' },
-  { id: 5, type: 'enquete', titre: 'Enquête satisfaction', description: 'Évaluation de la satisfaction des bénéficiaires', date: '2026-03-22', province: 'Kongo Central', territoire: 'Boma', village: 'Tshela', statut: 'terminee', responsable: 'David KALONJI', participants: 32, resultats: 'Taux satisfaction: 82%' },
-];
-
-const mockEquipiers: Equipier[] = [
-  { id: 1, nom: 'KABEYA', prenom: 'Marie', fonction: 'superviseur', telephone: '+243812345678', email: 'marie.kabeya@ota.cd', province: 'Kwilu', performance: 95, enquetes_realisees: 145, dernier_suivi: '2026-03-20', est_actif: true },
-  { id: 2, nom: 'MUKENDI', prenom: 'Joseph', fonction: 'enqueteur', telephone: '+243823456789', email: 'joseph.mukendi@ota.cd', province: 'Kwilu', performance: 88, enquetes_realisees: 112, dernier_suivi: '2026-03-22', est_actif: true },
-  { id: 3, nom: 'TSHIBOLA', prenom: 'Albert', fonction: 'technicien', telephone: '+243834567890', email: 'albert.tshibola@ota.cd', province: 'Kongo Central', performance: 92, enquetes_realisees: 78, dernier_suivi: '2026-03-21', est_actif: true },
-  { id: 4, nom: 'LUBALA', prenom: 'Pauline', fonction: 'enqueteur', telephone: '+243845678901', email: 'pauline.lubala@ota.cd', province: 'Kinshasa', performance: 78, enquetes_realisees: 65, dernier_suivi: '2026-03-23', est_actif: true },
-  { id: 5, nom: 'KALONJI', prenom: 'David', fonction: 'superviseur', telephone: '+243856789012', email: 'david.kalonji@ota.cd', province: 'Kongo Central', performance: 91, enquetes_realisees: 132, dernier_suivi: '2026-03-24', est_actif: true },
-  { id: 6, nom: 'NGOMA', prenom: 'Béatrice', fonction: 'enqueteur', telephone: '+243867890123', email: 'beatrice.ngoma@ota.cd', province: 'Kwilu', performance: 85, enquetes_realisees: 95, dernier_suivi: '2026-03-19', est_actif: false },
-];
-
-const mockRapports: RapportMensuel[] = [
-  { id: 1, mois: 'Janvier', annee: 2026, enquetes: 420, formations: 12, suivis: 48, qualite_donnees: 89, commentaires: 'Bon début d\'année', soumis_le: '2026-02-05', valide: true },
-  { id: 2, mois: 'Février', annee: 2026, enquetes: 385, formations: 10, suivis: 52, qualite_donnees: 91, commentaires: 'Progression satisfaisante', soumis_le: '2026-03-05', valide: true },
-  { id: 3, mois: 'Mars', annee: 2026, enquetes: 440, formations: 10, suivis: 56, qualite_donnees: 92, commentaires: 'Activités intensifiées', soumis_le: '2026-03-30', valide: false },
-];
+/** État vide explicite : on annonce l'absence de donnée au lieu de la combler. */
+const EtatVide: React.FC<{ titre: string; detail?: string }> = ({ titre, detail }) => (
+  <Paper variant="outlined" sx={{ p: 4, textAlign: 'center', borderStyle: 'dashed', borderRadius: 2 }}>
+    <GoogleIcon name="inbox" size={36} sx={{ color: 'text.disabled', mb: 1 }} />
+    <Typography variant="subtitle2" color="text.secondary">{titre}</Typography>
+    {detail && (
+      <Typography variant="caption" color="text.disabled" display="block" sx={{ mt: 0.5 }}>
+        {detail}
+      </Typography>
+    )}
+  </Paper>
+);
 
 const getTypeIcon = (type: string) => {
   switch (type) {
@@ -179,6 +118,7 @@ export const PartnerDashboard: React.FC = () => {
   const [rapportDialogOpen, setRapportDialogOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [exporting, setExporting] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
   const [newActivite, setNewActivite] = useState<Partial<ActiviteTerrain>>({
     type: 'enquete',
     statut: 'planifiee',
@@ -188,44 +128,60 @@ export const PartnerDashboard: React.FC = () => {
     annee: new Date().getFullYear(),
   });
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
+  /**
+   * Charge les données de l'opérateur technique. Aucun jeu de démonstration
+   * n'est fabriqué ici : si un service ne répond pas, la section concernée
+   * reste vide et l'écran le dit. Les données de démonstration relèvent du
+   * serveur (DEMO_DATA=1), pas de l'interface.
+   */
   const loadData = async () => {
     setLoading(true);
     setError(null);
-    try {
-      const [otRes, activitesRes, equipiersRes, rapportsRes] = await Promise.all([
-        otService.getOTData(),
-        otService.getActivites(),
-        otService.getEquipiers(),
-        otService.getRapportsMensuels(),
-      ]);
-      setOtData(otRes.data ?? mockOTData);
-      setActivites(activitesRes.data?.length ? activitesRes.data : mockActivites);
-      setEquipiers(equipiersRes.data?.length ? equipiersRes.data : mockEquipiers);
-      setRapports(rapportsRes.data?.length ? rapportsRes.data : mockRapports);
-    } catch (err) {
-      // Fallback sur les données mock si l'API n'est pas encore disponible
-      setOtData(mockOTData);
-      setActivites(mockActivites);
-      setEquipiers(mockEquipiers);
-      setRapports(mockRapports);
-      console.warn('API OT non disponible, utilisation des données mock:', err);
-    } finally {
-      setLoading(false);
+    setMessage(null);
+    const [otRes, activitesRes, equipiersRes, rapportsRes] = await Promise.allSettled([
+      otService.getOTData(),
+      otService.getActivites(),
+      otService.getEquipiers(),
+      otService.getRapportsMensuels(),
+    ]);
+
+    setOtData(otRes.status === 'fulfilled' ? (otRes.value.data ?? null) : null);
+    setActivites(activitesRes.status === 'fulfilled' && Array.isArray(activitesRes.value.data) ? activitesRes.value.data : []);
+    setEquipiers(equipiersRes.status === 'fulfilled' && Array.isArray(equipiersRes.value.data) ? equipiersRes.value.data : []);
+    setRapports(rapportsRes.status === 'fulfilled' && Array.isArray(rapportsRes.value.data) ? rapportsRes.value.data : []);
+
+    const echecs = [otRes, activitesRes, equipiersRes, rapportsRes].filter((r) => r.status === 'rejected').length;
+    if (echecs === 4) {
+      setError("Aucun des services de l'opérateur technique n'a répondu. Les données ne peuvent pas être affichées.");
+    } else if (echecs > 0) {
+      setMessage(`${echecs} service(s) sur 4 n'ont pas répondu : les sections correspondantes sont vides.`);
     }
+    setLoading(false);
   };
 
+  useEffect(() => {
+    // Chargement initial depuis les services de l'opérateur technique.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadData();
+  }, []);
+
+  /** Export réel : le fichier vient du serveur, aucun succès n'est simulé. */
   const handleExport = async (format: 'pdf' | 'excel') => {
+    setAnchorEl(null);
     setExporting(true);
+    setMessage(null);
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setAnchorEl(null);
-      alert(`Export ${format.toUpperCase()} démarré`);
-    } catch (err) {
-      console.error(err);
+      const reponse = await otService.exportData(format);
+      const url = URL.createObjectURL(new Blob([reponse.data as BlobPart]));
+      const lien = document.createElement('a');
+      lien.href = url;
+      lien.download = `rapport-ot-${new Date().toISOString().slice(0, 10)}.${format === 'pdf' ? 'pdf' : 'xlsx'}`;
+      document.body.appendChild(lien);
+      lien.click();
+      lien.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      setMessage("L'export n'a pas abouti : le service n'a pas répondu.");
     } finally {
       setExporting(false);
     }
@@ -234,19 +190,23 @@ export const PartnerDashboard: React.FC = () => {
   const handleAddActivite = async () => {
     try {
       await otService.addActivite(newActivite);
-    } catch { /* activité ajoutée localement en fallback */ }
-    setActiviteDialogOpen(false);
-    setNewActivite({ type: 'enquete', statut: 'planifiee' });
-    loadData();
+      setActiviteDialogOpen(false);
+      setNewActivite({ type: 'enquete', statut: 'planifiee' });
+      await loadData();
+    } catch {
+      setMessage("L'activité n'a pas pu être enregistrée : le service n'a pas répondu.");
+    }
   };
 
   const handleSubmitRapport = async () => {
     try {
       await otService.soumettreRapport(newRapport);
-    } catch { /* rapport soumis localement en fallback */ }
-    setRapportDialogOpen(false);
-    setNewRapport({ mois: new Date().toLocaleString('fr-FR', { month: 'long' }), annee: new Date().getFullYear() });
-    loadData();
+      setRapportDialogOpen(false);
+      setNewRapport({ mois: new Date().toLocaleString('fr-FR', { month: 'long' }), annee: new Date().getFullYear() });
+      await loadData();
+    } catch {
+      setMessage("Le rapport n'a pas pu être soumis : le service n'a pas répondu.");
+    }
   };
 
   if (loading) {
@@ -261,18 +221,45 @@ export const PartnerDashboard: React.FC = () => {
     return <Alert severity="error">{error}</Alert>;
   }
 
-  if (!otData) return null;
+  if (!otData) {
+    return (
+      <Box sx={{ p: 2 }}>
+        <Alert
+          severity="info"
+          action={<Button color="inherit" size="small" onClick={loadData}>Recharger</Button>}
+        >
+          Aucune donnée d'opérateur technique n'est disponible pour ce compte. Vérifiez que le
+          service <code>/ot/data</code> est configuré et que l'opérateur est rattaché à votre profil.
+        </Alert>
+      </Box>
+    );
+  }
 
-  const evolutionData = [
-    { name: 'Jan', enquetes: 420, formations: 12, suivis: 48 },
-    { name: 'Fév', enquetes: 385, formations: 10, suivis: 52 },
-    { name: 'Mar', enquetes: 440, formations: 10, suivis: 56 },
-  ];
+  /**
+   * Évolution mensuelle reconstituée à partir des rapports réellement soumis.
+   * Aucune série n'est inventée : sans rapport, le graphique n'est pas affiché.
+   */
+  const evolutionData = rapports
+    .slice()
+    .sort((a, b) => a.annee - b.annee)
+    .slice(-12)
+    .map((rapport) => ({
+      name: `${rapport.mois.slice(0, 3)} ${String(rapport.annee).slice(2)}`,
+      enquetes: rapport.enquetes,
+      formations: rapport.formations,
+      suivis: rapport.suivis,
+    }));
 
   return (
     <Box>
+      {message && (
+        <Alert severity="warning" onClose={() => setMessage(null)} sx={{ mb: 2 }}>
+          {message}
+        </Alert>
+      )}
+
       {/* En-tête avec informations OT */}
-      <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: '#F1F8E9' }}>
+      <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: 'action.hover' }}>
         <Stack direction="row" justifyContent="space-between" alignItems="flex-start" flexWrap="wrap" gap={2}>
           <Box>
             <Stack direction="row" alignItems="center" spacing={2}>
@@ -356,7 +343,6 @@ export const PartnerDashboard: React.FC = () => {
             title="Taux de réalisation"
             value={`${otData.performances.taux_realisation}%`}
             icon={<GoogleIcon name="target" size={32} />}
-            trend={{ value: 5, direction: 'up', period: 'vs objectif' }}
             color="primary"
             onClick={() => navigate('/indicateurs/ir')}
           />
@@ -366,7 +352,6 @@ export const PartnerDashboard: React.FC = () => {
             title="Qualité des données"
             value={`${otData.performances.qualite_donnees}%`}
             icon={<GoogleIcon name="data_usage" size={32} />}
-            trend={{ value: 3, direction: 'up', period: 'vs mois dernier' }}
             color="success"
             onClick={() => navigate('/indicateurs/iodp')}
           />
@@ -386,7 +371,15 @@ export const PartnerDashboard: React.FC = () => {
             title="Équipe terrain"
             value={otData.equipes.total}
             icon={<GoogleIcon name="groups" size={32} />}
-            trend={{ value: 0, direction: 'up', period: 'équipes actives' }}
+            trend={
+              equipiers.length > 0
+                ? {
+                    value: Math.round((equipiers.filter((e) => e.est_actif).length / equipiers.length) * 100),
+                    direction: 'up',
+                    period: 'de membres actifs',
+                  }
+                : undefined
+            }
             color="warning"
             onClick={() => navigate('/beneficiaires/organisations')}
           />
@@ -396,17 +389,24 @@ export const PartnerDashboard: React.FC = () => {
       {/* Évolution des activités */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid size={{ xs: 12, md: 8 }}>
-          <IndicatorChart
-            title="Évolution des activités mensuelles"
-            data={evolutionData}
-            lines={[
-              { key: 'enquetes', name: 'Enquêtes', color: '#2E7D32' },
-              { key: 'formations', name: 'Formations', color: '#FFC107' },
-              { key: 'suivis', name: 'Suivis', color: '#2196F3' },
-            ]}
-            type="line"
-            height={300}
-          />
+          {evolutionData.length > 0 ? (
+            <IndicatorChart
+              title="Évolution des activités mensuelles"
+              data={evolutionData}
+              lines={[
+                { key: 'enquetes', name: 'Enquêtes', color: '#2E7D32' },
+                { key: 'formations', name: 'Formations', color: '#FFC107' },
+                { key: 'suivis', name: 'Suivis', color: '#2196F3' },
+              ]}
+              type="line"
+              height={300}
+            />
+          ) : (
+            <EtatVide
+              titre="Évolution des activités mensuelles"
+              detail="Aucun rapport mensuel n'a encore été soumis : la série ne peut pas être tracée."
+            />
+          )}
         </Grid>
         <Grid size={{ xs: 12, md: 4 }}>
           <Paper sx={{ p: 2, borderRadius: 2, height: '100%' }}>
@@ -467,6 +467,13 @@ export const PartnerDashboard: React.FC = () => {
               </Button>
             </Stack>
             
+            {activites.length === 0 && (
+              <EtatVide
+                titre="Aucune activité terrain enregistrée"
+                detail="Les activités remontées par les équipes apparaîtront ici une fois saisies."
+              />
+            )}
+
             <Stack spacing={2}>
               {activites.map((activite, index) => (
                 <Stack key={activite.id} direction="row" spacing={2}>
@@ -480,7 +487,7 @@ export const PartnerDashboard: React.FC = () => {
                       <GoogleIcon name={getTypeIcon(activite.type)} size={16} sx={{ color: 'white' }} />
                     </Box>
                     {index < activites.length - 1 && (
-                      <Box sx={{ width: 2, flex: 1, bgcolor: '#e0e0e0', my: 0.5 }} />
+                      <Box sx={{ width: 2, flex: 1, bgcolor: 'action.selected', my: 0.5 }} />
                     )}
                   </Box>
                   {/* Contenu */}
@@ -546,7 +553,7 @@ export const PartnerDashboard: React.FC = () => {
 
             <TableContainer component={Paper} variant="outlined" sx={{ mt: 3 }}>
               <Table>
-                <TableHead sx={{ bgcolor: '#F1F8E9' }}>
+                <TableHead sx={{ bgcolor: 'action.hover' }}>
                   <TableRow>
                     <TableCell>Nom</TableCell>
                     <TableCell>Fonction</TableCell>
@@ -558,6 +565,15 @@ export const PartnerDashboard: React.FC = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
+                  {equipiers.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
+                        <Typography variant="body2" color="text.secondary">
+                          Aucun membre d'équipe enregistré pour cet opérateur.
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  )}
                   {equipiers.map((equipier) => (
                     <TableRow key={equipier.id}>
                       <TableCell>
@@ -622,6 +638,14 @@ export const PartnerDashboard: React.FC = () => {
             </Stack>
 
             <Grid container spacing={3}>
+              {rapports.length === 0 && (
+                <Grid size={{ xs: 12 }}>
+                  <EtatVide
+                    titre="Aucun rapport mensuel soumis"
+                    detail="Utilisez « Soumettre rapport » pour transmettre le premier rapport."
+                  />
+                </Grid>
+              )}
               {rapports.map((rapport) => (
                 <Grid size={{ xs: 12, md: 4 }} key={rapport.id}>
                   <Card sx={{ borderRadius: 2 }}>
@@ -631,9 +655,9 @@ export const PartnerDashboard: React.FC = () => {
                           {rapport.mois} {rapport.annee}
                         </Typography>
                         {rapport.valide ? (
-                          <Chip label="Validé" size="small" sx={{ bgcolor: '#E8F5E9', color: '#2E7D32' }} />
+                          <Chip label="Validé" size="small" sx={{ bgcolor: 'action.hover', color: '#2E7D32' }} />
                         ) : (
-                          <Chip label="En attente" size="small" sx={{ bgcolor: '#FFF3E0', color: '#FF8F00' }} />
+                          <Chip label="En attente" size="small" sx={{ bgcolor: 'rgba(250, 178, 25, 0.14)', color: '#FF8F00' }} />
                         )}
                       </Stack>
                       <Divider sx={{ my: 1.5 }} />
@@ -679,7 +703,7 @@ export const PartnerDashboard: React.FC = () => {
             </Typography>
             <TableContainer component={Paper} variant="outlined">
               <Table>
-                <TableHead sx={{ bgcolor: '#F1F8E9' }}>
+                <TableHead sx={{ bgcolor: 'action.hover' }}>
                   <TableRow>
                     <TableCell>Province</TableCell>
                     <TableCell>Territoire</TableCell>
@@ -688,7 +712,16 @@ export const PartnerDashboard: React.FC = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {otData.zones.map((zone, idx) => (
+                  {(otData.zones ?? []).length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={4} align="center" sx={{ py: 4 }}>
+                        <Typography variant="body2" color="text.secondary">
+                          Aucune zone d'intervention renseignée pour cet opérateur.
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {(otData.zones ?? []).map((zone, idx) => (
                     <TableRow key={idx}>
                       <TableCell>{zone.province}</TableCell>
                       <TableCell>{zone.territoire}</TableCell>

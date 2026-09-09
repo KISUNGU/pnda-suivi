@@ -73,7 +73,7 @@ import {
   CloudUpload,
   TableChart,
   InsertDriveFile,
-} from '@mui/icons-material';
+} from '../../components/common/PageIcons';
 import GoogleIcon from '../../components/common/GoogleIcon';
 import { GradientWidget } from '../../components/common/Widget/GradientWidget';
 import { ExportToolbar } from '../../components/common/ExportToolbar/ExportToolbar';
@@ -499,7 +499,7 @@ export const ActivitesDatabase: React.FC = () => {
       {/* Tableau des activités */}
       <TableContainer component={Paper} sx={{ borderRadius: 2, overflow: 'hidden' }}>
         <Table>
-          <TableHead sx={{ bgcolor: '#F1F8E9' }}>
+          <TableHead sx={{ bgcolor: 'action.hover' }}>
             <TableRow>
               <TableCell>Code</TableCell>
               <TableCell>Titre</TableCell>

@@ -1,5 +1,10 @@
 // frontend/src/pages/Rapports/PowerBIReports.tsx
-import React, { useState } from 'react';
+//
+// Rapports & analyses — entièrement alimentés par les services du programme.
+// Règle appliquée : aucune valeur n'est écrite en dur dans cette page. Quand un
+// service ne répond pas ou ne renvoie rien, la section concernée affiche un état
+// vide explicite au lieu de présenter des chiffres de démonstration.
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Typography,
@@ -22,43 +27,53 @@ import {
   Divider,
   Stack,
   Alert,
+  CircularProgress,
   LinearProgress,
   Tooltip,
 } from '@mui/material';
+import { GradientWidget } from '../../components/common/Widget/GradientWidget';
 import {
   BarChart, Bar,
-  LineChart, Line,
-  AreaChart, Area,
   PieChart, Pie, Cell,
   XAxis, YAxis,
   CartesianGrid,
   Tooltip as RechartTooltip,
   Legend,
   ResponsiveContainer,
-  RadarChart, Radar, PolarGrid, PolarAngleAxis,
+  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
+  ComposedChart, Line,
 } from 'recharts';
 import type { ValueType } from 'recharts/types/component/DefaultTooltipContent';
 import GoogleIcon from '../../components/common/GoogleIcon';
+import cadreResultatsService, {
+  type IndicateurCadre,
+  type CadreStats,
+} from '../../services/cadreResultats.service';
+import provincialService, { type ProvinceData } from '../../services/provincial.service';
+import beneficiaireService, { type AdvancedStats } from '../../services/beneficiaire.service';
+import { risqueService, type Risque, type RisqueStats } from '../../services/risque.service';
+import grmService, { type Plainte } from '../../services/grm.service';
 
-const fmtNum = (v: ValueType | undefined) => (typeof v === 'number' ? v.toLocaleString() : String(v ?? ''));
-const fmtPct = (v: ValueType | undefined) => (typeof v === 'number' ? `${v}%` : String(v ?? ''));
+const fmtNum = (v: ValueType | undefined) =>
+  typeof v === 'number' ? v.toLocaleString('fr-FR') : String(v ?? '');
+const fmtPct = (v: ValueType | undefined) => (typeof v === 'number' ? `${v} %` : String(v ?? ''));
+const nombre = (v: number | null | undefined) => (v == null ? '—' : v.toLocaleString('fr-FR'));
+const pourcent = (n: number, d: number) => (d > 0 ? Math.round((n / d) * 100) : 0);
 
 // ---------------------------------------------------------------------------
-// Types
+// Catalogue (métadonnées de navigation, pas des résultats)
 // ---------------------------------------------------------------------------
+type Categorie = 'dashboard' | 'indicateurs' | 'beneficiaires' | 'risques' | 'grm';
+
 interface Rapport {
   id: string;
   name: string;
   description: string;
-  category: 'dashboard' | 'indicateurs' | 'beneficiaires' | 'risques' | 'grm';
-  updated_at: string;
+  category: Categorie;
 }
 
-// ---------------------------------------------------------------------------
-// Palette
-// ---------------------------------------------------------------------------
 const COLORS = ['#2E7D32', '#4CAF50', '#81C784', '#A5D6A7', '#C8E6C9'];
-const PALETTE = {
+const PALETTE: Record<Categorie, { bg: string; fg: string }> = {
   dashboard:     { bg: '#E8F5E9', fg: '#2E7D32' },
   indicateurs:   { bg: '#E3F2FD', fg: '#1976D2' },
   beneficiaires: { bg: '#F3E5F5', fg: '#7B1FA2' },
@@ -66,9 +81,6 @@ const PALETTE = {
   grm:           { bg: '#FFEBEE', fg: '#D32F2F' },
 };
 
-// ---------------------------------------------------------------------------
-// Catalogue des rapports
-// ---------------------------------------------------------------------------
 const categories = [
   { value: 'all',           label: 'Tous',             icon: 'dashboard' },
   { value: 'dashboard',     label: 'Tableaux de bord', icon: 'dashboard' },
@@ -79,493 +91,778 @@ const categories = [
 ];
 
 const rapports: Rapport[] = [
-  {
-    id: '1', name: 'Tableau de bord exécutif',
-    description: 'KPIs clés du programme : bénéficiaires, productivité, accès marché, taux de réalisation',
-    category: 'dashboard', updated_at: '2026-03-28',
-  },
-  {
-    id: '2', name: 'Suivi des indicateurs IODP',
-    description: 'Performance des objectifs de développement vs cibles avec graphiques d\'évolution',
-    category: 'indicateurs', updated_at: '2026-03-25',
-  },
-  {
-    id: '3', name: 'Analyse des bénéficiaires',
-    description: 'Distribution géographique et démographique – sexe, âge, province',
-    category: 'beneficiaires', updated_at: '2026-03-20',
-  },
-  {
-    id: '4', name: 'Matrice des risques',
-    description: 'Évaluation et suivi des risques du programme avec plan d\'atténuation',
-    category: 'risques', updated_at: '2026-03-22',
-  },
-  {
-    id: '5', name: 'Gestion des plaintes GRM',
-    description: 'Suivi des plaintes VBG/EAS/HS, délais de traitement et taux de résolution',
-    category: 'grm', updated_at: '2026-03-28',
-  },
-  {
-    id: '6', name: 'Performance par province',
-    description: 'Analyse comparative des performances provinciales (bénéficiaires, productions)',
-    category: 'dashboard', updated_at: '2026-03-18',
-  },
-  {
-    id: '7', name: 'Rapport trimestriel T1 2026',
-    description: 'Synthèse complète des performances du premier trimestre 2026',
-    category: 'dashboard', updated_at: '2026-03-30',
-  },
+  { id: 'executif', name: 'Tableau de bord exécutif',
+    description: "Synthèse du cadre de résultats : atteinte des IODP, couverture provinciale, répartition par composante",
+    category: 'dashboard' },
+  { id: 'iodp', name: 'Suivi des indicateurs IODP',
+    description: "Réalisé et prévu des indicateurs d'objectif de développement, issus du cadre de résultats",
+    category: 'indicateurs' },
+  { id: 'beneficiaires', name: 'Analyse des bénéficiaires',
+    description: 'Répartition démographique et géographique des producteurs enregistrés au RNA',
+    category: 'beneficiaires' },
+  { id: 'risques', name: 'Matrice des risques',
+    description: "Répartition par niveau, profil par catégorie et registre des risques critiques et élevés",
+    category: 'risques' },
+  { id: 'grm', name: 'Gestion des plaintes GRM',
+    description: 'Volumes reçus et traités, typologie des plaintes et délais de traitement',
+    category: 'grm' },
+  { id: 'provinces', name: 'Performance par province',
+    description: 'Comparaison des provinces sur les effectifs enregistrés et le score de performance',
+    category: 'dashboard' },
 ];
 
 // ---------------------------------------------------------------------------
-// Données des graphiques
+// Chargement des données réelles
 // ---------------------------------------------------------------------------
-const dataEvolution = [
-  { mois: 'Oct', beneficiaires: 98000, cible: 110000 },
-  { mois: 'Nov', beneficiaires: 104000, cible: 112000 },
-  { mois: 'Déc', beneficiaires: 109000, cible: 114000 },
-  { mois: 'Jan', beneficiaires: 113500, cible: 116000 },
-  { mois: 'Fév', beneficiaires: 119000, cible: 120000 },
-  { mois: 'Mar', beneficiaires: 124530, cible: 124000 },
-];
+interface DonneesRapports {
+  cadre: IndicateurCadre[];
+  cadreStats: CadreStats | null;
+  provinces: ProvinceData[];
+  beneficiaires: AdvancedStats | null;
+  risques: Risque[];
+  risqueStats: RisqueStats | null;
+  plaintes: Plainte[];
+  chargeLe: Date | null;
+  echecs: string[];
+}
 
-const dataIODP = [
-  { indicateur: 'IODP1.1', realise: 50, cible: 100, label: 'Ventes agri.' },
-  { indicateur: 'IODP2.1', realise: 64.9, cible: 100, label: 'Adoption tech.' },
-  { indicateur: 'IODP2.3', realise: 76.7, cible: 100, label: 'Rendement maïs' },
-  { indicateur: 'IODP3.1', realise: 62.5, cible: 100, label: 'Plans conting.' },
-  { indicateur: 'IODP4.1', realise: 81, cible: 100, label: 'Accès marché' },
-];
+const DONNEES_VIDES: DonneesRapports = {
+  cadre: [], cadreStats: null, provinces: [], beneficiaires: null,
+  risques: [], risqueStats: null, plaintes: [], chargeLe: null, echecs: [],
+};
 
-const dataBenefSexe = [
-  { name: 'Femmes', value: 56038 },
-  { name: 'Hommes', value: 68492 },
-];
+const tableau = <T,>(valeur: unknown): T[] => (Array.isArray(valeur) ? (valeur as T[]) : []);
 
-const dataBenefAge = [
-  { tranche: '18–25', valeur: 18450 },
-  { tranche: '26–35', valeur: 32200 },
-  { tranche: '36–45', valeur: 28900 },
-  { tranche: '46–55', valeur: 27680 },
-  { tranche: '56+',   valeur: 17300 },
-];
+const useDonneesRapports = () => {
+  const [donnees, setDonnees] = useState<DonneesRapports>(DONNEES_VIDES);
+  const [chargement, setChargement] = useState(true);
 
-const dataProvinces = [
-  { province: 'Kinshasa',       value: 15230 },
-  { province: 'Kongo Central',  value: 18920 },
-  { province: 'Kwilu',          value: 14250 },
-  { province: 'Kasaï',          value: 16890 },
-  { province: 'Haut-Katanga',   value: 22340 },
-  { province: 'Tanganyika',     value: 19800 },
-  { province: 'Sud-Kivu',       value: 17100 },
-];
+  const charger = useCallback(async () => {
+    setChargement(true);
+    const [cadreRes, statsRes, provRes, benefRes, risquesRes, risqueStatsRes, plaintesRes] =
+      await Promise.allSettled([
+        cadreResultatsService.getAll(),
+        cadreResultatsService.getStats(),
+        provincialService.getAllProvinces(),
+        beneficiaireService.getAdvancedStats({}),
+        risqueService.getAll(),
+        risqueService.getStats(),
+        grmService.getAll({ limit: 2000 }),
+      ]);
 
-const dataRisques = [
-  { axe: 'Sécurité', score: 3 },
-  { axe: 'Climatique', score: 4 },
-  { axe: 'Financier', score: 2 },
-  { axe: 'Opérationnel', score: 3 },
-  { axe: 'Social', score: 2 },
-  { axe: 'Institutionnel', score: 1 },
-];
+    const echecs: string[] = [];
+    const marquer = (r: PromiseSettledResult<unknown>, nom: string) => {
+      if (r.status === 'rejected') echecs.push(nom);
+      return r.status === 'fulfilled' ? (r.value as { data: unknown }).data : null;
+    };
 
-const dataRisqueMatrice = [
-  { niveau: 'Critique', count: 2, color: '#F44336' },
-  { niveau: 'Élevé',    count: 4, color: '#FF9800' },
-  { niveau: 'Modéré',   count: 3, color: '#FFC107' },
-  { niveau: 'Faible',   count: 6, color: '#4CAF50' },
-];
+    const plaintesData = marquer(plaintesRes, 'plaintes GRM') as { data?: Plainte[] } | null;
 
-const dataGRM = [
-  { mois: 'Oct', plaintes: 12, resolues: 10 },
-  { mois: 'Nov', plaintes: 18, resolues: 15 },
-  { mois: 'Déc', plaintes: 22, resolues: 19 },
-  { mois: 'Jan', plaintes: 15, resolues: 14 },
-  { mois: 'Fév', plaintes: 28, resolues: 24 },
-  { mois: 'Mar', plaintes: 20, resolues: 19 },
-];
+    setDonnees({
+      cadre: tableau<IndicateurCadre>(marquer(cadreRes, 'cadre de résultats')),
+      cadreStats: marquer(statsRes, 'statistiques du cadre') as CadreStats | null,
+      provinces: tableau<ProvinceData>(marquer(provRes, 'provinces')),
+      beneficiaires: marquer(benefRes, 'bénéficiaires') as AdvancedStats | null,
+      risques: tableau<Risque>(marquer(risquesRes, 'risques')),
+      risqueStats: marquer(risqueStatsRes, 'statistiques des risques') as RisqueStats | null,
+      plaintes: tableau<Plainte>(plaintesData?.data),
+      chargeLe: new Date(),
+      echecs,
+    });
+    setChargement(false);
+  }, []);
 
-const dataGRMType = [
-  { type: 'VBG',         count: 18, color: '#D32F2F' },
-  { type: 'EAS/HS',      count: 12, color: '#F44336' },
-  { type: 'Corruption',  count: 8,  color: '#FF9800' },
-  { type: 'Exclusion',   count: 25, color: '#FFC107' },
-  { type: 'Autre',       count: 15, color: '#9E9E9E' },
-];
+  useEffect(() => {
+    // Chargement initial : synchronisation avec les services du programme.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    charger();
+  }, [charger]);
+
+  return { donnees, chargement, recharger: charger };
+};
 
 // ---------------------------------------------------------------------------
-// Sous-composants de rapport
+// Lecture du cadre de résultats
 // ---------------------------------------------------------------------------
-const KPICard: React.FC<{
-  label: string; value: string; change?: string; icon: string; color: string;
-}> = ({ label, value, change, icon, color }) => (
-  <Paper sx={{ p: 2, borderRadius: 2, bgcolor: `${color}10`, height: '100%' }}>
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-      <GoogleIcon name={icon} size={20} sx={{ color }} />
-      <Typography variant="caption" color="text.secondary">{label}</Typography>
-    </Box>
-    <Typography variant="h5" fontWeight={700} color={color}>{value}</Typography>
-    {change && (
-      <Typography variant="caption" color={change.startsWith('+') ? 'success.main' : 'error.main'}>
-        {change} vs période précédente
+const ANNEES = ['2023', '2024', '2025', '2026', '2027'] as const;
+type CleAnnee = (typeof ANNEES)[number];
+
+/** Dernier couple réalisé/prévu disponible pour un indicateur, et son taux d'atteinte. */
+const atteinte = (ind: IndicateurCadre) => {
+  for (let i = ANNEES.length - 1; i >= 0; i -= 1) {
+    const entree = ind.annees?.[ANNEES[i] as CleAnnee];
+    if (entree && entree.realise != null) {
+      const prevu = entree.prevu ?? ind.final_prevu;
+      return {
+        annee: ANNEES[i],
+        realise: entree.realise,
+        prevu,
+        taux: prevu && prevu !== 0 ? Math.round((entree.realise / prevu) * 1000) / 10 : null,
+      };
+    }
+  }
+  return { annee: null, realise: null, prevu: ind.final_prevu, taux: null };
+};
+
+// ---------------------------------------------------------------------------
+// Éléments d'interface partagés
+// ---------------------------------------------------------------------------
+const EtatVide: React.FC<{ titre: string; detail?: string; hauteur?: number }> = ({
+  titre, detail, hauteur = 200,
+}) => (
+  <Paper
+    variant="outlined"
+    sx={{
+      p: 3, textAlign: 'center', borderStyle: 'dashed', borderRadius: 2,
+      minHeight: hauteur, display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center',
+    }}
+  >
+    <GoogleIcon name="query_stats" size={34} sx={{ color: 'text.disabled', mb: 1 }} />
+    <Typography variant="subtitle2" color="text.secondary">{titre}</Typography>
+    {detail && (
+      <Typography variant="caption" color="text.disabled" sx={{ mt: 0.5, maxWidth: 420 }}>
+        {detail}
       </Typography>
     )}
   </Paper>
 );
 
-const RapportExecutif: React.FC = () => (
-  <Box sx={{ p: 3 }}>
-    <Grid container spacing={2} sx={{ mb: 3 }}>
-      <Grid size={{ xs: 6, md: 3 }}>
-        <KPICard label="Bénéficiaires" value="124 530" change="+8.2%" icon="people" color="#2E7D32" />
-      </Grid>
-      <Grid size={{ xs: 6, md: 3 }}>
-        <KPICard label="Productivité agri." value="+23%" change="+5.3%" icon="trending_up" color="#4CAF50" />
-      </Grid>
-      <Grid size={{ xs: 6, md: 3 }}>
-        <KPICard label="Accès au marché" value="+15%" change="+2.1%" icon="storefront" color="#1976D2" />
-      </Grid>
-      <Grid size={{ xs: 6, md: 3 }}>
-        <KPICard label="Taux de réalisation" value="71%" change="+12%" icon="check_circle" color="#FF9800" />
-      </Grid>
-    </Grid>
-    <Grid container spacing={2}>
-      <Grid size={{ xs: 12, md: 8 }}>
-        <Paper sx={{ p: 2, borderRadius: 2 }}>
-          <Typography variant="subtitle2" gutterBottom>Évolution des bénéficiaires vs cible</Typography>
-          <ResponsiveContainer width="100%" height={260}>
-            <AreaChart data={dataEvolution}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" />
-              <XAxis dataKey="mois" />
-              <YAxis tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
-              <RechartTooltip formatter={fmtNum} />
-              <Legend />
-              <Area type="monotone" dataKey="beneficiaires" name="Réalisé" stroke="#2E7D32" fill="#C8E6C9" />
-              <Area type="monotone" dataKey="cible" name="Cible" stroke="#FF9800" fill="#FFE0B2" strokeDasharray="5 5" fillOpacity={0.3} />
-            </AreaChart>
-          </ResponsiveContainer>
-        </Paper>
-      </Grid>
-      <Grid size={{ xs: 12, md: 4 }}>
-        <Paper sx={{ p: 2, borderRadius: 2 }}>
-          <Typography variant="subtitle2" gutterBottom>Répartition budget</Typography>
-          <ResponsiveContainer width="100%" height={260}>
-            <PieChart>
-              <Pie data={[
-                { name: 'Intrants', value: 35 },
-                { name: 'Formation', value: 25 },
-                { name: 'Infra.', value: 20 },
-                { name: 'Gestion', value: 12 },
-                { name: 'Autres', value: 8 },
-              ]} cx="50%" cy="50%" outerRadius={80} dataKey="value" label={({ name, value }) => `${name} ${value}%`} labelLine={false}>
-                {COLORS.map((c, i) => <Cell key={i} fill={c} />)}
-              </Pie>
-              <RechartTooltip formatter={fmtPct} />
-            </PieChart>
-          </ResponsiveContainer>
-        </Paper>
-      </Grid>
-    </Grid>
-  </Box>
+const KPICard: React.FC<{ label: string; value: string; icon: string; color: string }> = ({
+  label, value, icon, color,
+}) => (
+  <GradientWidget
+    title={label}
+    value={value}
+    icon={<GoogleIcon name={icon} size={36} />}
+    color={
+      color === '#4CAF50' ? 'success'
+        : color === '#FF9800' ? 'warning'
+        : color === '#1976D2' ? 'info'
+        : color === '#D32F2F' || color === '#E91E63' ? 'danger'
+        : 'primary'
+    }
+  />
 );
 
-const RapportIODP: React.FC = () => (
-  <Box sx={{ p: 3 }}>
-    <Grid container spacing={2} sx={{ mb: 3 }}>
-      {dataIODP.map((d) => (
-        <Grid size={{ xs: 12 }} key={d.indicateur}>
-          <Paper sx={{ p: 2, borderRadius: 2 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-              <Typography variant="body2" fontWeight={600}>{d.indicateur} – {d.label}</Typography>
-              <Typography variant="body2" fontWeight={700} color={d.realise >= 75 ? 'success.main' : d.realise >= 50 ? 'warning.main' : 'error.main'}>
-                {d.realise}%
-              </Typography>
-            </Box>
-            <LinearProgress
-              variant="determinate"
-              value={d.realise}
-              sx={{
-                height: 10, borderRadius: 5,
-                bgcolor: '#E0E0E0',
-                '& .MuiLinearProgress-bar': {
-                  bgcolor: d.realise >= 75 ? '#4CAF50' : d.realise >= 50 ? '#FF9800' : '#F44336',
-                  borderRadius: 5,
-                },
-              }}
-            />
-          </Paper>
+const Bloc: React.FC<{ titre: string; children: React.ReactNode }> = ({ titre, children }) => (
+  <Paper sx={{ p: 2, borderRadius: 2, height: '100%' }}>
+    <Typography variant="subtitle2" gutterBottom>{titre}</Typography>
+    {children}
+  </Paper>
+);
+
+// ---------------------------------------------------------------------------
+// Rapports
+// ---------------------------------------------------------------------------
+type PropsRapport = { d: DonneesRapports };
+
+const RapportExecutif: React.FC<PropsRapport> = ({ d }) => {
+  const odp = d.cadre.filter((i) => i.est_odp);
+  const totalBenef = d.provinces.reduce((s, p) => s + (p.beneficiaires?.total ?? 0), 0);
+  const totalFemmes = d.provinces.reduce((s, p) => s + (p.beneficiaires?.femmes ?? 0), 0);
+
+  /** Taux moyen d'atteinte des IODP, année par année, calculé sur le cadre. */
+  const serieAnnuelle = ANNEES.map((annee) => {
+    const taux = odp
+      .map((ind) => {
+        const e = ind.annees?.[annee as CleAnnee];
+        if (!e || e.realise == null || !e.prevu) return null;
+        return (e.realise / e.prevu) * 100;
+      })
+      .filter((v): v is number => v !== null);
+    return {
+      annee,
+      taux: taux.length ? Math.round(taux.reduce((a, b) => a + b, 0) / taux.length) : null,
+      renseignes: taux.length,
+    };
+  }).filter((p) => p.renseignes > 0);
+
+  const composantes = d.cadreStats?.composantes ?? [];
+
+  if (!d.cadreStats && d.provinces.length === 0) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <EtatVide
+          titre="Synthèse indisponible"
+          detail="Ni le cadre de résultats ni les données provinciales n'ont pu être chargés."
+        />
+      </Box>
+    );
+  }
+
+  return (
+    <Box sx={{ p: 3 }}>
+      <Grid container spacing={2} sx={{ mb: 3 }}>
+        <Grid size={{ xs: 6, md: 3 }}>
+          <KPICard label="Exploitants inscrits" value={nombre(totalBenef)} icon="people" color="#2E7D32" />
         </Grid>
-      ))}
-    </Grid>
-    <Paper sx={{ p: 2, borderRadius: 2 }}>
-      <Typography variant="subtitle2" gutterBottom>Performance IODP (% atteinte)</Typography>
-      <ResponsiveContainer width="100%" height={220}>
-        <BarChart data={dataIODP} layout="vertical">
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis type="number" domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
-          <YAxis type="category" dataKey="indicateur" width={70} />
-          <RechartTooltip formatter={fmtPct} />
-          <Bar dataKey="realise" name="Réalisé" fill="#2E7D32" radius={[0, 4, 4, 0]} />
-          <Bar dataKey="cible" name="Cible" fill="#E0E0E0" radius={[0, 4, 4, 0]} />
-        </BarChart>
-      </ResponsiveContainer>
-    </Paper>
-  </Box>
-);
+        <Grid size={{ xs: 6, md: 3 }}>
+          <KPICard
+            label="Part des femmes"
+            value={totalBenef > 0 ? `${pourcent(totalFemmes, totalBenef)} %` : '—'}
+            icon="female" color="#E91E63"
+          />
+        </Grid>
+        <Grid size={{ xs: 6, md: 3 }}>
+          <KPICard
+            label="Performance moyenne"
+            value={d.cadreStats ? `${Math.round(d.cadreStats.moyenne_performance)} %` : '—'}
+            icon="assessment" color="#4CAF50"
+          />
+        </Grid>
+        <Grid size={{ xs: 6, md: 3 }}>
+          <KPICard
+            label="Indicateurs atteints"
+            value={d.cadreStats ? `${d.cadreStats.atteint} / ${d.cadreStats.total}` : '—'}
+            icon="flag" color="#FF9800"
+          />
+        </Grid>
+      </Grid>
 
-const RapportBeneficiaires: React.FC = () => (
-  <Box sx={{ p: 3 }}>
-    <Grid container spacing={2} sx={{ mb: 3 }}>
-      <Grid size={{ xs: 6, md: 3 }}>
-        <KPICard label="Total" value="124 530" icon="people" color="#2E7D32" />
+      <Grid container spacing={2}>
+        <Grid size={{ xs: 12, md: 8 }}>
+          <Bloc titre="Taux moyen d'atteinte des IODP, par année">
+            {serieAnnuelle.length > 0 ? (
+              <ResponsiveContainer width="100%" height={260}>
+                <ComposedChart data={serieAnnuelle}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" />
+                  <XAxis dataKey="annee" />
+                  <YAxis tickFormatter={(v) => `${v}%`} />
+                  <RechartTooltip formatter={fmtPct} />
+                  <Legend />
+                  <Bar dataKey="taux" name="Taux moyen d'atteinte" fill="#2E7D32" radius={[4, 4, 0, 0]} />
+                  <Line type="monotone" dataKey="taux" name="Tendance" stroke="#FF9800" strokeWidth={2} dot={{ r: 4 }} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            ) : (
+              <EtatVide
+                titre="Aucune année renseignée"
+                detail="Le cadre de résultats ne contient encore ni réalisé ni prévu exploitable pour les IODP."
+              />
+            )}
+          </Bloc>
+        </Grid>
+        <Grid size={{ xs: 12, md: 4 }}>
+          <Bloc titre="Indicateurs par composante">
+            {composantes.length > 0 ? (
+              <ResponsiveContainer width="100%" height={260}>
+                <PieChart>
+                  <Pie
+                    data={composantes} cx="50%" cy="50%" outerRadius={80}
+                    dataKey="count" nameKey="nom" labelLine={false}
+                    label={({ name, value }) => `${name} (${value})`}
+                  >
+                    {composantes.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                  </Pie>
+                  <RechartTooltip formatter={fmtNum} />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <EtatVide titre="Composantes non renseignées" />
+            )}
+          </Bloc>
+        </Grid>
       </Grid>
-      <Grid size={{ xs: 6, md: 3 }}>
-        <KPICard label="Femmes" value="56 038" change="+45%" icon="female" color="#E91E63" />
-      </Grid>
-      <Grid size={{ xs: 6, md: 3 }}>
-        <KPICard label="Hommes" value="68 492" icon="male" color="#1976D2" />
-      </Grid>
-      <Grid size={{ xs: 6, md: 3 }}>
-        <KPICard label="Jeunes (18–35)" value="50 650" change="+40.7%" icon="school" color="#FF9800" />
-      </Grid>
-    </Grid>
-    <Grid container spacing={2}>
-      <Grid size={{ xs: 12, md: 4 }}>
-        <Paper sx={{ p: 2, borderRadius: 2 }}>
-          <Typography variant="subtitle2" gutterBottom>Répartition par sexe</Typography>
-          <ResponsiveContainer width="100%" height={220}>
-            <PieChart>
-              <Pie data={dataBenefSexe} cx="50%" cy="50%" outerRadius={80} dataKey="value" label={({ name, percent }) => `${name as string} ${((percent ?? 0) * 100).toFixed(0)}%`}>
-                <Cell fill="#E91E63" />
-                <Cell fill="#1976D2" />
-              </Pie>
-              <RechartTooltip formatter={fmtNum} />
-            </PieChart>
-          </ResponsiveContainer>
-        </Paper>
-      </Grid>
-      <Grid size={{ xs: 12, md: 4 }}>
-        <Paper sx={{ p: 2, borderRadius: 2 }}>
-          <Typography variant="subtitle2" gutterBottom>Répartition par tranche d'âge</Typography>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={dataBenefAge}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="tranche" />
-              <YAxis tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
-              <RechartTooltip formatter={fmtNum} />
-              <Bar dataKey="valeur" fill="#4CAF50" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </Paper>
-      </Grid>
-      <Grid size={{ xs: 12, md: 4 }}>
-        <Paper sx={{ p: 2, borderRadius: 2 }}>
-          <Typography variant="subtitle2" gutterBottom>Top provinces</Typography>
-          <Stack spacing={1} sx={{ mt: 1 }}>
-            {dataProvinces.slice(0, 5).map((p) => (
-              <Box key={p.province}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography variant="caption">{p.province}</Typography>
-                  <Typography variant="caption" fontWeight={600}>{p.value.toLocaleString()}</Typography>
-                </Box>
-                <LinearProgress variant="determinate" value={(p.value / 25000) * 100} sx={{ height: 6, borderRadius: 3, '& .MuiLinearProgress-bar': { bgcolor: '#2E7D32' } }} />
+    </Box>
+  );
+};
+
+const RapportIODP: React.FC<PropsRapport> = ({ d }) => {
+  const odp = d.cadre.filter((i) => i.est_odp).map((ind) => ({ ind, a: atteinte(ind) }));
+  const mesures = odp.filter((o) => o.a.taux != null);
+
+  if (odp.length === 0) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <EtatVide
+          titre="Aucun indicateur d'objectif de développement"
+          detail="Le service du cadre de résultats n'a renvoyé aucun IODP."
+        />
+      </Box>
+    );
+  }
+
+  return (
+    <Box sx={{ p: 3 }}>
+      <Grid container spacing={2} sx={{ mb: 3 }}>
+        {odp.map(({ ind, a }) => (
+          <Grid size={{ xs: 12 }} key={ind.id}>
+            <Paper sx={{ p: 2, borderRadius: 2 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, mb: 0.5 }}>
+                <Typography variant="body2" fontWeight={600}>
+                  {ind.code} – {ind.libelle_court ?? ind.nom}
+                </Typography>
+                <Typography
+                  variant="body2" fontWeight={700}
+                  color={a.taux == null ? 'text.disabled' : a.taux >= 75 ? 'success.main' : a.taux >= 50 ? 'warning.main' : 'error.main'}
+                >
+                  {a.taux == null ? 'Non mesuré' : `${a.taux} %`}
+                </Typography>
               </Box>
-            ))}
-          </Stack>
-        </Paper>
+              <LinearProgress
+                variant="determinate"
+                value={a.taux == null ? 0 : Math.min(a.taux, 100)}
+                sx={{
+                  height: 10, borderRadius: 5, bgcolor: 'action.selected',
+                  '& .MuiLinearProgress-bar': {
+                    bgcolor: a.taux == null ? '#BDBDBD' : a.taux >= 75 ? '#4CAF50' : a.taux >= 50 ? '#FF9800' : '#F44336',
+                    borderRadius: 5,
+                  },
+                }}
+              />
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                {a.annee
+                  ? `${nombre(a.realise)} / ${nombre(a.prevu)} ${ind.unite} — exercice ${a.annee}`
+                  : 'Aucune valeur réalisée saisie'}
+                {ind.source_donnees ? ` · source : ${ind.source_donnees}` : ''}
+              </Typography>
+            </Paper>
+          </Grid>
+        ))}
       </Grid>
-    </Grid>
-  </Box>
-);
 
-const RapportRisques: React.FC = () => (
-  <Box sx={{ p: 3 }}>
-    <Grid container spacing={2} sx={{ mb: 3 }}>
-      {dataRisqueMatrice.map((r) => (
-        <Grid size={{ xs: 6, md: 3 }} key={r.niveau}>
-          <Paper sx={{ p: 2, textAlign: 'center', borderRadius: 2, bgcolor: `${r.color}15` }}>
-            <Typography variant="caption" color="text.secondary">{r.niveau}</Typography>
-            <Typography variant="h4" fontWeight={800} color={r.color}>{r.count}</Typography>
-            <Typography variant="caption" color="text.secondary">risques</Typography>
-          </Paper>
-        </Grid>
-      ))}
-    </Grid>
-    <Grid container spacing={2}>
-      <Grid size={{ xs: 12, md: 6 }}>
-        <Paper sx={{ p: 2, borderRadius: 2 }}>
-          <Typography variant="subtitle2" gutterBottom>Radar des risques par axe</Typography>
-          <ResponsiveContainer width="100%" height={260}>
-            <RadarChart data={dataRisques}>
-              <PolarGrid />
-              <PolarAngleAxis dataKey="axe" />
-              <Radar name="Score" dataKey="score" stroke="#F44336" fill="#F44336" fillOpacity={0.3} />
-              <RechartTooltip />
-            </RadarChart>
-          </ResponsiveContainer>
-        </Paper>
-      </Grid>
-      <Grid size={{ xs: 12, md: 6 }}>
-        <Paper sx={{ p: 2, borderRadius: 2 }}>
-          <Typography variant="subtitle2" gutterBottom sx={{ mb: 2 }}>Risques critiques & élevés</Typography>
-          <Stack spacing={1.5}>
-            {[
-              { titre: 'Sécheresse au Kasaï', niveau: 'Critique', icon: 'warning', color: '#F44336' },
-              { titre: 'Retard distribution intrants', niveau: 'Critique', icon: 'warning', color: '#F44336' },
-              { titre: 'Instabilité sécuritaire Est', niveau: 'Élevé', icon: 'gpp_maybe', color: '#FF9800' },
-              { titre: 'Inflation des coûts opérations', niveau: 'Élevé', icon: 'gpp_maybe', color: '#FF9800' },
-            ].map((r, i) => (
-              <Alert
-                key={i}
-                severity={r.niveau === 'Critique' ? 'error' : 'warning'}
-                icon={<GoogleIcon name={r.icon} size={16} />}
-                sx={{ borderRadius: 2, py: 0.5 }}
-              >
-                <Typography variant="caption" fontWeight={600}>{r.titre}</Typography>
-              </Alert>
-            ))}
-          </Stack>
-        </Paper>
-      </Grid>
-    </Grid>
-  </Box>
-);
-
-const RapportGRM: React.FC = () => (
-  <Box sx={{ p: 3 }}>
-    <Grid container spacing={2} sx={{ mb: 3 }}>
-      <Grid size={{ xs: 6, md: 3 }}>
-        <KPICard label="Plaintes reçues" value="115" change="+12" icon="inbox" color="#D32F2F" />
-      </Grid>
-      <Grid size={{ xs: 6, md: 3 }}>
-        <KPICard label="Résolues" value="101" change="+87.8%" icon="check_circle" color="#2E7D32" />
-      </Grid>
-      <Grid size={{ xs: 6, md: 3 }}>
-        <KPICard label="En cours" value="14" icon="pending" color="#FF9800" />
-      </Grid>
-      <Grid size={{ xs: 6, md: 3 }}>
-        <KPICard label="Délai moyen" value="4.2 j" change="-1.3j" icon="schedule" color="#1976D2" />
-      </Grid>
-    </Grid>
-    <Grid container spacing={2}>
-      <Grid size={{ xs: 12, md: 7 }}>
-        <Paper sx={{ p: 2, borderRadius: 2 }}>
-          <Typography variant="subtitle2" gutterBottom>Plaintes reçues vs résolues</Typography>
-          <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={dataGRM}>
+      <Bloc titre="Réalisé et prévu par indicateur">
+        {mesures.length > 0 ? (
+          <ResponsiveContainer width="100%" height={Math.max(220, mesures.length * 42)}>
+            <BarChart
+              data={mesures.map(({ ind, a }) => ({ code: ind.code, realise: a.realise, prevu: a.prevu }))}
+              layout="vertical"
+            >
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="mois" />
-              <YAxis />
-              <RechartTooltip />
+              <XAxis type="number" />
+              <YAxis type="category" dataKey="code" width={90} />
+              <RechartTooltip formatter={fmtNum} />
               <Legend />
-              <Bar dataKey="plaintes" name="Reçues" fill="#EF9A9A" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="resolues" name="Résolues" fill="#2E7D32" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="realise" name="Réalisé" fill="#2E7D32" radius={[0, 4, 4, 0]} />
+              <Bar dataKey="prevu" name="Prévu" fill="#C8E6C9" radius={[0, 4, 4, 0]} />
             </BarChart>
           </ResponsiveContainer>
-        </Paper>
-      </Grid>
-      <Grid size={{ xs: 12, md: 5 }}>
-        <Paper sx={{ p: 2, borderRadius: 2 }}>
-          <Typography variant="subtitle2" gutterBottom>Types de plaintes</Typography>
-          <ResponsiveContainer width="100%" height={240}>
-            <PieChart>
-              <Pie data={dataGRMType} cx="50%" cy="50%" outerRadius={80} dataKey="count"
-                label={({ name, percent }) => `${name as string} ${((percent ?? 0) * 100).toFixed(0)}%`} labelLine={false}>
-                {dataGRMType.map((d, i) => <Cell key={i} fill={d.color} />)}
-              </Pie>
-              <RechartTooltip />
-            </PieChart>
-          </ResponsiveContainer>
-        </Paper>
-      </Grid>
-    </Grid>
-  </Box>
-);
+        ) : (
+          <EtatVide
+            titre="Aucune valeur mesurée"
+            detail="Les IODP sont définis mais aucun réalisé n'a encore été saisi."
+          />
+        )}
+      </Bloc>
+    </Box>
+  );
+};
 
-const RapportParProvince: React.FC = () => (
-  <Box sx={{ p: 3 }}>
-    <Grid container spacing={2} sx={{ mb: 3 }}>
-      <Grid size={{ xs: 6, md: 3 }}>
-        <KPICard label="Provinces actives" value="7 / 10" icon="map" color="#2E7D32" />
-      </Grid>
-      <Grid size={{ xs: 6, md: 3 }}>
-        <KPICard label="Meilleure perf." value="Haut-Katanga" icon="emoji_events" color="#FF9800" />
-      </Grid>
-      <Grid size={{ xs: 6, md: 3 }}>
-        <KPICard label="Objectif H.-Katanga" value="95%" icon="bar_chart" color="#4CAF50" />
-      </Grid>
-      <Grid size={{ xs: 6, md: 3 }}>
-        <KPICard label="Écart min-max" value="8 090" icon="compare_arrows" color="#1976D2" />
-      </Grid>
-    </Grid>
-    <Paper sx={{ p: 2, borderRadius: 2 }}>
-      <Typography variant="subtitle2" gutterBottom>Bénéficiaires par province</Typography>
-      <ResponsiveContainer width="100%" height={300}>
-        <BarChart data={dataProvinces}>
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="province" angle={-20} textAnchor="end" interval={0} height={55} />
-          <YAxis tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
-          <RechartTooltip formatter={fmtNum} />
-          <Bar dataKey="value" name="Bénéficiaires" radius={[4, 4, 0, 0]}>
-            {dataProvinces.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
-    </Paper>
-  </Box>
-);
+const RapportBeneficiaires: React.FC<PropsRapport> = ({ d }) => {
+  const s = d.beneficiaires?.stats;
+  const total = s?.total_producteurs ?? 0;
+  const femmes = s?.total_femmes ?? 0;
+  const ages = d.beneficiaires?.age_distribution ?? [];
+  const provinces = [...d.provinces].sort(
+    (a, b) => (b.beneficiaires?.total ?? 0) - (a.beneficiaires?.total ?? 0),
+  );
+  const maxProv = provinces[0]?.beneficiaires?.total ?? 0;
 
-const RapportTrimestriel: React.FC = () => (
-  <Box sx={{ p: 3 }}>
-    <Grid container spacing={2} sx={{ mb: 3 }}>
-      <Grid size={{ xs: 6, md: 3 }}>
-        <KPICard label="Score global T1" value="71%" change="+8%" icon="assessment" color="#2E7D32" />
-      </Grid>
-      <Grid size={{ xs: 6, md: 3 }}>
-        <KPICard label="Activités réalisées" value="48 / 67" icon="task_alt" color="#4CAF50" />
-      </Grid>
-      <Grid size={{ xs: 6, md: 3 }}>
-        <KPICard label="Budget consommé" value="62%" change="+5%" icon="account_balance_wallet" color="#1976D2" />
-      </Grid>
-      <Grid size={{ xs: 6, md: 3 }}>
-        <KPICard label="Indicateurs atteints" value="3 / 5" icon="flag" color="#FF9800" />
-      </Grid>
-    </Grid>
-    <Paper sx={{ p: 2, borderRadius: 2 }}>
-      <Typography variant="subtitle2" gutterBottom>Évolution mensuelle – T1 2026</Typography>
-      <ResponsiveContainer width="100%" height={260}>
-        <LineChart data={[
-          { mois: 'Jan', realise: 58, budget: 55 },
-          { mois: 'Fév', realise: 64, budget: 61 },
-          { mois: 'Mar', realise: 71, budget: 62 },
-        ]}>
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="mois" />
-          <YAxis tickFormatter={(v) => `${v}%`} />
-          <RechartTooltip formatter={fmtPct} />
-          <Legend />
-          <Line type="monotone" dataKey="realise" name="Taux réalisation" stroke="#2E7D32" strokeWidth={2} dot={{ r: 5 }} />
-          <Line type="monotone" dataKey="budget" name="Budget consommé" stroke="#1976D2" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 5 }} />
-        </LineChart>
-      </ResponsiveContainer>
-    </Paper>
-  </Box>
-);
+  if (!d.beneficiaires && provinces.length === 0) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <EtatVide
+          titre="Aucune donnée bénéficiaire"
+          detail="Les services /beneficiaires et /provinces n'ont renvoyé aucun enregistrement."
+        />
+      </Box>
+    );
+  }
 
-// Mapping id → composant
-const rapportComponents: Record<string, React.ReactNode> = {
-  '1': <RapportExecutif />,
-  '2': <RapportIODP />,
-  '3': <RapportBeneficiaires />,
-  '4': <RapportRisques />,
-  '5': <RapportGRM />,
-  '6': <RapportParProvince />,
-  '7': <RapportTrimestriel />,
+  return (
+    <Box sx={{ p: 3 }}>
+      <Grid container spacing={2} sx={{ mb: 3 }}>
+        <Grid size={{ xs: 6, md: 3 }}>
+          <KPICard label="Producteurs enregistrés" value={nombre(s?.total_producteurs)} icon="people" color="#2E7D32" />
+        </Grid>
+        <Grid size={{ xs: 6, md: 3 }}>
+          <KPICard label="Femmes" value={nombre(s?.total_femmes)} icon="female" color="#E91E63" />
+        </Grid>
+        <Grid size={{ xs: 6, md: 3 }}>
+          <KPICard label="Hommes" value={total > 0 ? nombre(total - femmes) : '—'} icon="male" color="#1976D2" />
+        </Grid>
+        <Grid size={{ xs: 6, md: 3 }}>
+          <KPICard
+            label="Âge moyen"
+            value={s?.age_moyen != null ? `${Math.round(s.age_moyen)} ans` : '—'}
+            icon="cake" color="#FF9800"
+          />
+        </Grid>
+      </Grid>
+
+      <Grid container spacing={2}>
+        <Grid size={{ xs: 12, md: 4 }}>
+          <Bloc titre="Répartition par sexe">
+            {total > 0 ? (
+              <ResponsiveContainer width="100%" height={220}>
+                <PieChart>
+                  <Pie
+                    data={[{ name: 'Femmes', value: femmes }, { name: 'Hommes', value: total - femmes }]}
+                    cx="50%" cy="50%" outerRadius={80} dataKey="value"
+                    label={({ name, percent }) => `${name as string} ${((percent ?? 0) * 100).toFixed(0)}%`}
+                  >
+                    <Cell fill="#E91E63" />
+                    <Cell fill="#1976D2" />
+                  </Pie>
+                  <RechartTooltip formatter={fmtNum} />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <EtatVide titre="Effectifs non disponibles" />
+            )}
+          </Bloc>
+        </Grid>
+
+        <Grid size={{ xs: 12, md: 4 }}>
+          <Bloc titre="Répartition par tranche d'âge">
+            {ages.length > 0 ? (
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={ages}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="tranche_age" />
+                  <YAxis />
+                  <RechartTooltip formatter={fmtNum} />
+                  <Bar dataKey="nombre" name="Producteurs" fill="#4CAF50" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <EtatVide titre="Distribution par âge non disponible" />
+            )}
+          </Bloc>
+        </Grid>
+
+        <Grid size={{ xs: 12, md: 4 }}>
+          <Bloc titre="Provinces les plus couvertes">
+            {provinces.length > 0 ? (
+              <Stack spacing={1} sx={{ mt: 1 }}>
+                {provinces.slice(0, 6).map((p) => (
+                  <Box key={p.id}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Typography variant="caption">{p.name}</Typography>
+                      <Typography variant="caption" fontWeight={600}>
+                        {nombre(p.beneficiaires?.total)}
+                      </Typography>
+                    </Box>
+                    <LinearProgress
+                      variant="determinate"
+                      value={maxProv > 0 ? ((p.beneficiaires?.total ?? 0) / maxProv) * 100 : 0}
+                      sx={{ height: 6, borderRadius: 3, '& .MuiLinearProgress-bar': { bgcolor: '#2E7D32' } }}
+                    />
+                  </Box>
+                ))}
+              </Stack>
+            ) : (
+              <EtatVide titre="Aucune province servie" />
+            )}
+          </Bloc>
+        </Grid>
+      </Grid>
+    </Box>
+  );
+};
+
+const LIBELLES_CATEGORIE_RISQUE: Record<string, string> = {
+  gestion: 'Gestion',
+  technique: 'Technique',
+  politique: 'Politique',
+  socio_economique: 'Socio-économique',
+  environnemental: 'Environnemental',
+  sante_securite: 'Santé & sécurité',
+};
+
+const RapportRisques: React.FC<PropsRapport> = ({ d }) => {
+  const stats = d.risqueStats;
+  const niveaux = stats
+    ? [
+        { niveau: 'Critique', count: stats.critiques, color: '#F44336' },
+        { niveau: 'Élevé',    count: stats.eleves,    color: '#FF9800' },
+        { niveau: 'Modéré',   count: stats.moderes,   color: '#FFC107' },
+        { niveau: 'Faible',   count: stats.faibles,   color: '#4CAF50' },
+      ]
+    : [];
+
+  /** Profil par catégorie : criticité moyenne observée (probabilité × impact). */
+  const radar = useMemo(() => {
+    const parCategorie = new Map<string, number[]>();
+    d.risques.forEach((r) => {
+      const liste = parCategorie.get(r.categorie) ?? [];
+      liste.push(r.probabilite * r.impact);
+      parCategorie.set(r.categorie, liste);
+    });
+    return [...parCategorie.entries()].map(([cat, scores]) => ({
+      axe: LIBELLES_CATEGORIE_RISQUE[cat] ?? cat,
+      score: Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10,
+    }));
+  }, [d.risques]);
+
+  const majeurs = d.risques
+    .filter((r) => r.niveau === 'Critique' || r.niveau === 'Élevé')
+    .sort((a, b) => b.probabilite * b.impact - a.probabilite * a.impact)
+    .slice(0, 8);
+
+  if (!stats && d.risques.length === 0) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <EtatVide titre="Registre des risques vide" detail="Le service /risques n'a renvoyé aucun enregistrement." />
+      </Box>
+    );
+  }
+
+  return (
+    <Box sx={{ p: 3 }}>
+      {niveaux.length > 0 && (
+        <Grid container spacing={2} sx={{ mb: 3 }}>
+          {niveaux.map((r) => (
+            <Grid size={{ xs: 6, md: 3 }} key={r.niveau}>
+              <Paper sx={{ p: 2, textAlign: 'center', borderRadius: 2, bgcolor: `${r.color}15` }}>
+                <Typography variant="caption" color="text.secondary">{r.niveau}</Typography>
+                <Typography variant="h4" fontWeight={800} sx={{ color: r.color }}>{r.count}</Typography>
+                <Typography variant="caption" color="text.secondary">risques</Typography>
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
+      )}
+
+      <Grid container spacing={2}>
+        <Grid size={{ xs: 12, md: 6 }}>
+          <Bloc titre="Criticité moyenne par catégorie (probabilité × impact)">
+            {radar.length >= 3 ? (
+              <ResponsiveContainer width="100%" height={260}>
+                <RadarChart data={radar}>
+                  <PolarGrid />
+                  <PolarAngleAxis dataKey="axe" />
+                  <PolarRadiusAxis domain={[0, 25]} />
+                  <Radar name="Criticité" dataKey="score" stroke="#F44336" fill="#F44336" fillOpacity={0.3} />
+                  <RechartTooltip />
+                </RadarChart>
+              </ResponsiveContainer>
+            ) : (
+              <EtatVide
+                titre="Profil non traçable"
+                detail="Au moins trois catégories de risques renseignées sont nécessaires pour tracer le radar."
+              />
+            )}
+          </Bloc>
+        </Grid>
+
+        <Grid size={{ xs: 12, md: 6 }}>
+          <Bloc titre="Risques critiques et élevés">
+            {majeurs.length > 0 ? (
+              <Stack spacing={1.5} sx={{ mt: 1 }}>
+                {majeurs.map((r) => (
+                  <Alert
+                    key={r.id}
+                    severity={r.niveau === 'Critique' ? 'error' : 'warning'}
+                    icon={<GoogleIcon name={r.niveau === 'Critique' ? 'warning' : 'gpp_maybe'} size={16} />}
+                    sx={{ borderRadius: 2, py: 0.5 }}
+                  >
+                    <Typography variant="caption" fontWeight={600} display="block">
+                      {r.code} — {r.nom}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {LIBELLES_CATEGORIE_RISQUE[r.categorie] ?? r.categorie}
+                      {r.province ? ` · ${r.province}` : ''} · responsable : {r.responsable}
+                    </Typography>
+                  </Alert>
+                ))}
+              </Stack>
+            ) : (
+              <EtatVide titre="Aucun risque critique ou élevé enregistré" />
+            )}
+          </Bloc>
+        </Grid>
+      </Grid>
+    </Box>
+  );
+};
+
+const MOIS_COURTS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'];
+const COULEURS_TYPE_PLAINTE: Record<string, string> = {
+  VBG: '#D32F2F', EAS: '#F44336', HS: '#EF5350',
+  Technique: '#FF9800', Administratif: '#FFC107',
+  Financier: '#8E24AA', Environnemental: '#2E7D32',
+};
+
+/** Répartition des plaintes par type, dans l'ordre décroissant des volumes. */
+const compterParType = (plaintes: Plainte[]) => {
+  const compte = new Map<string, number>();
+  plaintes.forEach((p) => compte.set(p.type, (compte.get(p.type) ?? 0) + 1));
+  return [...compte.entries()]
+    .map(([type, count]) => ({ type, count, color: COULEURS_TYPE_PLAINTE[type] ?? '#9E9E9E' }))
+    .sort((a, b) => b.count - a.count);
+};
+
+const RapportGRM: React.FC<PropsRapport> = ({ d }) => {
+  const plaintes = d.plaintes;
+  const estResolue = (p: Plainte) => p.statut === 'traitee' || p.statut === 'cloturee';
+  const resolues = plaintes.filter(estResolue).length;
+  const enCours = plaintes.filter((p) => p.statut === 'en_cours' || p.statut === 'recue' || p.statut === 'referee').length;
+  const delais = plaintes.map((p) => p.delai_traite).filter((v): v is number => typeof v === 'number');
+  const delaiMoyen = delais.length ? Math.round((delais.reduce((a, b) => a + b, 0) / delais.length) * 10) / 10 : null;
+
+  /** Série mensuelle reconstituée à partir des dates de réception réelles. */
+  const serie = useMemo(() => {
+    const buckets = new Map<string, { mois: string; recues: number; resolues: number; tri: number }>();
+    plaintes.forEach((p) => {
+      const date = new Date(p.date_reception);
+      if (Number.isNaN(date.getTime())) return;
+      const cle = `${date.getFullYear()}-${String(date.getMonth()).padStart(2, '0')}`;
+      const entree = buckets.get(cle) ?? {
+        mois: `${MOIS_COURTS[date.getMonth()]} ${String(date.getFullYear()).slice(2)}`,
+        recues: 0, resolues: 0,
+        tri: date.getFullYear() * 12 + date.getMonth(),
+      };
+      entree.recues += 1;
+      if (estResolue(p)) entree.resolues += 1;
+      buckets.set(cle, entree);
+    });
+    return [...buckets.values()].sort((a, b) => a.tri - b.tri).slice(-12);
+  }, [plaintes]);
+
+  const parType = compterParType(plaintes);
+
+  if (plaintes.length === 0) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <EtatVide
+          titre="Aucune plainte enregistrée"
+          detail="Le mécanisme de gestion des plaintes ne contient aucun enregistrement pour la période servie."
+        />
+      </Box>
+    );
+  }
+
+  return (
+    <Box sx={{ p: 3 }}>
+      <Grid container spacing={2} sx={{ mb: 3 }}>
+        <Grid size={{ xs: 6, md: 3 }}>
+          <KPICard label="Plaintes reçues" value={nombre(plaintes.length)} icon="inbox" color="#D32F2F" />
+        </Grid>
+        <Grid size={{ xs: 6, md: 3 }}>
+          <KPICard
+            label="Traitées ou clôturées"
+            value={`${nombre(resolues)} (${pourcent(resolues, plaintes.length)} %)`}
+            icon="check_circle" color="#2E7D32"
+          />
+        </Grid>
+        <Grid size={{ xs: 6, md: 3 }}>
+          <KPICard label="En cours" value={nombre(enCours)} icon="pending" color="#FF9800" />
+        </Grid>
+        <Grid size={{ xs: 6, md: 3 }}>
+          <KPICard
+            label="Délai moyen"
+            value={delaiMoyen != null ? `${delaiMoyen} j` : '—'}
+            icon="schedule" color="#1976D2"
+          />
+        </Grid>
+      </Grid>
+
+      <Grid container spacing={2}>
+        <Grid size={{ xs: 12, md: 7 }}>
+          <Bloc titre="Plaintes reçues et traitées, par mois de réception">
+            {serie.length > 0 ? (
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={serie}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="mois" />
+                  <YAxis allowDecimals={false} />
+                  <RechartTooltip formatter={fmtNum} />
+                  <Legend />
+                  <Bar dataKey="recues" name="Reçues" fill="#EF9A9A" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="resolues" name="Traitées" fill="#2E7D32" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <EtatVide titre="Dates de réception non exploitables" />
+            )}
+          </Bloc>
+        </Grid>
+        <Grid size={{ xs: 12, md: 5 }}>
+          <Bloc titre="Typologie des plaintes">
+            <ResponsiveContainer width="100%" height={240}>
+              <PieChart>
+                <Pie
+                  data={parType} cx="50%" cy="50%" outerRadius={80} dataKey="count" nameKey="type"
+                  labelLine={false}
+                  label={({ name, percent }) => `${name as string} ${((percent ?? 0) * 100).toFixed(0)}%`}
+                >
+                  {parType.map((t, i) => <Cell key={i} fill={t.color} />)}
+                </Pie>
+                <RechartTooltip formatter={fmtNum} />
+              </PieChart>
+            </ResponsiveContainer>
+          </Bloc>
+        </Grid>
+      </Grid>
+    </Box>
+  );
+};
+
+const RapportParProvince: React.FC<PropsRapport> = ({ d }) => {
+  const provinces = [...d.provinces].sort(
+    (a, b) => (b.beneficiaires?.total ?? 0) - (a.beneficiaires?.total ?? 0),
+  );
+  const avecScore = provinces.filter((p) => p.performance_score != null);
+  const totaux = provinces.map((p) => p.beneficiaires?.total ?? 0);
+  const ecart = totaux.length > 1 ? Math.max(...totaux) - Math.min(...totaux) : null;
+
+  if (provinces.length === 0) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <EtatVide titre="Aucune province servie" detail="Le service /provinces n'a renvoyé aucun enregistrement." />
+      </Box>
+    );
+  }
+
+  return (
+    <Box sx={{ p: 3 }}>
+      <Grid container spacing={2} sx={{ mb: 3 }}>
+        <Grid size={{ xs: 6, md: 3 }}>
+          <KPICard label="Provinces servies" value={nombre(provinces.length)} icon="map" color="#2E7D32" />
+        </Grid>
+        <Grid size={{ xs: 6, md: 3 }}>
+          <KPICard label="Effectif le plus élevé" value={provinces[0]?.name ?? '—'} icon="emoji_events" color="#FF9800" />
+        </Grid>
+        <Grid size={{ xs: 6, md: 3 }}>
+          <KPICard
+            label="Meilleur score"
+            value={
+              avecScore.length
+                ? `${Math.max(...avecScore.map((p) => p.performance_score ?? 0))} %`
+                : '—'
+            }
+            icon="bar_chart" color="#4CAF50"
+          />
+        </Grid>
+        <Grid size={{ xs: 6, md: 3 }}>
+          <KPICard label="Écart min–max" value={nombre(ecart)} icon="compare_arrows" color="#1976D2" />
+        </Grid>
+      </Grid>
+
+      <Bloc titre="Exploitants inscrits par province">
+        <ResponsiveContainer width="100%" height={320}>
+          <BarChart data={provinces.map((p) => ({ province: p.name, value: p.beneficiaires?.total ?? 0 }))}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="province" angle={-20} textAnchor="end" interval={0} height={60} />
+            <YAxis tickFormatter={(v) => (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v))} />
+            <RechartTooltip formatter={fmtNum} />
+            <Bar dataKey="value" name="Exploitants" radius={[4, 4, 0, 0]}>
+              {provinces.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </Bloc>
+    </Box>
+  );
 };
 
 // ---------------------------------------------------------------------------
 // Page principale
 // ---------------------------------------------------------------------------
 export const PowerBIReports: React.FC = () => {
+  const { donnees, chargement, recharger } = useDonneesRapports();
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedRapport, setSelectedRapport] = useState<Rapport | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -573,26 +870,61 @@ export const PowerBIReports: React.FC = () => {
 
   const filtered = rapports.filter((r) => {
     const matchCat = selectedCategory === 'all' || r.category === selectedCategory;
-    const matchSearch = r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      r.description.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchCat && matchSearch;
+    const q = searchQuery.toLowerCase();
+    return matchCat && (r.name.toLowerCase().includes(q) || r.description.toLowerCase().includes(q));
   });
 
-  const handleOpen = (r: Rapport) => { setSelectedRapport(r); setDialogOpen(true); };
+  const rendu = (id: string) => {
+    switch (id) {
+      case 'executif': return <RapportExecutif d={donnees} />;
+      case 'iodp': return <RapportIODP d={donnees} />;
+      case 'beneficiaires': return <RapportBeneficiaires d={donnees} />;
+      case 'risques': return <RapportRisques d={donnees} />;
+      case 'grm': return <RapportGRM d={donnees} />;
+      case 'provinces': return <RapportParProvince d={donnees} />;
+      default:
+        return <Box sx={{ p: 3 }}><EtatVide titre="Rapport non disponible" /></Box>;
+    }
+  };
 
   return (
     <Box>
-      {/* En-tête */}
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" sx={{ fontWeight: 600, color: 'primary.main', mb: 0.5 }}>
-          Rapports &amp; Analyses
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Tableaux de bord interactifs et rapports d'analyse avancée du programme PNDA-SE
-        </Typography>
-      </Box>
+      <Stack direction="row" justifyContent="space-between" alignItems="flex-start" flexWrap="wrap" gap={2} sx={{ mb: 3 }}>
+        <Box>
+          <Typography variant="h4" sx={{ fontWeight: 600, color: 'primary.main', mb: 0.5 }}>
+            Rapports &amp; Analyses
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Tableaux de bord construits sur les données du cadre de résultats, du RNA, du registre
+            des risques et du mécanisme de gestion des plaintes.
+          </Typography>
+        </Box>
+        <Button
+          variant="outlined"
+          startIcon={<GoogleIcon name="refresh" size={18} />}
+          onClick={recharger}
+          disabled={chargement}
+        >
+          Actualiser
+        </Button>
+      </Stack>
 
-      {/* Recherche */}
+      {chargement && <LinearProgress sx={{ mb: 2 }} />}
+
+      {!chargement && donnees.echecs.length > 0 && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          Sources indisponibles : {donnees.echecs.join(', ')}. Les rapports concernés restent vides.
+        </Alert>
+      )}
+
+      {!chargement && donnees.chargeLe && (
+        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
+          Données extraites le {donnees.chargeLe.toLocaleString('fr-FR')} — {donnees.cadre.length} indicateurs
+          du cadre, {donnees.provinces.length} provinces, {donnees.risques.length} risques,{' '}
+          {donnees.plaintes.length} plaintes.
+        </Typography>
+      )}
+
       <Paper sx={{ p: 2, mb: 3, borderRadius: 2 }}>
         <TextField
           fullWidth
@@ -616,7 +948,6 @@ export const PowerBIReports: React.FC = () => {
         />
       </Paper>
 
-      {/* Catégories */}
       <Tabs
         value={selectedCategory}
         onChange={(_, v) => setSelectedCategory(v)}
@@ -625,17 +956,11 @@ export const PowerBIReports: React.FC = () => {
         scrollButtons="auto"
       >
         {categories.map((cat) => (
-          <Tab
-            key={cat.value}
-            value={cat.value}
-            label={cat.label}
-            icon={<GoogleIcon name={cat.icon} size={18} />}
-            iconPosition="start"
-          />
+          <Tab key={cat.value} value={cat.value} label={cat.label}
+               icon={<GoogleIcon name={cat.icon} size={18} />} iconPosition="start" />
         ))}
       </Tabs>
 
-      {/* Grille */}
       <Grid container spacing={3}>
         {filtered.map((rapport) => {
           const pal = PALETTE[rapport.category];
@@ -648,7 +973,7 @@ export const PowerBIReports: React.FC = () => {
                   '&:hover': { transform: 'translateY(-4px)', boxShadow: 4 },
                   border: `1px solid ${pal.bg}`,
                 }}
-                onClick={() => handleOpen(rapport)}
+                onClick={() => { setSelectedRapport(rapport); setDialogOpen(true); }}
               >
                 <CardContent>
                   <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, mb: 2 }}>
@@ -661,7 +986,9 @@ export const PowerBIReports: React.FC = () => {
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                       <Typography variant="subtitle1" fontWeight={600} noWrap>{rapport.name}</Typography>
                       <Typography variant="caption" color="text.secondary">
-                        Mis à jour le {new Date(rapport.updated_at).toLocaleDateString('fr-FR')}
+                        {donnees.chargeLe
+                          ? `Données du ${donnees.chargeLe.toLocaleDateString('fr-FR')}`
+                          : 'Données non chargées'}
                       </Typography>
                     </Box>
                   </Box>
@@ -695,7 +1022,6 @@ export const PowerBIReports: React.FC = () => {
         </Paper>
       )}
 
-      {/* Dialog rapport */}
       <Dialog
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
@@ -712,7 +1038,10 @@ export const PowerBIReports: React.FC = () => {
                 <Chip
                   label={categories.find((c) => c.value === selectedRapport.category)?.label}
                   size="small"
-                  sx={{ bgcolor: PALETTE[selectedRapport.category].bg, color: PALETTE[selectedRapport.category].fg }}
+                  sx={{
+                    bgcolor: PALETTE[selectedRapport.category].bg,
+                    color: PALETTE[selectedRapport.category].fg,
+                  }}
                 />
               </Box>
               <IconButton onClick={() => setDialogOpen(false)}>
@@ -721,17 +1050,21 @@ export const PowerBIReports: React.FC = () => {
             </DialogTitle>
             <Divider />
             <DialogContent sx={{ p: 0, overflowY: 'auto' }}>
-              {rapportComponents[selectedRapport.id] ?? (
-                <Box sx={{ p: 4, textAlign: 'center' }}>
-                  <Typography color="text.secondary">Rapport non disponible</Typography>
+              {chargement ? (
+                <Box sx={{ p: 6, display: 'flex', justifyContent: 'center' }}>
+                  <CircularProgress sx={{ color: '#2E7D32' }} />
                 </Box>
+              ) : (
+                rendu(selectedRapport.id)
               )}
             </DialogContent>
-            <DialogActions sx={{ px: 3, py: 1.5 }}>
+            <DialogActions sx={{ px: 3, py: 1.5, justifyContent: 'space-between' }}>
+              <Typography variant="caption" color="text.secondary">
+                {donnees.chargeLe
+                  ? `Source : services du programme — extraction du ${donnees.chargeLe.toLocaleString('fr-FR')}`
+                  : 'Aucune extraction disponible'}
+              </Typography>
               <Button onClick={() => setDialogOpen(false)}>Fermer</Button>
-              <Button variant="contained" sx={{ bgcolor: '#2E7D32' }} startIcon={<GoogleIcon name="download" size={18} />}>
-                Exporter PDF
-              </Button>
             </DialogActions>
           </>
         )}

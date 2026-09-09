@@ -1,5 +1,6 @@
 // frontend/src/pages/Collecte/CollecteMobile.tsx
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -83,6 +84,7 @@ const getCategoryLabel = (category: string) => {
 };
 
 export const CollecteMobile: React.FC = () => {
+  const [searchParams] = useSearchParams();
   const [selectedForm, setSelectedForm] = useState<CollecteForm | null>(null);
   const [formDialogOpen, setFormDialogOpen] = useState(false);
   const [formData, setFormData] = useState<Record<string, unknown>>({});
@@ -107,6 +109,15 @@ export const CollecteMobile: React.FC = () => {
     loadData();
     getCurrentLocation();
   }, []);
+
+  useEffect(() => {
+    const formId = searchParams.get('form');
+    if (!formId) return;
+    const form = getActiveForms().find((item) => item.id === formId);
+    if (form) {
+      handleOpenForm(form);
+    }
+  }, [searchParams]);
 
   const getCurrentLocation = () => {
     if (navigator.geolocation) {
@@ -375,19 +386,19 @@ export const CollecteMobile: React.FC = () => {
                     sx={{ 
                       width: 80, 
                       height: 80, 
-                      bgcolor: '#F5F5F5', 
+                      bgcolor: 'action.hover', 
                       borderRadius: 2,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      border: '1px solid #E0E0E0',
+                      border: 1, borderColor: 'divider',
                     }}
                   >
                     <GoogleIcon name="photo_camera" size={32} sx={{ color: '#9E9E9E' }} />
                   </Box>
                   <IconButton 
                     size="small" 
-                    sx={{ position: 'absolute', top: -8, right: -8, bgcolor: 'white' }}
+                    sx={{ position: 'absolute', top: -8, right: -8, bgcolor: 'background.paper' }}
                     onClick={() => handleRemovePhoto(index)}
                   >
                     <GoogleIcon name="close" size={14} />
@@ -594,7 +605,7 @@ export const CollecteMobile: React.FC = () => {
                       </Box>
                     }
                   />
-                  <Chip label="En attente" size="small" sx={{ bgcolor: '#FFF3E0', color: '#FF8F00', ml: 2 }} />
+                  <Chip label="En attente" size="small" sx={{ bgcolor: 'rgba(250, 178, 25, 0.14)', color: '#FF8F00', ml: 2 }} />
                 </ListItem>
                 <Divider />
               </React.Fragment>
@@ -642,7 +653,7 @@ export const CollecteMobile: React.FC = () => {
                       </Box>
                     }
                   />
-                  <Chip label="Synchronisé" size="small" sx={{ bgcolor: '#E8F5E9', color: '#2E7D32', ml: 2 }} />
+                  <Chip label="Synchronisé" size="small" sx={{ bgcolor: 'action.hover', color: '#2E7D32', ml: 2 }} />
                 </ListItem>
                 <Divider />
               </React.Fragment>
@@ -717,9 +728,9 @@ export const CollecteMobile: React.FC = () => {
               <Typography variant="subtitle2" color="text.secondary" gutterBottom>
                 Données collectées
               </Typography>
-              <Paper sx={{ p: 2, bgcolor: '#F5F5F5', borderRadius: 2, mb: 2 }}>
+              <Paper sx={{ p: 2, bgcolor: 'action.hover', borderRadius: 2, mb: 2 }}>
                 {Object.entries(selectedSavedForm.data).map(([key, value]) => (
-                  <Box key={key} sx={{ display: 'flex', justifyContent: 'space-between', mb: 1, py: 0.5, borderBottom: '1px solid #E0E0E0' }}>
+                  <Box key={key} sx={{ display: 'flex', justifyContent: 'space-between', mb: 1, py: 0.5, borderBottom: 1, borderColor: 'divider' }}>
                     <Typography variant="caption" color="text.secondary">{key}</Typography>
                     <Typography variant="caption" fontWeight={500}>{String(value)}</Typography>
                   </Box>
@@ -738,12 +749,12 @@ export const CollecteMobile: React.FC = () => {
                         sx={{ 
                           width: 80, 
                           height: 80, 
-                          bgcolor: '#F5F5F5', 
+                          bgcolor: 'action.hover', 
                           borderRadius: 2,
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          border: '1px solid #E0E0E0',
+                          border: 1, borderColor: 'divider',
                         }}
                       >
                         <GoogleIcon name="photo" size={32} sx={{ color: '#9E9E9E' }} />

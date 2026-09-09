@@ -1,10 +1,8 @@
-﻿// frontend/src/App.tsx
+// frontend/src/App.tsx
 import React from 'react';
-import { ThemeProvider } from '@mui/material/styles';
-import CssBaseline from '@mui/material/CssBaseline';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Provider } from 'react-redux';
-import { theme } from './assets/styles/theme';
+import { ThemeModeProvider } from './context/ThemeModeContext';
 import { store } from './store/store';
 import { Layout } from './components/common/Layout/Layout';
 import { AuthProvider } from './context/AuthContext';
@@ -15,6 +13,7 @@ import { BeneficiaireList } from './pages/Beneficiaires/BeneficiaireList';
 import { PlainteList } from './pages/GRM/PlainteList';
 import { IODPList } from './pages/Indicateurs/IODPList';
 import { IRList } from './pages/Indicateurs/IRList';
+import { IndicateurDetail } from './pages/Indicateurs/IndicateurDetail';
 import { RisqueList } from './pages/Risques/RisqueList';
 import { CadreResultats } from './pages/CadreResultats/CadreResultats';
 import { PowerBIReports } from './pages/Rapports/PowerBIReports';
@@ -36,6 +35,7 @@ import { EnvironnementVBG } from './pages/Indicateurs/EnvironnementVBG';
 import { ProfilePage } from './pages/Profil/ProfilePage';
 import { SuiviMissions } from './pages/Suivis/SuiviMissions';
 import { ActivitesSuivi } from './pages/Suivis/ActivitesSuivi';
+import { SuiviPTBA } from './pages/Suivis/SuiviPTBA';
 import { DashboardAC } from './pages/AgentCollecteur/DashboardAC';
 import { OTDashboard } from './pages/Dashboard/OTDashboard';
 import { AideDocumentation } from './pages/Aide/AideDocumentation';
@@ -44,8 +44,9 @@ import { AlertesRisques } from './pages/Risques/AlertesRisques';
 import { NotificationsPage } from './pages/Notifications/NotificationsPage';
 import { BeneficiaireDashboard } from './pages/Beneficiaires/BeneficiaireDashboard';
 
-// RÃ´les et page d'accueil par dÃ©faut
+// Rôles et page d'accueil par défaut
 const DEFAULT_HOME: Record<string, string> = {
+  super_admin: '/dashboard/national',
   admin: '/dashboard/national',
   uncp: '/dashboard/national',
   upep: '/dashboard/provincial',
@@ -62,7 +63,7 @@ const getStoredUser = () => {
   }
 };
 
-// Composant de protection des routes avec contrÃ´le par rÃ´le
+// Composant de protection des routes avec contrôle par rôle
 const ProtectedRoute: React.FC<{
   children: React.ReactNode;
   roles?: string[];
@@ -93,168 +94,177 @@ const HomeRedirect: React.FC = () => {
 function App() {
   return (
     <Provider store={store}>
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
+      <ThemeModeProvider>
         <BrowserRouter>
           <AuthProvider>
             <NotificationsProvider>
               <Routes>
                 <Route path="/login" element={<LoginPage />} />
 
-                {/* Redirection accueil selon rÃ´le */}
+                {/* Redirection accueil selon rôle */}
                 <Route path="/" element={<HomeRedirect />} />
 
                 {/* admin + uncp uniquement */}
                 <Route path="/dashboard/national" element={
-                  <ProtectedRoute roles={['admin', 'uncp']}>
+                  <ProtectedRoute roles={['super_admin', 'admin', 'uncp']}>
                     <Layout><NationalDashboard /></Layout>
                   </ProtectedRoute>
                 } />
                 <Route path="/admin/utilisateurs" element={
-                  <ProtectedRoute roles={['admin']}>
+                  <ProtectedRoute roles={['super_admin']}>
                     <Layout><Utilisateurs /></Layout>
                   </ProtectedRoute>
                 } />
                 <Route path="/admin/configurations" element={
-                  <ProtectedRoute roles={['admin']}>
+                  <ProtectedRoute roles={['super_admin']}>
                     <Layout><ConfigurationPage /></Layout>
                   </ProtectedRoute>
                 } />
 
                 {/* admin + uncp + upep */}
                 <Route path="/dashboard/provincial" element={
-                  <ProtectedRoute roles={['admin', 'uncp', 'upep']}>
+                  <ProtectedRoute roles={['super_admin', 'admin', 'uncp', 'upep']}>
                     <Layout><ProvincialDashboard /></Layout>
                   </ProtectedRoute>
                 } />
 
                 {/* ot uniquement */}
                 <Route path="/dashboard/ot" element={
-                  <ProtectedRoute roles={['admin', 'uncp', 'upep', 'ot']}>
+                  <ProtectedRoute roles={['super_admin', 'admin', 'uncp', 'upep', 'ot']}>
                     <Layout><OTDashboard /></Layout>
                   </ProtectedRoute>
                 } />
                 <Route path="/indicateurs/iodp" element={
-                  <ProtectedRoute roles={['admin', 'uncp', 'upep', 'ot', 'partenaire']}>
+                  <ProtectedRoute roles={['super_admin', 'admin', 'uncp', 'upep', 'ot', 'partenaire']}>
                     <Layout><IODPList /></Layout>
                   </ProtectedRoute>
                 } />
                 <Route path="/indicateurs/ir" element={
-                  <ProtectedRoute roles={['admin', 'uncp', 'upep', 'ot', 'partenaire']}>
+                  <ProtectedRoute roles={['super_admin', 'admin', 'uncp', 'upep', 'ot', 'partenaire']}>
                     <Layout><IRList /></Layout>
                   </ProtectedRoute>
                 } />
                 <Route path="/indicateurs/cadre" element={
-                  <ProtectedRoute roles={['admin', 'uncp', 'upep', 'ot', 'partenaire']}>
+                  <ProtectedRoute roles={['super_admin', 'admin', 'uncp', 'upep', 'ot', 'partenaire']}>
                     <Layout><CadreResultats /></Layout>
                   </ProtectedRoute>
                 } />
                 <Route path="/indicateurs/environnement" element={
-                  <ProtectedRoute roles={['admin', 'uncp', 'upep', 'ot', 'partenaire']}>
+                  <ProtectedRoute roles={['super_admin', 'admin', 'uncp', 'upep', 'ot', 'partenaire']}>
                     <Layout><EnvironnementVBG /></Layout>
                   </ProtectedRoute>
                 } />
+                <Route path="/indicateurs/:id" element={
+                  <ProtectedRoute roles={['super_admin', 'admin', 'uncp', 'upep', 'ot', 'partenaire']}>
+                    <Layout><IndicateurDetail /></Layout>
+                  </ProtectedRoute>
+                } />
                 <Route path="/beneficiaires/rna" element={
-                  <ProtectedRoute roles={['admin', 'uncp', 'upep', 'ot']}>
+                  <ProtectedRoute roles={['super_admin', 'admin', 'uncp', 'upep', 'ot']}>
                     <Layout><BeneficiaireList /></Layout>
                   </ProtectedRoute>
                 } />
                 <Route path="/beneficiaires/organisations" element={
-                  <ProtectedRoute roles={['admin', 'uncp', 'upep', 'ot']}>
+                  <ProtectedRoute roles={['super_admin', 'admin', 'uncp', 'upep', 'ot']}>
                     <Layout><OrganisationList /></Layout>
                   </ProtectedRoute>
                 } />
                 <Route path="/beneficiaires/fournisseurs" element={
-                  <ProtectedRoute roles={['admin', 'uncp', 'upep']}>
+                  <ProtectedRoute roles={['super_admin', 'admin', 'uncp', 'upep']}>
                     <Layout><FournisseurList /></Layout>
                   </ProtectedRoute>
                 } />
                 <Route path="/beneficiaires/cartes" element={
-                  <ProtectedRoute roles={['admin', 'uncp', 'upep', 'ot']}>
+                  <ProtectedRoute roles={['super_admin', 'admin', 'uncp', 'upep', 'ot']}>
                     <Layout><DistributionCartesPage /></Layout>
                   </ProtectedRoute>
                 } />
                 <Route path="/beneficiaires/ventes-semences" element={
-                  <ProtectedRoute roles={['admin', 'uncp', 'upep', 'ot']}>
+                  <ProtectedRoute roles={['super_admin', 'admin', 'uncp', 'upep', 'ot']}>
                     <Layout><VentesSemencesPage /></Layout>
                   </ProtectedRoute>
                 } />
                 <Route path="/suivi/missions" element={
-                  <ProtectedRoute roles={['admin', 'uncp', 'upep', 'ot']}>
+                  <ProtectedRoute roles={['super_admin', 'admin', 'uncp', 'upep', 'ot']}>
                     <Layout><SuiviMissions /></Layout>
                   </ProtectedRoute>
                 } />
                 <Route path="/suivi/activites" element={
-                  <ProtectedRoute roles={['admin', 'uncp', 'upep', 'ot']}>
+                  <ProtectedRoute roles={['super_admin', 'admin', 'uncp', 'upep', 'ot']}>
                     <Layout><ActivitesSuivi /></Layout>
                   </ProtectedRoute>
                 } />
+                <Route path="/suivi/ptba" element={
+                  <ProtectedRoute roles={['super_admin', 'admin', 'uncp', 'upep', 'ot', 'partenaire']}>
+                    <Layout><SuiviPTBA /></Layout>
+                  </ProtectedRoute>
+                } />
                 <Route path="/risques/registre" element={
-                  <ProtectedRoute roles={['admin', 'uncp', 'upep']}>
+                  <ProtectedRoute roles={['super_admin', 'admin', 'uncp', 'upep']}>
                     <Layout><RisqueList /></Layout>
                   </ProtectedRoute>
                 } />
                 <Route path="/risques/plan" element={
-                  <ProtectedRoute roles={['admin', 'uncp', 'upep']}>
+                  <ProtectedRoute roles={['super_admin', 'admin', 'uncp', 'upep']}>
                     <Layout><PlanAttenuation /></Layout>
                   </ProtectedRoute>
                 } />
                 <Route path="/risques/alertes" element={
-                  <ProtectedRoute roles={['admin', 'uncp', 'upep']}>
+                  <ProtectedRoute roles={['super_admin', 'admin', 'uncp', 'upep']}>
                     <Layout><AlertesRisques /></Layout>
                   </ProtectedRoute>
                 } />
                 <Route path="/database/plaintes" element={
-                  <ProtectedRoute roles={['admin', 'uncp', 'upep', 'ot']}>
+                  <ProtectedRoute roles={['super_admin', 'admin', 'uncp', 'upep', 'ot']}>
                     <Layout><PlainteList /></Layout>
                   </ProtectedRoute>
                 } />
                 <Route path="/database/beneficiaires" element={
-                  <ProtectedRoute roles={['admin', 'uncp', 'upep']}>
+                  <ProtectedRoute roles={['super_admin', 'admin', 'uncp', 'upep']}>
                     <Layout><BeneficiaireDatabase /></Layout>
                   </ProtectedRoute>
                 } />
                 <Route path="/database/activites" element={
-                  <ProtectedRoute roles={['admin', 'uncp', 'upep']}>
+                  <ProtectedRoute roles={['super_admin', 'admin', 'uncp', 'upep']}>
                     <Layout><ActivitesDatabase /></Layout>
                   </ProtectedRoute>
                 } />
                 <Route path="/database/indicateurs" element={
-                  <ProtectedRoute roles={['admin', 'uncp', 'upep']}>
+                  <ProtectedRoute roles={['super_admin', 'admin', 'uncp', 'upep']}>
                     <Layout><IndicateursDatabase /></Layout>
                   </ProtectedRoute>
                 } />
                 <Route path="/outils/calculateur" element={
-                  <ProtectedRoute roles={['admin', 'uncp', 'upep', 'ot']}>
+                  <ProtectedRoute roles={['super_admin', 'admin', 'uncp', 'upep', 'ot']}>
                     <Layout><IndicateurCalculator /></Layout>
                   </ProtectedRoute>
                 } />
                 <Route path="/outils/collecte" element={
-                  <ProtectedRoute roles={['admin', 'uncp', 'upep', 'ot']}>
+                  <ProtectedRoute roles={['super_admin', 'admin', 'uncp', 'upep', 'ot']}>
                     <Layout><CollecteMobile /></Layout>
                   </ProtectedRoute>
                 } />
                 <Route path="/outils/cartographie" element={
-                  <ProtectedRoute roles={['admin', 'uncp', 'upep', 'ot']}>
+                  <ProtectedRoute roles={['super_admin', 'admin', 'uncp', 'upep', 'ot']}>
                     <Layout><CartographiePage /></Layout>
                   </ProtectedRoute>
                 } />
                 <Route path="/rapports" element={
-                  <ProtectedRoute roles={['admin', 'uncp', 'upep', 'partenaire']}>
+                  <ProtectedRoute roles={['super_admin', 'admin', 'uncp', 'upep', 'partenaire']}>
                     <Layout><PowerBIReports /></Layout>
                   </ProtectedRoute>
                 } />
 
                 {/* Partenaires */}
                 <Route path="/dashboard/partenaires" element={
-                  <ProtectedRoute roles={['admin', 'uncp', 'upep', 'partenaire']}>
+                  <ProtectedRoute roles={['super_admin', 'admin', 'uncp', 'upep', 'partenaire']}>
                     <Layout><PartnerDashboard /></Layout>
                   </ProtectedRoute>
                 } />
 
                 {/* Agent collecteur */}
                 <Route path="/agent/dashboard" element={
-                  <ProtectedRoute roles={['admin', 'uncp', 'upep', 'ot']}>
+                  <ProtectedRoute roles={['super_admin', 'admin', 'uncp', 'upep', 'ot']}>
                     <Layout><DashboardAC /></Layout>
                   </ProtectedRoute>
                 } />
@@ -278,7 +288,7 @@ function App() {
                   </ProtectedRoute>
                 } />
                 <Route path="/beneficiaires/dashboard" element={
-                  <ProtectedRoute roles={['admin', 'uncp', 'upep']}>
+                  <ProtectedRoute roles={['super_admin', 'admin', 'uncp', 'upep']}>
                     <Layout><BeneficiaireDashboard /></Layout>
                   </ProtectedRoute>
                 } />
@@ -288,7 +298,7 @@ function App() {
             </NotificationsProvider>
           </AuthProvider>
         </BrowserRouter>
-      </ThemeProvider>
+      </ThemeModeProvider>
     </Provider>
   );
 }

@@ -184,7 +184,7 @@ export const IndicateurCalculator: React.FC = () => {
   const chartData = selectedIndicateur && resultat && typeof cibleCourante === 'number'
     ? [
         { name: 'Réalisé', valeur: resultat.valeur, fill: '#2E7D32' },
-        { name: 'Cible', valeur: cibleCourante, fill: '#E0E0E0' },
+        { name: 'Cible', valeur: cibleCourante, fill: 'rgba(148, 163, 184, 0.45)' },
       ]
     : [];
 
@@ -333,7 +333,7 @@ export const IndicateurCalculator: React.FC = () => {
                 </Stack>
 
                 {/* Formule */}
-                <Accordion disableGutters elevation={0} sx={{ bgcolor: '#F9FBE7', borderRadius: 2, border: '1px solid #DCE775', '&:before': { display: 'none' } }}>
+                <Accordion disableGutters elevation={0} sx={{ bgcolor: 'action.hover', borderRadius: 2, border: '1px solid #DCE775', '&:before': { display: 'none' } }}>
                   <AccordionSummary expandIcon={<GoogleIcon name="expand_more" size={20} />}>
                     <Stack direction="row" spacing={1} alignItems="center">
                       <GoogleIcon name="functions" size={18} sx={{ color: '#2E7D32' }} />
@@ -342,7 +342,7 @@ export const IndicateurCalculator: React.FC = () => {
                   </AccordionSummary>
                   <AccordionDetails>
                     <Typography
-                      sx={{ fontFamily: 'monospace', fontSize: '0.9rem', bgcolor: 'white', borderRadius: 1, p: 1.5 }}
+                      sx={{ fontFamily: 'monospace', fontSize: '0.9rem', bgcolor: 'background.paper', borderRadius: 1, p: 1.5 }}
                     >
                       {selectedIndicateur.formule}
                     </Typography>
@@ -437,7 +437,7 @@ export const IndicateurCalculator: React.FC = () => {
                       {/* Progression vers cible */}
                       {typeof cible === 'number' && (
                         <Grid size={{ xs: 12, md: 6 }}>
-                          <Box sx={{ bgcolor: '#F5F5F5', borderRadius: 2, p: 2.5, height: '100%' }}>
+                          <Box sx={{ bgcolor: 'action.hover', borderRadius: 2, p: 2.5, height: '100%' }}>
                             <Typography variant="caption" color="text.secondary" fontWeight={600}>PROGRESSION VERS LA CIBLE</Typography>
                             <Typography variant="h3" fontWeight={800} sx={{ color: statut.color, lineHeight: 1.1, my: 1 }}>
                               {Math.min(prog, 100).toFixed(1)}%
@@ -447,7 +447,7 @@ export const IndicateurCalculator: React.FC = () => {
                               value={Math.min(prog, 100)}
                               sx={{
                                 height: 10, borderRadius: 5, mb: 1,
-                                bgcolor: '#E0E0E0',
+                                bgcolor: 'action.selected',
                                 '& .MuiLinearProgress-bar': { bgcolor: statut.color, borderRadius: 5 },
                               }}
                             />
@@ -485,7 +485,7 @@ export const IndicateurCalculator: React.FC = () => {
                     {resultat.recommandations && resultat.recommandations.length > 0 && (
                       <>
                         <Divider sx={{ my: 2 }} />
-                        <Accordion disableGutters elevation={0} sx={{ bgcolor: '#FFF8E1', borderRadius: 2, border: '1px solid #FFE082', '&:before': { display: 'none' } }} defaultExpanded>
+                        <Accordion disableGutters elevation={0} sx={{ bgcolor: 'rgba(250, 178, 25, 0.14)', borderRadius: 2, border: '1px solid #FFE082', '&:before': { display: 'none' } }} defaultExpanded>
                           <AccordionSummary expandIcon={<GoogleIcon name="expand_more" size={20} />}>
                             <Stack direction="row" spacing={1} alignItems="center">
                               <GoogleIcon name="lightbulb" size={18} sx={{ color: '#F9A825' }} />
@@ -541,7 +541,7 @@ export const IndicateurCalculator: React.FC = () => {
             <TableContainer>
               <Table size="small">
                 <TableHead>
-                  <TableRow sx={{ bgcolor: '#F5F5F5' }}>
+                  <TableRow sx={{ bgcolor: 'action.hover' }}>
                     <TableCell><strong>Date</strong></TableCell>
                     <TableCell><strong>Indicateur</strong></TableCell>
                     <TableCell align="right"><strong>Valeur</strong></TableCell>

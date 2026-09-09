@@ -1,5 +1,6 @@
 // frontend/src/services/provincial.service.ts
 import axios from 'axios';
+import type { Geometry } from 'geojson';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
@@ -57,6 +58,19 @@ export interface ProvinceData {
     vbg: number;
   };
   dernier_suivi: string;
+  progression?: number;
+  performance_score?: number;
+  progression_delta?: number;
+  coordonnees?: { lat: number; lng: number };
+}
+
+export interface ProvinceContour {
+  id: string;
+  name: string;
+  code: string;
+  coord_lat: number | null;
+  coord_lng: number | null;
+  contour_geojson: Geometry | null;
 }
 
 export interface PerformanceEvolution {
@@ -94,6 +108,13 @@ export const provincialService = {
   
   // Exporter les données provinciales
   exportProvinceData: (provinceId: string) => api.get(`/provinces/${provinceId}/export`, { responseType: 'blob' }),
+
+  // Contours GeoJSON des provinces (SIG)
+  getContours: () => api.get<ProvinceContour[]>('/provinces/contours'),
+
+  // Importer le contour officiel d'une province (GeoJSON Polygon/MultiPolygon WGS84)
+  putContour: (provinceId: string, geometry: Geometry) =>
+    api.put(`/provinces/${provinceId}/contour`, { geometry }),
 };
 
 export default provincialService;

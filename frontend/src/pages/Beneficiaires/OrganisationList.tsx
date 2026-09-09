@@ -8,29 +8,30 @@ import {
   Drawer, Dialog, DialogTitle, DialogContent, DialogActions,
   Avatar, Alert, CircularProgress,
 } from '@mui/material';
-import SearchIcon from '@mui/icons-material/Search';
-import FilterListIcon from '@mui/icons-material/FilterList';
-import AddIcon from '@mui/icons-material/Add';
-import EditIcon from '@mui/icons-material/Edit';
-import DeleteIcon from '@mui/icons-material/Delete';
-import VisibilityIcon from '@mui/icons-material/Visibility';
-import DownloadIcon from '@mui/icons-material/Download';
-import RefreshIcon from '@mui/icons-material/Refresh';
-import ClearIcon from '@mui/icons-material/Clear';
-import BusinessIcon from '@mui/icons-material/Business';
-import GroupsIcon from '@mui/icons-material/Groups';
-import FemaleIcon from '@mui/icons-material/Female';
-import MaleIcon from '@mui/icons-material/Male';
-import AgricultureIcon from '@mui/icons-material/Agriculture';
-import LocationOnIcon from '@mui/icons-material/LocationOn';
-import PhoneIcon from '@mui/icons-material/Phone';
-import EmailIcon from '@mui/icons-material/Email';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import PersonIcon from '@mui/icons-material/Person';
+import {
+  Search as SearchIcon,
+  FilterList as FilterListIcon,
+  Add as AddIcon,
+  Edit as EditIcon,
+  Delete as DeleteIcon,
+  Visibility as VisibilityIcon,
+  Download as DownloadIcon,
+  Refresh as RefreshIcon,
+  Clear as ClearIcon,
+  Business as BusinessIcon,
+  Groups as GroupsIcon,
+  Female as FemaleIcon,
+  Male as MaleIcon,
+  Agriculture as AgricultureIcon,
+  LocationOn as LocationOnIcon,
+  Phone as PhoneIcon,
+  Email as EmailIcon,
+  CheckCircle as CheckCircleIcon,
+  Person as PersonIcon,
+  ChildCare as ChildCareIcon,
+} from '../../components/common/PageIcons';
 import { organisationService } from '../../services/organisation.service';
 import type { Organisation, OrganisationFilters, OrganisationStats } from '../../services/organisation.service';
-// import GoogleIcon from '../../components/common/GoogleIcon';
-import ChildCareIcon from '@mui/icons-material/ChildCare';
 import { GradientWidget } from '../../components/common/Widget/GradientWidget';
 import { moduleGridStyles } from '../../components/common/Layout/moduleGridStyles';
 import { ExportToolbar } from '../../components/common/ExportToolbar/ExportToolbar';
@@ -367,7 +368,7 @@ export const OrganisationList: React.FC = () => {
       />
       <TableContainer component={Paper} sx={{ borderRadius: 2, overflow: 'hidden' }}>
         <Table>
-          <TableHead sx={{ bgcolor: '#F1F8E9' }}>
+          <TableHead sx={{ bgcolor: 'action.hover' }}>
             <TableRow>
               <TableCell>Code</TableCell>
               <TableCell>Nom / Sigle</TableCell>

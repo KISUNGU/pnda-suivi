@@ -30,15 +30,24 @@ export const PerformanceGauge: React.FC<PerformanceGaugeProps> = ({
   const colorValue = color === 'primary' ? getColor() : color;
 
   return (
-    <Paper sx={{ p: 2, borderRadius: '10px' }}>
+    <Paper sx={{ p: 2, borderRadius: '7px' }}>
       <Typography variant="body2" color="text.secondary" gutterBottom>
         {title}
       </Typography>
-      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 1 }}>
-        <Typography variant="h4" fontWeight={700} color={`${colorValue}.main`}>
+      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.75, mb: 1, minWidth: 0 }}>
+        <Typography
+          fontWeight={700}
+          color={`${colorValue}.main`}
+          sx={{
+            fontSize: 'clamp(1.25rem, 2.4vw, 1.7rem)',
+            lineHeight: 1.1,
+            letterSpacing: '-0.03em',
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
           {current}{unit}
         </Typography>
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
           / {target}{unit}
         </Typography>
       </Box>
@@ -48,7 +57,7 @@ export const PerformanceGauge: React.FC<PerformanceGaugeProps> = ({
         sx={{
           height: 8,
           borderRadius: '8px',
-          bgcolor: '#E0E0E0',
+          bgcolor: 'action.selected',
           '& .MuiLinearProgress-bar': {
             bgcolor: `${colorValue}.main`,
             borderRadius: '8px',

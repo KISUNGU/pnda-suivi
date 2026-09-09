@@ -1,82 +1,67 @@
-# Logs
+# ==== Dependances ====
+node_modules/
+bower_components/
+jspm_packages/
+
+# ==== Builds ====
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# ==== Environnement / secrets ====
+.env
+.env.*
+!.env.example
+!.env.exemple
+
+# ==== Logs & diagnostics ====
 logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-lerna-debug.log*
 pnpm-debug.log*
-
-# Diagnostic reports
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
-
-# Runtime data
-pids/
 *.pid
 *.seed
 *.pid.lock
 
-# Coverage and caches
+# ==== Caches & couverture ====
 coverage/
 *.lcov
 .nyc_output/
-.grunt/
 .cache/
 .parcel-cache/
 .eslintcache
 .stylelintcache
 .npm/
-
-# Dependency directories
-node_modules/
-backend/node_modules/
-frontend/node_modules/
-bower_components/
-jspm_packages/
-web_modules/
-
-# Build outputs
-dist/
-backend/dist/
-frontend/dist/
-build/Release/
-.next/
-out/
-.nuxt/
-.vuepress/dist/
-**/.vitepress/dist
-
-# Tooling files
-*.tsbuildinfo
-.yarn-integrity
-*.tgz
-.lock-wscript
-.node_repl_history
-.tern-port
-
-# Environment files
-.env
-.env.*
-!.env.example
-backend/.env
-frontend/.env
-
-# Yarn v3
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/sdks
-!.yarn/versions
-
-# Vite
+.vite/
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
-# Editor and OS files
+# ==== Archives locales, sauvegardes, sorties d'outils (hors depot) ====
+_to_delete/
+_backup-correctifs/
+Claude outputs/
+*.tgz
+*.bak
+*.patch
+
+# ==== Editeurs / OS ====
 .vscode/*
 !.vscode/extensions.json
 .vscode-test/
+.idea/
 .DS_Store
 Thumbs.db
+
+# ==== Dumps de donnees (contiennent des donnees personnelles RNA) ====
+# Ne JAMAIS versionner : nom_complet, telephone, date_naissance de beneficiaires reels.
+database/agriculteurs.sql
+database/pnda_se.sql
+*.dump
+*.sql.gz
+
+# ==== Implementation abandonnee (server/ + web/), conservee en local uniquement ====
+_archive-refonte-se/

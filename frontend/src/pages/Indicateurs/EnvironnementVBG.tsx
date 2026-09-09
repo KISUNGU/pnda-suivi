@@ -1,5 +1,6 @@
 // frontend/src/pages/Indicateurs/EnvironnementVBG.tsx
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -42,7 +43,7 @@ import {
 } from '@mui/material';
 import GoogleIcon from '../../components/common/GoogleIcon';
 import { GradientWidget } from '../../components/common/Widget/GradientWidget';
-import type { IndicateurEnvironnemental, PlainteSensible, FormationSensibilisation, StatsEnvironnement } from '../../services/environnement.service';
+import environnementService, { type IndicateurEnvironnemental, type PlainteSensible, type FormationSensibilisation, type StatsEnvironnement } from '../../services/environnement.service';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -58,242 +59,6 @@ function TabPanel(props: TabPanelProps) {
     </div>
   );
 }
-
-// Données mockées
-const mockIndicateurs: IndicateurEnvironnemental[] = [
-  {
-    id: 1,
-    code: 'ENV-01',
-    nom: 'Entreprises respectant les dispositions environnementales',
-    description: 'Pourcentage d\'entreprises conformes aux clauses environnementales sur leurs chantiers',
-    categorie: 'environnement',
-    unite: '%',
-    valeur_actuelle: 78,
-    valeur_cible: 100,
-    progression: 78,
-    tendance: 'hausse',
-    periode: 'T1 2026',
-    observations: 'Progression significative depuis le dernier trimestre',
-  },
-  {
-    id: 2,
-    code: 'ENV-02',
-    nom: 'Études d\'impact environnemental réalisées',
-    description: 'Nombre de sous-projets ayant fait l\'objet d\'une ÉIES avec PGES mis en œuvre',
-    categorie: 'environnement',
-    unite: 'nombre',
-    valeur_actuelle: 12,
-    valeur_cible: 20,
-    progression: 60,
-    tendance: 'hausse',
-    periode: 'T1 2026',
-  },
-  {
-    id: 3,
-    code: 'VBG-01',
-    nom: 'Plaintes VBG reçues',
-    description: 'Nombre de plaintes liées aux Violences Basées sur le Genre',
-    categorie: 'vbg',
-    unite: 'nombre',
-    valeur_actuelle: 18,
-    valeur_cible: 0,
-    progression: 0,
-    tendance: 'hausse',
-    periode: 'T1 2026',
-    observations: 'Augmentation due à la sensibilisation',
-  },
-  {
-    id: 4,
-    code: 'VBG-02',
-    nom: 'Plaintes VBG traitées',
-    description: 'Pourcentage de plaintes VBG traitées dans les délais',
-    categorie: 'vbg',
-    unite: '%',
-    valeur_actuelle: 72,
-    valeur_cible: 100,
-    progression: 72,
-    tendance: 'hausse',
-    periode: 'T1 2026',
-  },
-  {
-    id: 5,
-    code: 'EAS-01',
-    nom: 'Cas d\'Exploitation et Abus Sexuels',
-    description: 'Nombre de cas d\'EAS signalés',
-    categorie: 'eas',
-    unite: 'nombre',
-    valeur_actuelle: 5,
-    valeur_cible: 0,
-    progression: 0,
-    tendance: 'stable',
-    periode: 'T1 2026',
-  },
-  {
-    id: 6,
-    code: 'HS-01',
-    nom: 'Cas de Harcèlement Sexuel',
-    description: 'Nombre de cas de harcèlement sexuel signalés',
-    categorie: 'hs',
-    unite: 'nombre',
-    valeur_actuelle: 3,
-    valeur_cible: 0,
-    progression: 0,
-    tendance: 'stable',
-    periode: 'T1 2026',
-  },
-  {
-    id: 7,
-    code: 'SENS-01',
-    nom: 'Personnes formées/sensibilisées',
-    description: 'Nombre de personnes formées et sensibilisées aux VBG/EAS/HS',
-    categorie: 'environnement',
-    unite: 'nombre',
-    valeur_actuelle: 245,
-    valeur_cible: 500,
-    progression: 49,
-    tendance: 'hausse',
-    periode: 'T1 2026',
-  },
-  {
-    id: 8,
-    code: 'CODE-01',
-    nom: 'Code de conduite signé',
-    description: 'Pourcentage du personnel ayant signé le code de conduite',
-    categorie: 'environnement',
-    unite: '%',
-    valeur_actuelle: 92,
-    valeur_cible: 100,
-    progression: 92,
-    tendance: 'hausse',
-    periode: 'T1 2026',
-  },
-];
-
-const mockPlaintes: PlainteSensible[] = [
-  {
-    id: 1,
-    numero: 'PL-VBG-001',
-    type: 'VBG',
-    description: 'Cas de violence conjugale au sein du ménage bénéficiaire',
-    date_reception: '2026-03-15',
-    statut: 'en_cours',
-    delai_traitement: 12,
-    province: 'Kwilu',
-    territoire: 'Idiofa',
-    est_confidentiel: true,
-    prise_en_charge: 'Centre de santé de Masi-Manimba',
-  },
-  {
-    id: 2,
-    numero: 'PL-EAS-001',
-    type: 'EAS',
-    description: 'Exploitation sexuelle par un agent de terrain',
-    date_reception: '2026-03-18',
-    statut: 'en_cours',
-    delai_traitement: 10,
-    province: 'Kasaï',
-    territoire: 'Tshikapa',
-    est_confidentiel: true,
-    prise_en_charge: 'Commission VBG provinciale',
-  },
-  {
-    id: 3,
-    numero: 'PL-VBG-002',
-    type: 'VBG',
-    description: 'Violence psychologique lors d\'une distribution d\'intrants',
-    date_reception: '2026-03-20',
-    statut: 'traitee',
-    delai_traitement: 8,
-    province: 'Kongo Central',
-    territoire: 'Matadi',
-    est_confidentiel: false,
-    resolution: 'Médiation effectuée, agent sanctionné',
-  },
-  {
-    id: 4,
-    numero: 'PL-HS-001',
-    type: 'HS',
-    description: 'Harcèlement sexuel lors d\'une formation',
-    date_reception: '2026-03-22',
-    statut: 'referee',
-    delai_traitement: 5,
-    province: 'Kinshasa',
-    territoire: 'Mont Ngafula',
-    est_confidentiel: true,
-    prise_en_charge: 'Commission disciplinaire',
-  },
-];
-
-const mockFormations: FormationSensibilisation[] = [
-  {
-    id: 1,
-    titre: 'Formation sur les VBG et le Code de Conduite',
-    type: 'formation',
-    date: '2026-02-10',
-    lieu: 'Kinshasa',
-    participants: 45,
-    participants_femmes: 28,
-    participants_hommes: 17,
-    province: 'Kinshasa',
-    formateur: 'Expert Genre',
-    evaluation: 85,
-  },
-  {
-    id: 2,
-    titre: 'Sensibilisation communautaire VBG',
-    type: 'sensibilisation',
-    date: '2026-02-20',
-    lieu: 'Masi-Manimba',
-    participants: 120,
-    participants_femmes: 78,
-    participants_hommes: 42,
-    province: 'Kwilu',
-    formateur: 'Animateur local',
-    evaluation: 90,
-  },
-  {
-    id: 3,
-    titre: 'Formation EAS/HS pour agents terrain',
-    type: 'formation',
-    date: '2026-03-05',
-    lieu: 'Tshikapa',
-    participants: 35,
-    participants_femmes: 18,
-    participants_hommes: 17,
-    province: 'Kasaï',
-    formateur: 'Consultant',
-    evaluation: 88,
-  },
-  {
-    id: 4,
-    titre: 'Sensibilisation mécanismes de plainte',
-    type: 'sensibilisation',
-    date: '2026-03-15',
-    lieu: 'Matadi',
-    participants: 85,
-    participants_femmes: 52,
-    participants_hommes: 33,
-    province: 'Kongo Central',
-    formateur: 'GRM',
-  },
-];
-
-const mockStats: StatsEnvironnement = {
-  entreprises_conformes: 42,
-  total_entreprises: 54,
-  taux_conformite: 77.8,
-  eies_realisees: 12,
-  eies_prevues: 20,
-  personnes_formees: 180,
-  personnes_sensibilisees: 325,
-  plaintes_vbg: 12,
-  plaintes_eas: 3,
-  plaintes_hs: 2,
-  plaintes_traitees: 11,
-  delai_moyen_traitement: 10.5,
-  code_conduite_signes: 156,
-  total_personnel: 170,
-};
 
 const getTypeColor = (type: string) => {
   switch (type) {
@@ -327,6 +92,7 @@ const getStatutColor = (statut: string) => {
 };
 
 export const EnvironnementVBG: React.FC = () => {
+  const navigate = useNavigate();
   const [indicateurs, setIndicateurs] = useState<IndicateurEnvironnemental[]>([]);
   const [plaintes, setPlaintes] = useState<PlainteSensible[]>([]);
   const [formations, setFormations] = useState<FormationSensibilisation[]>([]);
@@ -345,11 +111,16 @@ export const EnvironnementVBG: React.FC = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setIndicateurs(mockIndicateurs);
-      setPlaintes(mockPlaintes);
-      setFormations(mockFormations);
-      setStats(mockStats);
+      const [indicateursRes, plaintesRes, formationsRes, statsRes] = await Promise.all([
+        environnementService.getIndicateurs(),
+        environnementService.getPlaintes(),
+        environnementService.getFormations(),
+        environnementService.getStats(),
+      ]);
+      setIndicateurs(indicateursRes.data);
+      setPlaintes(plaintesRes.data);
+      setFormations(formationsRes.data);
+      setStats(statsRes.data);
     } catch (err) {
       console.error(err);
     } finally {
@@ -364,7 +135,7 @@ export const EnvironnementVBG: React.FC = () => {
 
   const handleAddFormation = async () => {
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await environnementService.addFormation(newFormation);
       setFormationDialogOpen(false);
       setNewFormation({ type: 'formation' });
       loadData();
@@ -399,6 +170,7 @@ export const EnvironnementVBG: React.FC = () => {
               value={`${stats.taux_conformite}%`}
               icon={<GoogleIcon name="eco" size={36} />}
               trend={{ value: stats.taux_conformite, direction: 'up', period: `${stats.entreprises_conformes}/${stats.total_entreprises} entreprises` }}
+              onClick={() => navigate('/indicateurs/cadre')}
               color="primary"
             />
           </Grid>
@@ -408,6 +180,7 @@ export const EnvironnementVBG: React.FC = () => {
               value={(stats.plaintes_vbg + stats.plaintes_eas + stats.plaintes_hs).toLocaleString('fr-FR')}
               icon={<GoogleIcon name="warning" size={36} />}
               trend={{ value: stats.plaintes_vbg, direction: 'down', period: `VBG ${stats.plaintes_vbg} | EAS ${stats.plaintes_eas} | HS ${stats.plaintes_hs}` }}
+              onClick={() => navigate('/outils/collecte?form=plainte_grm')}
               color="danger"
             />
           </Grid>
@@ -416,6 +189,7 @@ export const EnvironnementVBG: React.FC = () => {
               title="Traitement des plaintes"
               value={stats.plaintes_traitees.toLocaleString('fr-FR')}
               icon={<GoogleIcon name="check_circle" size={36} />}
+              onClick={() => navigate('/database/plaintes')}
               trend={{ value: (stats.plaintes_vbg + stats.plaintes_eas + stats.plaintes_hs) > 0 ? Math.round((stats.plaintes_traitees / (stats.plaintes_vbg + stats.plaintes_eas + stats.plaintes_hs)) * 100) : 0, direction: 'up', period: `${stats.delai_moyen_traitement} jours de délai moyen` }}
               color="success"
             />
@@ -425,6 +199,7 @@ export const EnvironnementVBG: React.FC = () => {
               title="Personnes sensibilisées"
               value={(stats.personnes_formees + stats.personnes_sensibilisees).toLocaleString('fr-FR')}
               icon={<GoogleIcon name="groups" size={36} />}
+              onClick={() => setTabValue(1)}
               trend={{ value: stats.personnes_formees, direction: 'up', period: `formations ${stats.personnes_formees} | sensibilisations ${stats.personnes_sensibilisees}` }}
               color="info"
             />
@@ -507,7 +282,7 @@ export const EnvironnementVBG: React.FC = () => {
             </Alert>
             <TableContainer component={Paper} variant="outlined">
               <Table>
-                <TableHead sx={{ bgcolor: '#F1F8E9' }}>
+                <TableHead sx={{ bgcolor: 'action.hover' }}>
                   <TableRow>
                     <TableCell>N° Plainte</TableCell>
                     <TableCell>Type</TableCell>
@@ -525,7 +300,7 @@ export const EnvironnementVBG: React.FC = () => {
                       <TableCell>
                         <Typography variant="body2" fontWeight={500}>{plainte.numero}</Typography>
                         {plainte.est_confidentiel && (
-                          <Chip label="Confidentiel" size="small" sx={{ height: 18, fontSize: '0.6rem', bgcolor: '#FFEBEE', color: '#F44336' }} />
+                          <Chip label="Confidentiel" size="small" sx={{ height: 18, fontSize: '0.6rem', bgcolor: 'rgba(208, 59, 59, 0.14)', color: '#F44336' }} />
                         )}
                       </TableCell>
                       <TableCell>
@@ -654,7 +429,7 @@ export const EnvironnementVBG: React.FC = () => {
                 </Card>
               </Grid>
               <Grid size={{ xs: 12, md: 6 }}>
-                <Paper sx={{ p: 3, bgcolor: '#F1F8E9', borderRadius: 2 }}>
+                <Paper sx={{ p: 3, bgcolor: 'action.hover', borderRadius: 2 }}>
                   <Typography variant="subtitle1" fontWeight={600} gutterBottom>
                     Engagement du personnel
                   </Typography>

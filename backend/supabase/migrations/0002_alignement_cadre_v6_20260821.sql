@@ -1,0 +1,28 @@
+-- ===========================================================================
+-- 0002 — Alignement sur le Cadre de résultats PNDA v6 reformulé (21/08/2026)
+-- APPLIQUÉE le 31/08/2026 sur le projet Supabase pnda-suivi-evaluation
+-- (gdocnukywqfgjpnuqbrr) via le connecteur. Conservée ici pour traçabilité.
+--
+--   1. Année 2027 sur cadre_resultats (prevu_2027/realise_2027, prévu 2027 =
+--      cible finale) et sur indicateur (cible_2027/realise_2027).
+--   2. Les 7 indicateurs v6 manquants (36 au total) :
+--      IR-1.1.5 paquets techniques, IR-2.2.5/IR-2.2.5F services financiers,
+--      IR-2.2.6 éducation financière, IR-3.1.4 R&D AIC/AIN,
+--      IR-3.1.5 opérationnalisation RNA, IR-3.1.6 satisfaction.
+--   3. Table cadre_cibles_provinciales (18 cibles issues des fiches
+--      d'opérationnalisation : ODP-1, ODP-2, ODP-7, ODP-7F).
+--   4. Référentiel provinces : ajout de Kasaï-Central (77 440 exploitants au
+--      RNA), coordonnées manquantes, colonne contour_geojson pour le SIG.
+--
+-- Le script complet appliqué est disponible dans l'historique de migrations
+-- Supabase (nom : alignement_cadre_v6_20260821). Résumé des objets touchés :
+--
+--   alter table cadre_resultats add column prevu_2027, realise_2027;
+--   alter table indicateur      add column cible_2027, realise_2027;
+--   insert into cadre_resultats (id 30..36)  -- 7 indicateurs v6
+--   insert into indicateur (id 107, 211-213, 304-306)
+--   create table cadre_cibles_provinciales (code_cadre, province, annee, cible);
+--   alter table provinces add column contour_geojson jsonb;
+--   insert into provinces (id 'kasaicentral');
+-- ===========================================================================
+select 'migration appliquée via le connecteur Supabase — voir l''historique des migrations du projet';

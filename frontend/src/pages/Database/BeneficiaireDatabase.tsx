@@ -57,7 +57,7 @@ import {
   CloudUpload,
   PictureAsPdf,
   TableChart,
-} from '@mui/icons-material';
+} from '../../components/common/PageIcons';
 import GoogleIcon from '../../components/common/GoogleIcon';
 import { GradientWidget } from '../../components/common/Widget/GradientWidget';
 import { ExportToolbar } from '../../components/common/ExportToolbar/ExportToolbar';
@@ -78,180 +78,6 @@ function TabPanel(props: TabPanelProps) {
     </div>
   );
 }
-
-// Données mockées
-const mockBeneficiaires: BeneficiaireComplet[] = [
-  {
-    id: 1,
-    rna_id: 'RNA-00123',
-    nom: 'MUKENDI',
-    prenom: 'Joseph',
-    sexe: 'M',
-    date_naissance: '1985-03-15',
-    age: 41,
-    telephone: '+243812345678',
-    email: 'joseph.mukendi@email.com',
-    province: 'Kwilu',
-    territoire: 'Idiofa',
-    village: 'Masi-Manimba',
-    type_exploitant: 'agriculteur',
-    est_jeune: false,
-    niveau_instruction: 'secondaire',
-    situation_matrimoniale: 'marie',
-    nombre_enfants: 4,
-    superficie_totale: 5.5,
-    superficie_cultivee: 4.2,
-    principales_cultures: ['maïs', 'manioc', 'arachide'],
-    cheptel: { bovins: 2, caprins: 5, ovins: 0, volailles: 15 },
-    technologies_adoptees: ['semences_ameliorees', 'engrais_organiques'],
-    est_beneficiaire_subvention: true,
-    date_adhesion: '2024-01-15',
-    created_at: '2024-01-15T10:00:00Z',
-    updated_at: '2026-03-20T14:30:00Z',
-  },
-  {
-    id: 2,
-    rna_id: 'RNA-00124',
-    nom: 'KABEYA',
-    prenom: 'Marie',
-    sexe: 'F',
-    date_naissance: '1990-07-22',
-    age: 35,
-    telephone: '+243823456789',
-    email: 'marie.kabeya@email.com',
-    province: 'Kasaï',
-    territoire: 'Tshikapa',
-    village: 'Kananga',
-    type_exploitant: 'eleveur',
-    est_jeune: true,
-    niveau_instruction: 'primaire',
-    situation_matrimoniale: 'celibataire',
-    nombre_enfants: 1,
-    superficie_totale: 3.2,
-    superficie_cultivee: 2.0,
-    principales_cultures: ['maïs'],
-    cheptel: { bovins: 0, caprins: 8, ovins: 3, volailles: 25 },
-    technologies_adoptees: ['irrigation', 'semences_ameliorees'],
-    est_beneficiaire_subvention: true,
-    date_adhesion: '2024-02-20',
-    created_at: '2024-02-20T11:00:00Z',
-    updated_at: '2026-03-18T09:15:00Z',
-  },
-  {
-    id: 3,
-    rna_id: 'RNA-00125',
-    nom: 'TSHIBOLA',
-    prenom: 'Albert',
-    sexe: 'M',
-    date_naissance: '1995-11-10',
-    age: 30,
-    telephone: '+243834567890',
-    province: 'Kinshasa',
-    territoire: 'Mont Ngafula',
-    commune: 'Selembao',
-    village: '',
-    type_exploitant: 'pisciculteur',
-    est_jeune: true,
-    niveau_instruction: 'superieur',
-    situation_matrimoniale: 'celibataire',
-    nombre_enfants: 0,
-    superficie_totale: 1.5,
-    superficie_cultivee: 1.2,
-    principales_cultures: [],
-    cheptel: undefined,
-    technologies_adoptees: ['aquaculture'],
-    est_beneficiaire_subvention: false,
-    date_adhesion: '2024-03-10',
-    created_at: '2024-03-10T09:30:00Z',
-    updated_at: '2026-03-15T16:20:00Z',
-  },
-  {
-    id: 4,
-    rna_id: 'RNA-00126',
-    nom: 'LUBALA',
-    prenom: 'Pauline',
-    sexe: 'F',
-    date_naissance: '1988-05-03',
-    age: 37,
-    telephone: '+243845678901',
-    province: 'Kongo Central',
-    territoire: 'Matadi',
-    village: 'Boma',
-    type_exploitant: 'mixte',
-    est_jeune: false,
-    niveau_instruction: 'secondaire',
-    situation_matrimoniale: 'marie',
-    nombre_enfants: 3,
-    superficie_totale: 4.8,
-    superficie_cultivee: 3.5,
-    principales_cultures: ['manioc', 'arachide'],
-    cheptel: { bovins: 1, caprins: 3, ovins: 2, volailles: 12 },
-    technologies_adoptees: ['semences_ameliorees', 'conservation_sols'],
-    est_beneficiaire_subvention: true,
-    date_adhesion: '2024-01-05',
-    created_at: '2024-01-05T14:00:00Z',
-    updated_at: '2026-03-22T11:45:00Z',
-  },
-  {
-    id: 5,
-    rna_id: 'RNA-00127',
-    nom: 'KALONJI',
-    prenom: 'David',
-    sexe: 'M',
-    date_naissance: '1992-09-18',
-    age: 33,
-    telephone: '+243856789012',
-    province: 'Haut-Lomami',
-    territoire: 'Kamina',
-    village: 'Malemba',
-    type_exploitant: 'agriculteur',
-    est_jeune: true,
-    niveau_instruction: 'secondaire',
-    situation_matrimoniale: 'marie',
-    nombre_enfants: 2,
-    superficie_totale: 6.0,
-    superficie_cultivee: 5.0,
-    principales_cultures: ['maïs', 'soja'],
-    cheptel: { bovins: 3, caprins: 4, ovins: 0, volailles: 20 },
-    technologies_adoptees: ['semences_ameliorees', 'engrais_organiques', 'irrigation'],
-    est_beneficiaire_subvention: true,
-    date_adhesion: '2024-02-28',
-    created_at: '2024-02-28T08:00:00Z',
-    updated_at: '2026-03-25T10:00:00Z',
-  },
-];
-
-const mockStats: StatistiquesBeneficiaires = {
-  total: 124530,
-  par_sexe: { hommes: 68492, femmes: 56038 },
-  par_type: { agriculteur: 78234, eleveur: 28456, pisciculteur: 12450, mixte: 5390 },
-  par_province: {
-    Kinshasa: 15230,
-    'Kongo Central': 18920,
-    Kwilu: 14250,
-    Kasaï: 16890,
-    'Haut-Lomami': 11240,
-    Tanganyika: 9800,
-  },
-  par_age: { jeunes: 42340, adultes: 65420, seniors: 16770 },
-  par_instruction: { aucun: 32450, primaire: 45678, secondaire: 35678, superieur: 10724 },
-  par_technologies: {
-    semences_ameliorees: 45678,
-    engrais_organiques: 32456,
-    irrigation: 12450,
-    conservation_sols: 23456,
-    agroforesterie: 8900,
-  },
-  evolution_mensuelle: [
-    { mois: 'Sep', total: 112000 },
-    { mois: 'Oct', total: 115000 },
-    { mois: 'Nov', total: 118500 },
-    { mois: 'Déc', total: 120000 },
-    { mois: 'Jan', total: 122000 },
-    { mois: 'Fév', total: 123500 },
-    { mois: 'Mar', total: 124530 },
-  ],
-};
 
 const getTypeIcon = (type: string) => {
   switch (type) {
@@ -306,13 +132,15 @@ export const BeneficiaireDatabase: React.FC = () => {
         databaseService.getStats(),
       ]);
       const d = beneRes.data;
-      setBeneficiaires(d.data?.length ? d.data : mockBeneficiaires);
-      setTotal(d.total ?? mockBeneficiaires.length);
-      setStats(statsRes.data || mockStats);
-    } catch {
-      setBeneficiaires(mockBeneficiaires);
-      setTotal(mockBeneficiaires.length);
-      setStats(mockStats);
+      setBeneficiaires(d.data ?? []);
+      setTotal(d.total ?? 0);
+      setStats(statsRes.data ?? null);
+    } catch (err) {
+      console.error('Erreur chargement bénéficiaires:', err);
+      setError('Impossible de charger les données des bénéficiaires');
+      setBeneficiaires([]);
+      setTotal(0);
+      setStats(null);
     } finally {
       setLoading(false);
     }
@@ -539,7 +367,7 @@ export const BeneficiaireDatabase: React.FC = () => {
       />
       <TableContainer component={Paper} sx={{ borderRadius: 2, overflow: 'hidden' }}>
         <Table>
-          <TableHead sx={{ bgcolor: '#F1F8E9' }}>
+          <TableHead sx={{ bgcolor: 'action.hover' }}>
             <TableRow>
               <TableCell>RNA ID</TableCell>
               <TableCell>Nom complet</TableCell>
@@ -559,7 +387,7 @@ export const BeneficiaireDatabase: React.FC = () => {
                 </TableCell>
                 <TableCell>
                   {beneficiaire.nom} {beneficiaire.prenom}
-                  {beneficiaire.est_jeune && <Chip label="Jeune" size="small" sx={{ ml: 1, height: 20, bgcolor: '#E8F5E9' }} />}
+                  {beneficiaire.est_jeune && <Chip label="Jeune" size="small" sx={{ ml: 1, height: 20, bgcolor: 'action.hover' }} />}
                 </TableCell>
                 <TableCell>
                   {beneficiaire.sexe === 'M' ? <Male color="primary" /> : <Female color="secondary" />}
@@ -720,7 +548,7 @@ export const BeneficiaireDatabase: React.FC = () => {
               <TabPanel value={tabValue} index={1}>
                 <TableContainer component={Paper} variant="outlined">
                   <Table size="small">
-                    <TableHead sx={{ bgcolor: '#F5F5F5' }}>
+                    <TableHead sx={{ bgcolor: 'action.hover' }}>
                       <TableRow>
                         <TableCell>Date</TableCell>
                         <TableCell>Type</TableCell>

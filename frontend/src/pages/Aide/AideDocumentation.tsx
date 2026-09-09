@@ -37,119 +37,9 @@ import {
   Rating,
   Stack,
 } from '@mui/material';
-import {
-  Search,
-  Description,
-  Download,
-  Email,
-  Phone,
-  OpenInNew,
-  CheckCircle,
-  ArrowForward,
-  MenuBook,
-  Quiz,
-  OndemandVideo,
-  ContactSupport,
-  Assignment,
-  BarChart,
-  Warning,
-  Settings,
-  Schedule,
-} from '@mui/icons-material';
-import type { ArticleAide, FAQ, Tutoriel, ContactSupport as ContactSupportType } from '../../services/aide.service';
+import GoogleIcon from '../../components/common/GoogleIcon';
+import aideService, { type ArticleAide, type FAQ, type Tutoriel, type ContactSupport as ContactSupportType } from '../../services/aide.service';
 import { moduleGridStyles } from '../../components/common/Layout/moduleGridStyles';
-
-// Données mockées
-const mockGuides: ArticleAide[] = [
-  {
-    id: 1,
-    titre: 'Manuel d\'utilisation du système PNDA S&E',
-    contenu: 'Guide complet pour prendre en main le système...',
-    categorie: 'guide',
-    tags: ['débutant', 'général'],
-    date_creation: '2025-01-01',
-    date_modification: '2026-03-15',
-    auteur: 'UNCP',
-  },
-  {
-    id: 2,
-    titre: 'Guide de collecte de données terrain',
-    contenu: 'Procédures pour la collecte des données...',
-    categorie: 'guide',
-    tags: ['collecte', 'terrain'],
-    date_creation: '2025-02-10',
-    date_modification: '2026-03-20',
-    auteur: 'UNCP',
-  },
-  {
-    id: 3,
-    titre: 'Guide d\'utilisation du calculateur d\'indicateurs',
-    contenu: 'Comment utiliser le calculateur d\'indicateurs...',
-    categorie: 'guide',
-    tags: ['indicateurs', 'calcul'],
-    date_creation: '2025-03-01',
-    date_modification: '2026-03-25',
-    auteur: 'UNCP',
-  },
-];
-
-const mockFAQ: FAQ[] = [
-  { id: 1, question: 'Comment créer un compte utilisateur ?', reponse: 'La création de compte se fait par l\'administrateur...', categorie: 'compte', popularite: 45 },
-  { id: 2, question: 'Comment synchroniser les données hors ligne ?', reponse: 'Cliquez sur le bouton "Synchroniser" en haut à droite...', categorie: 'collecte', popularite: 38 },
-  { id: 3, question: 'Comment exporter un rapport ?', reponse: 'Dans la section Rapports, utilisez le bouton Exporter...', categorie: 'rapports', popularite: 32 },
-  { id: 4, question: 'Comment traiter une plainte VBG ?', reponse: 'Les plaintes VBG sont confidentielles et traitées...', categorie: 'grm', popularite: 28 },
-  { id: 5, question: 'Comment modifier un bénéficiaire ?', reponse: 'Dans la base de données bénéficiaires, cliquez sur Modifier...', categorie: 'beneficiaires', popularite: 25 },
-  { id: 6, question: 'Que faire en cas d\'erreur technique ?', reponse: 'Contactez le support technique via le formulaire...', categorie: 'support', popularite: 20 },
-];
-
-const mockTutoriels: Tutoriel[] = [
-  {
-    id: 1,
-    titre: 'Premiers pas avec le système',
-    description: 'Découvrez les fonctionnalités principales du PNDA S&E',
-    duree: '10 min',
-    niveau: 'debutant',
-    video_url: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
-    etapes: [
-      { titre: 'Connexion', description: 'Utilisez vos identifiants fournis par l\'administrateur' },
-      { titre: 'Navigation', description: 'Explorez les différents menus et tableaux de bord' },
-      { titre: 'Première collecte', description: 'Apprenez à enregistrer vos premières données' },
-    ],
-  },
-  {
-    id: 2,
-    titre: 'Collecte de données hors ligne',
-    description: 'Utilisez l\'application mobile sans connexion internet',
-    duree: '15 min',
-    niveau: 'intermediaire',
-    video_url: '',
-    etapes: [
-      { titre: 'Téléchargement', description: 'Installez l\'application PWA sur votre appareil' },
-      { titre: 'Formulaires', description: 'Sélectionnez le formulaire approprié' },
-      { titre: 'Synchronisation', description: 'Synchronisez vos données quand la connexion revient' },
-    ],
-  },
-  {
-    id: 3,
-    titre: 'Analyse des indicateurs',
-    description: 'Maîtrisez le calculateur d\'indicateurs et les tableaux de bord',
-    duree: '20 min',
-    niveau: 'avance',
-    video_url: '',
-    etapes: [
-      { titre: 'Indicateurs IODP', description: 'Comprenez les objectifs de développement' },
-      { titre: 'Calcul automatique', description: 'Utilisez le calculateur avec les formules' },
-      { titre: 'Visualisation', description: 'Interprétez les graphiques et tendances' },
-    ],
-  },
-];
-
-const mockContact: ContactSupportType = {
-  email: 'support@pnda.cd',
-  telephone: '+243 123 456 789',
-  horaires: 'Lundi - Vendredi, 8h00 - 17h00',
-  urgence: '+243 999 888 777 (24h/24)',
-};
 
 type SearchResult = {
   type: 'guide' | 'faq' | 'tutoriel';
@@ -158,6 +48,10 @@ type SearchResult = {
 };
 
 export const AideDocumentation: React.FC = () => {
+  const [guides, setGuides] = useState<ArticleAide[]>([]);
+  const [faqs, setFaqs] = useState<FAQ[]>([]);
+  const [tutoriels, setTutoriels] = useState<Tutoriel[]>([]);
+  const [contact, setContact] = useState<ContactSupportType | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
@@ -172,19 +66,31 @@ export const AideDocumentation: React.FC = () => {
   const [expandedFAQ, setExpandedFAQ] = useState<number | false>(false);
 
   useEffect(() => {
-    // Charger les données
+    const loadData = async () => {
+      try {
+        const [guidesRes, faqRes, tutorielsRes, contactRes] = await Promise.all([
+          aideService.getGuides(),
+          aideService.getFAQ(),
+          aideService.getTutoriels(),
+          aideService.getContactSupport(),
+        ]);
+        setGuides(guidesRes.data);
+        setFaqs(faqRes.data);
+        setTutoriels(tutorielsRes.data);
+        setContact(contactRes.data);
+      } catch (error) {
+        console.error(error);
+      }
+    };
+    loadData();
   }, []);
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
     setSearching(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setSearchResults([
-        { type: 'guide', titre: 'Manuel d\'utilisation', extrait: 'Guide complet pour prendre en main le système...' },
-        { type: 'faq', titre: 'Comment synchroniser les données ?', extrait: 'Cliquez sur le bouton "Synchroniser"...' },
-        { type: 'tutoriel', titre: 'Premiers pas avec le système', extrait: 'Découvrez les fonctionnalités principales...' },
-      ]);
+      const response = await aideService.rechercher(searchQuery);
+      setSearchResults(response.data as SearchResult[]);
     } catch (error) {
       console.error(error);
     } finally {
@@ -194,7 +100,7 @@ export const AideDocumentation: React.FC = () => {
 
   const handleSendDemande = async () => {
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await aideService.envoyerDemande(demandeData);
       setDemandeEnvoyee(true);
       setTimeout(() => {
         setDemandeDialogOpen(false);
@@ -228,7 +134,7 @@ export const AideDocumentation: React.FC = () => {
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
-                  <Search />
+                  <GoogleIcon name="search" />
                 </InputAdornment>
               ),
               endAdornment: (
@@ -266,22 +172,22 @@ export const AideDocumentation: React.FC = () => {
 
       {/* Onglets */}
       <Tabs value={tabValue} onChange={(_, v) => setTabValue(v)} sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}>
-        <Tab label="Guides" icon={<MenuBook />} iconPosition="start" />
-        <Tab label="FAQ" icon={<Quiz />} iconPosition="start" />
-        <Tab label="Tutoriels" icon={<OndemandVideo />} iconPosition="start" />
-        <Tab label="Support" icon={<ContactSupport />} iconPosition="start" />
+        <Tab label="Guides" icon={<GoogleIcon name="menu_book" />} iconPosition="start" />
+        <Tab label="FAQ" icon={<GoogleIcon name="quiz" />} iconPosition="start" />
+        <Tab label="Tutoriels" icon={<GoogleIcon name="ondemand_video" />} iconPosition="start" />
+        <Tab label="Support" icon={<GoogleIcon name="contact_support" />} iconPosition="start" />
       </Tabs>
 
       {/* Onglet Guides */}
       {tabValue === 0 && (
         <Grid container spacing={3}>
-          {mockGuides.map((guide) => (
+          {guides.map((guide) => (
             <Grid size={{ xs: 12, md: 6, lg: 4 }} key={guide.id}>
               <Card sx={{ ...moduleGridStyles.statCard, display: 'flex', flexDirection: 'column' }}>
                 <CardContent sx={{ flex: 1 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                    <Avatar sx={{ bgcolor: '#E8F5E9' }}>
-                      <Description sx={{ color: '#2E7D32' }} />
+                    <Avatar sx={{ bgcolor: 'action.hover' }}>
+                      <GoogleIcon name="description" sx={{ color: '#2E7D32' }} />
                     </Avatar>
                     <Box>
                       <Typography variant="subtitle1" fontWeight={600}>{guide.titre}</Typography>
@@ -300,10 +206,10 @@ export const AideDocumentation: React.FC = () => {
                   </Box>
                 </CardContent>
                 <CardActions>
-                  <Button size="small" startIcon={<OpenInNew />} onClick={() => { setSelectedGuide(guide); setGuideDialogOpen(true); }}>
+                  <Button size="small" startIcon={<GoogleIcon name="open_in_new" size={20} />} onClick={() => { setSelectedGuide(guide); setGuideDialogOpen(true); }}>
                     Lire le guide
                   </Button>
-                  <Button size="small" startIcon={<Download />}>
+                  <Button size="small" startIcon={<GoogleIcon name="download" size={20} />}>
                     Télécharger PDF
                   </Button>
                 </CardActions>
@@ -318,9 +224,9 @@ export const AideDocumentation: React.FC = () => {
         <Box>
           <Grid container spacing={3}>
             <Grid size={{ xs: 12, md: 8 }}>
-              {mockFAQ.map((faq) => (
+              {faqs.map((faq) => (
                 <Accordion key={faq.id} expanded={expandedFAQ === faq.id} onChange={() => setExpandedFAQ(expandedFAQ === faq.id ? false : faq.id)}>
-                  <AccordionSummary expandIcon={<ArrowForward />}>
+                  <AccordionSummary expandIcon={<GoogleIcon name="chevron_right" />}>
                     <Typography variant="subtitle1" fontWeight={500}>{faq.question}</Typography>
                   </AccordionSummary>
                   <AccordionDetails>
@@ -336,42 +242,42 @@ export const AideDocumentation: React.FC = () => {
               ))}
             </Grid>
             <Grid size={{ xs: 12, md: 4 }}>
-              <Paper sx={{ ...moduleGridStyles.sectionPanel, bgcolor: '#F1F8E9' }}>
+              <Paper sx={{ ...moduleGridStyles.sectionPanel, bgcolor: 'action.hover' }}>
                 <Typography variant="subtitle1" fontWeight={600} gutterBottom>
                   Catégories FAQ
                 </Typography>
                 <List dense>
                   <ListItem disablePadding>
                     <ListItemButton>
-                      <ListItemIcon><Quiz fontSize="small" /></ListItemIcon>
+                      <ListItemIcon><GoogleIcon name="quiz" size={20} /></ListItemIcon>
                       <ListItemText primary="Compte et connexion" />
                       <Chip label="3" size="small" />
                     </ListItemButton>
                   </ListItem>
                   <ListItem disablePadding>
                     <ListItemButton>
-                      <ListItemIcon><Assignment fontSize="small" /></ListItemIcon>
+                      <ListItemIcon><GoogleIcon name="assignment" size={20} /></ListItemIcon>
                       <ListItemText primary="Collecte de données" />
                       <Chip label="4" size="small" />
                     </ListItemButton>
                   </ListItem>
                   <ListItem disablePadding>
                     <ListItemButton>
-                      <ListItemIcon><BarChart fontSize="small" /></ListItemIcon>
+                      <ListItemIcon><GoogleIcon name="bar_chart" size={20} /></ListItemIcon>
                       <ListItemText primary="Indicateurs" />
                       <Chip label="2" size="small" />
                     </ListItemButton>
                   </ListItem>
                   <ListItem disablePadding>
                     <ListItemButton>
-                      <ListItemIcon><Warning fontSize="small" /></ListItemIcon>
+                      <ListItemIcon><GoogleIcon name="warning" size={20} /></ListItemIcon>
                       <ListItemText primary="GRM / Plaintes" />
                       <Chip label="2" size="small" />
                     </ListItemButton>
                   </ListItem>
                   <ListItem disablePadding>
                     <ListItemButton>
-                      <ListItemIcon><Settings fontSize="small" /></ListItemIcon>
+                      <ListItemIcon><GoogleIcon name="settings" size={20} /></ListItemIcon>
                       <ListItemText primary="Support technique" />
                       <Chip label="3" size="small" />
                     </ListItemButton>
@@ -386,13 +292,13 @@ export const AideDocumentation: React.FC = () => {
       {/* Onglet Tutoriels */}
       {tabValue === 2 && (
         <Grid container spacing={3}>
-          {mockTutoriels.map((tutoriel) => (
+          {tutoriels.map((tutoriel) => (
             <Grid size={{ xs: 12, md: 4 }} key={tutoriel.id}>
               <Card sx={{ ...moduleGridStyles.statCard, cursor: 'pointer' }} onClick={() => { setSelectedTutoriel(tutoriel); setTutorielDialogOpen(true); }}>
                 <CardContent>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                    <Avatar sx={{ bgcolor: '#E3F2FD' }}>
-                      <OndemandVideo sx={{ color: '#1976D2' }} />
+                    <Avatar sx={{ bgcolor: 'rgba(57, 135, 229, 0.14)' }}>
+                      <GoogleIcon name="ondemand_video" sx={{ color: '#1976D2' }} />
                     </Avatar>
                     <Box>
                       <Typography variant="subtitle1" fontWeight={600}>{tutoriel.titre}</Typography>
@@ -428,20 +334,20 @@ export const AideDocumentation: React.FC = () => {
                 <Divider sx={{ mb: 2 }} />
                 <List>
                   <ListItem>
-                    <ListItemIcon><Email sx={{ color: '#1976D2' }} /></ListItemIcon>
-                    <ListItemText primary="Email" secondary={mockContact.email} />
+                    <ListItemIcon><GoogleIcon name="email" sx={{ color: '#1976D2' }} /></ListItemIcon>
+                    <ListItemText primary="Email" secondary={contact?.email} />
                   </ListItem>
                   <ListItem>
-                    <ListItemIcon><Phone sx={{ color: '#2E7D32' }} /></ListItemIcon>
-                    <ListItemText primary="Téléphone" secondary={mockContact.telephone} />
+                    <ListItemIcon><GoogleIcon name="phone" sx={{ color: '#2E7D32' }} /></ListItemIcon>
+                    <ListItemText primary="Téléphone" secondary={contact?.telephone} />
                   </ListItem>
                   <ListItem>
-                    <ListItemIcon><Schedule sx={{ color: '#FF8F00' }} /></ListItemIcon>
-                    <ListItemText primary="Horaires" secondary={mockContact.horaires} />
+                    <ListItemIcon><GoogleIcon name="schedule" sx={{ color: '#FF8F00' }} /></ListItemIcon>
+                    <ListItemText primary="Horaires" secondary={contact?.horaires} />
                   </ListItem>
                   <ListItem>
-                    <ListItemIcon><Warning sx={{ color: '#F44336' }} /></ListItemIcon>
-                    <ListItemText primary="Urgence" secondary={mockContact.urgence} />
+                    <ListItemIcon><GoogleIcon name="warning" sx={{ color: '#F44336' }} /></ListItemIcon>
+                    <ListItemText primary="Urgence" secondary={contact?.urgence} />
                   </ListItem>
                 </List>
               </CardContent>
@@ -504,7 +410,7 @@ export const AideDocumentation: React.FC = () => {
             </DialogContent>
             <DialogActions>
               <Button onClick={() => setGuideDialogOpen(false)}>Fermer</Button>
-              <Button variant="contained" startIcon={<Download />} sx={{ bgcolor: '#2E7D32' }}>Télécharger PDF</Button>
+              <Button variant="contained" startIcon={<GoogleIcon name="download" size={20} />} sx={{ bgcolor: '#2E7D32' }}>Télécharger PDF</Button>
             </DialogActions>
           </>
         )}
@@ -555,7 +461,7 @@ export const AideDocumentation: React.FC = () => {
         <DialogTitle>Confirmation d'envoi</DialogTitle>
         <DialogContent>
           {demandeEnvoyee ? (
-            <Alert severity="success" icon={<CheckCircle />}>
+            <Alert severity="success" icon={<GoogleIcon name="check_circle" />}>
               Votre demande a été envoyée avec succès ! Nous vous répondrons dans les plus brefs délais.
             </Alert>
           ) : (
@@ -563,7 +469,7 @@ export const AideDocumentation: React.FC = () => {
               <Typography variant="body2" sx={{ mb: 2 }}>
                 Vérifiez vos informations avant validation :
               </Typography>
-              <Paper sx={{ p: 2, bgcolor: '#F5F5F5', borderRadius: 2 }}>
+              <Paper sx={{ p: 2, bgcolor: 'action.hover', borderRadius: 2 }}>
                 <Typography variant="subtitle2">Email :</Typography>
                 <Typography variant="body2" gutterBottom>{demandeData.email}</Typography>
                 <Typography variant="subtitle2">Sujet :</Typography>

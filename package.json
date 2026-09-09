@@ -1,15 +1,13 @@
 {
   "name": "pnda-se",
-  "version": "1.0.0",
-  "description": "PNDA Suivi-Évaluation",
+  "private": true,
+  "version": "2.0.0",
+  "description": "PNDA — Plateforme de Suivi & Évaluation (React/TS + Node/TS + Supabase)",
   "scripts": {
-    "start": "node scripts/start.js",
-    "start:win": "scripts/start.bat",
-    "start:mac": "chmod +x scripts/start.sh && ./scripts/start.sh",
-    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
-    "dev:backend": "cd backend && npm run dev",
-    "dev:frontend": "cd frontend && npm run dev",
-    "dev:both": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\""
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "dev": "concurrently -n api,web -c cyan,green \"npm --prefix backend run dev\" \"npm --prefix frontend run dev\"",
+    "build": "npm --prefix backend run build && npm --prefix frontend run build"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

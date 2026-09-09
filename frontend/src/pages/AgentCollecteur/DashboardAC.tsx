@@ -65,94 +65,27 @@ import {
   Settings,
   Menu as MenuIcon,
   Close as CloseIcon,
-} from '@mui/icons-material';
+} from '../../components/common/PageIcons';
 import GoogleIcon from '../../components/common/GoogleIcon';
 import { GradientWidget } from '../../components/common/Widget/GradientWidget';
 import { moduleGridStyles } from '../../components/common/Layout/moduleGridStyles';
-import type { AgentCollecteur, CollecteData, StatistiquesAC } from '../../services/agentCollecteur.service';
+import agentCollecteurService, { type AgentCollecteur, type CollecteData, type StatistiquesAC } from '../../services/agentCollecteur.service';
 
+interface BeneficiaireAC {
+  id: number;
+  nom: string;
+  prenom: string;
+  rna_id: string;
+  sexe: string;
+  village: string;
+  telephone: string;
+}
 
-// Données mockées
-const mockAgent: AgentCollecteur = {
-  id: 1,
-  nom: 'MUKENDI',
-  prenom: 'Joseph',
-  matricule: 'AC-2026-001',
-  telephone: '+243812345678',
-  email: 'joseph.mukendi@ac.cd',
-  province: 'Kwilu',
-  territoire: 'Idiofa',
-  zones: ['Masi-Manimba', 'Kikwit', 'Idiofa Centre'],
-  statut: 'actif',
-  date_affectation: '2025-01-15',
-  superviseur: 'Marie KABEYA',
-};
-
-const mockStats: StatistiquesAC = {
-  total_collectes: 156,
-  collectes_semaine: 12,
-  collectes_mois: 45,
-  formulaires_disponibles: 4,
-  beneficiaires_couverts: 89,
-  taux_synchronisation: 92,
-  dernier_sync: '2026-04-02T10:30:00Z',
-};
-
-const mockCollectes: CollecteData[] = [
-  {
-    id: 1,
-    formulaire_id: 'enquete_production',
-    formulaire_nom: 'Enquête production',
-    donnees: { culture: 'maïs', superficie: 2.5, production: 3750 },
-    latitude: -5.0489,
-    longitude: 18.8203,
-    photos: [],
-    date_collecte: '2026-04-01T14:30:00Z',
-    synced: true,
-    beneficiaire: { nom: 'MUKENDI', prenom: 'Joseph', rna_id: 'RNA-00123' },
-  },
-  {
-    id: 2,
-    formulaire_id: 'adoption_technologie',
-    formulaire_nom: 'Adoption technologie',
-    donnees: { technologies: 'semences_ameliorees', satisfaction: 'satisfait' },
-    latitude: -5.0500,
-    longitude: 18.8210,
-    photos: [],
-    date_collecte: '2026-04-01T09:15:00Z',
-    synced: true,
-    beneficiaire: { nom: 'KABEYA', prenom: 'Marie', rna_id: 'RNA-00124' },
-  },
-  {
-    id: 3,
-    formulaire_id: 'plainte_grm',
-    formulaire_nom: 'Plainte GRM',
-    donnees: { type_plainte: 'technique', description: 'Non-livraison intrants' },
-    latitude: -5.0470,
-    longitude: 18.8190,
-    photos: [],
-    date_collecte: '2026-04-02T08:00:00Z',
-    synced: false,
-    beneficiaire: { nom: 'TSHIBOLA', prenom: 'Albert', rna_id: 'RNA-00125' },
-  },
-];
-
-const mockBeneficiaires = [
-  { id: 1, nom: 'MUKENDI', prenom: 'Joseph', rna_id: 'RNA-00123', sexe: 'M', village: 'Masi-Manimba', telephone: '+243812345678' },
-  { id: 2, nom: 'KABEYA', prenom: 'Marie', rna_id: 'RNA-00124', sexe: 'F', village: 'Kikwit', telephone: '+243823456789' },
-  { id: 3, nom: 'TSHIBOLA', prenom: 'Albert', rna_id: 'RNA-00125', sexe: 'M', village: 'Idiofa', telephone: '+243834567890' },
-  { id: 4, nom: 'LUBALA', prenom: 'Pauline', rna_id: 'RNA-00126', sexe: 'F', village: 'Masi-Manimba', telephone: '+243845678901' },
-];
-
-const mockFormulaires = [
-  { id: 'enquete_production', nom: 'Enquête production agricole', version: '1.0' },
-  { id: 'adoption_technologie', nom: 'Adoption des technologies', version: '1.0' },
-  { id: 'plainte_grm', nom: 'Enregistrement de plainte', version: '1.0' },
-  { id: 'satisfaction_formation', nom: 'Évaluation de satisfaction', version: '1.0' },
-];
-
-type BeneficiaireAC = typeof mockBeneficiaires[number];
-type FormulaireAC = typeof mockFormulaires[number];
+interface FormulaireAC {
+  id: string;
+  nom: string;
+  version: string;
+}
 
 export const DashboardAC: React.FC = () => {
   const theme = useTheme();
@@ -197,12 +130,18 @@ export const DashboardAC: React.FC = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setAgent(mockAgent);
-      setStats(mockStats);
-      setCollectes(mockCollectes);
-      setBeneficiaires(mockBeneficiaires);
-      setFormulaires(mockFormulaires);
+      const [profilRes, statsRes, collectesRes, beneficiairesRes, formulairesRes] = await Promise.all([
+        agentCollecteurService.getProfil(),
+        agentCollecteurService.getStats(),
+        agentCollecteurService.getCollectes(),
+        agentCollecteurService.getBeneficiaires(),
+        agentCollecteurService.getFormulaires(),
+      ]);
+      setAgent(profilRes.data);
+      setStats(statsRes.data);
+      setCollectes(collectesRes.data.data);
+      setBeneficiaires(beneficiairesRes.data.data);
+      setFormulaires(formulairesRes.data);
     } catch (error) {
       console.error(error);
     } finally {
@@ -213,7 +152,7 @@ export const DashboardAC: React.FC = () => {
   const handleSync = async () => {
     setSyncing(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await agentCollecteurService.synchroniser();
       setSyncDialogOpen(false);
       loadData();
     } catch (error) {
@@ -225,7 +164,12 @@ export const DashboardAC: React.FC = () => {
 
   const handleSubmitCollecte = async () => {
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await agentCollecteurService.sauvegarderCollecte({
+        formulaire_id: selectedFormulaire,
+        donnees: {},
+        latitude: location?.lat,
+        longitude: location?.lng,
+      });
       setCollecteDialogOpen(false);
       setSelectedFormulaire('');
       loadData();
@@ -272,7 +216,7 @@ export const DashboardAC: React.FC = () => {
         </AppBar>
 
         {/* Profil Agent */}
-        <Paper sx={{ m: 2, p: 2, borderRadius: 2, bgcolor: '#F1F8E9' }}>
+        <Paper sx={{ m: 2, p: 2, borderRadius: 2, bgcolor: 'action.hover' }}>
           <Stack direction="row" spacing={2} alignItems="center">
             <Avatar sx={{ bgcolor: '#2E7D32', width: 56, height: 56 }}>
               <Person />
@@ -338,7 +282,7 @@ export const DashboardAC: React.FC = () => {
         <BottomNavigation
           value={bottomNavValue}
           onChange={(_, v) => setBottomNavValue(v)}
-          sx={{ position: 'fixed', bottom: 0, left: 0, right: 0, bgcolor: 'white', borderTop: '1px solid #E0E0E0' }}
+          sx={{ position: 'fixed', bottom: 0, left: 0, right: 0, bgcolor: 'background.paper', borderTop: 1, borderColor: 'divider' }}
         >
           <BottomNavigationAction label="Collectes" icon={<ListAlt />} />
           <BottomNavigationAction label="Bénéficiaires" icon={<People />} />
@@ -398,7 +342,7 @@ export const DashboardAC: React.FC = () => {
                         <Typography variant="caption" color="text.secondary">{b.rna_id}</Typography>
                         <Typography variant="caption" display="block">{b.village}</Typography>
                       </Box>
-                      <IconButton size="small" sx={{ bgcolor: '#F1F8E9' }}>
+                      <IconButton size="small" sx={{ bgcolor: 'action.hover' }}>
                         <Add fontSize="small" />
                       </IconButton>
                     </Stack>
@@ -556,7 +500,7 @@ export const DashboardAC: React.FC = () => {
       </Box>
 
       {/* Profil Agent */}
-      <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: '#F1F8E9' }}>
+      <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: 'action.hover' }}>
         <Grid container spacing={3} alignItems="center">
           <Grid size={{ xs: 12, md: 2 }} sx={{ display: 'flex', justifyContent: 'center' }}>
             <Avatar sx={{ bgcolor: '#2E7D32', width: 100, height: 100 }}>
@@ -576,7 +520,7 @@ export const DashboardAC: React.FC = () => {
             </Typography>
           </Grid>
           <Grid size={{ xs: 12, md: 4 }}>
-            <Paper sx={{ p: 2, bgcolor: 'white', borderRadius: 2 }}>
+            <Paper sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 2 }}>
               <Typography variant="caption" color="text.secondary">Zones d'intervention</Typography>
               <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap', gap: 1 }}>
                 {agent?.zones.map((zone, idx) => (
@@ -597,6 +541,7 @@ export const DashboardAC: React.FC = () => {
             icon={<GoogleIcon name="assignment" size={36} />}
             trend={{ value: stats?.collectes_mois ?? 0, direction: 'up', period: 'ce mois' }}
             color="primary"
+            onClick={() => setCollecteDialogOpen(true)}
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
@@ -606,6 +551,7 @@ export const DashboardAC: React.FC = () => {
             icon={<GoogleIcon name="groups" size={36} />}
             trend={{ value: stats?.collectes_semaine ?? 0, direction: 'up', period: 'collectes cette semaine' }}
             color="info"
+            onClick={() => setCollecteDialogOpen(true)}
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
@@ -615,6 +561,7 @@ export const DashboardAC: React.FC = () => {
             icon={<GoogleIcon name="sync" size={36} />}
             trend={{ value: stats?.taux_synchronisation ?? 0, direction: 'up', period: 'des collectes' }}
             color="warning"
+            onClick={() => setSyncDialogOpen(true)}
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
@@ -624,6 +571,7 @@ export const DashboardAC: React.FC = () => {
             icon={<GoogleIcon name="cloud_off" size={36} />}
             trend={{ value: pendingCollectes, direction: pendingCollectes > 0 ? 'down' : 'up', period: pendingCollectes > 0 ? 'à synchroniser' : 'tout est synchronisé' }}
             color={pendingCollectes > 0 ? 'danger' : 'success'}
+            onClick={() => setSyncDialogOpen(true)}
           />
         </Grid>
       </Grid>
@@ -638,7 +586,7 @@ export const DashboardAC: React.FC = () => {
             <Card sx={{ ...moduleGridStyles.statCard, cursor: 'pointer' }} onClick={() => { setSelectedFormulaire(form.id); setCollecteDialogOpen(true); }}>
               <CardContent>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                  <Avatar sx={{ bgcolor: '#E8F5E9' }}>
+                  <Avatar sx={{ bgcolor: 'action.hover' }}>
                     <Assignment sx={{ color: '#2E7D32' }} />
                   </Avatar>
                   <Box>
@@ -679,7 +627,7 @@ export const DashboardAC: React.FC = () => {
                       <Typography variant="caption" color="text.secondary">{b.rna_id}</Typography>
                       <Typography variant="caption" display="block">{b.village}</Typography>
                     </Box>
-                    <IconButton size="small" sx={{ bgcolor: '#F1F8E9' }}>
+                    <IconButton size="small" sx={{ bgcolor: 'action.hover' }}>
                       <Add fontSize="small" />
                     </IconButton>
                   </Stack>
@@ -696,7 +644,7 @@ export const DashboardAC: React.FC = () => {
       </Typography>
       <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
         <Table>
-          <TableHead sx={{ bgcolor: '#F1F8E9' }}>
+          <TableHead sx={{ bgcolor: 'action.hover' }}>
             <TableRow>
               <TableCell>Date</TableCell>
               <TableCell>Formulaire</TableCell>
@@ -719,9 +667,9 @@ export const DashboardAC: React.FC = () => {
                 </TableCell>
                 <TableCell>
                   {collecte.synced ? (
-                    <Chip label="Synchronisé" size="small" sx={{ bgcolor: '#E8F5E9', color: '#2E7D32' }} />
+                    <Chip label="Synchronisé" size="small" sx={{ bgcolor: 'action.hover', color: '#2E7D32' }} />
                   ) : (
-                    <Chip label="En attente" size="small" sx={{ bgcolor: '#FFF3E0', color: '#FF8F00' }} />
+                    <Chip label="En attente" size="small" sx={{ bgcolor: 'rgba(250, 178, 25, 0.14)', color: '#FF8F00' }} />
                   )}
                 </TableCell>
                 <TableCell align="center">
@@ -823,7 +771,7 @@ export const DashboardAC: React.FC = () => {
               <Typography variant="body2" gutterBottom>{selectedCollecte.formulaire_nom}</Typography>
               
               <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 2 }}>Données</Typography>
-              <Paper sx={{ p: 2, bgcolor: '#F5F5F5', borderRadius: 2 }}>
+              <Paper sx={{ p: 2, bgcolor: 'action.hover', borderRadius: 2 }}>
                 {Object.entries(selectedCollecte.donnees).map(([key, value]) => (
                   <Box key={key} sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                     <Typography variant="caption">{key}</Typography>

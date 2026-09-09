@@ -1,5 +1,6 @@
 // frontend/src/pages/Risques/AlertesRisques.tsx
 import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -37,6 +38,7 @@ const risqueCodes: Record<number, string> = {
 };
 
 export const AlertesRisques: React.FC = () => {
+  const navigate = useNavigate();
   const { notifications, loading, refresh, markAsRead } = useNotifications();
   const [filter, setFilter] = useState<'toutes' | 'non_lues' | 'danger' | 'warning' | 'info'>('toutes');
 
@@ -113,6 +115,7 @@ export const AlertesRisques: React.FC = () => {
             icon={<Badge badgeContent={nonLues} color="error"><GoogleIcon name="notifications" size={36} /></Badge>}
             trend={{ value: nonLues, direction: nonLues > 0 ? 'down' : 'up', period: nonLues > 0 ? 'non lues' : 'toutes lues' }}
             color="primary"
+            onClick={() => navigate('/risques/registre')}
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
@@ -122,6 +125,7 @@ export const AlertesRisques: React.FC = () => {
             icon={<GoogleIcon name="error" size={36} />}
             trend={{ value: alertes.length > 0 ? Math.round((critiques / alertes.length) * 100) : 0, direction: 'down', period: 'du total' }}
             color="danger"
+            onClick={() => navigate('/risques/registre')}
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
@@ -131,6 +135,7 @@ export const AlertesRisques: React.FC = () => {
             icon={<GoogleIcon name="warning" size={36} />}
             trend={{ value: alertes.length > 0 ? Math.round((avertissements / alertes.length) * 100) : 0, direction: 'up', period: 'du total' }}
             color="warning"
+            onClick={() => navigate('/risques/plan')}
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
@@ -140,6 +145,7 @@ export const AlertesRisques: React.FC = () => {
             icon={<GoogleIcon name="mark_email_read" size={36} />}
             trend={{ value: alertes.length > 0 ? Math.round(((alertes.length - nonLues) / alertes.length) * 100) : 0, direction: 'up', period: 'du total' }}
             color="success"
+            onClick={() => navigate('/notifications')}
           />
         </Grid>
       </Grid>

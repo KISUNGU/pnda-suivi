@@ -1,5 +1,5 @@
 // frontend/src/pages/Admin/ConfigurationPage.tsx
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Box,
   Typography,
@@ -32,6 +32,7 @@ import {
   Snackbar,
 } from '@mui/material';
 import GoogleIcon from '../../components/common/GoogleIcon';
+import configurationService from '../../services/configuration.service';
 
 // ─── Sous-composant onglet ───────────────────────────────────────────
 interface TabPanelProps {
@@ -140,9 +141,45 @@ export function ConfigurationPage() {
   const [snackOpen, setSnackOpen] = useState(false);
   const [snackMessage, setSnackMessage] = useState('');
 
-  const handleSave = (section: string) => {
-    setSnackMessage(`Configuration "${section}" sauvegardée avec succès.`);
-    setSnackOpen(true);
+  useEffect(() => {
+    const loadConfiguration = async () => {
+      try {
+        const { data } = await configurationService.getConfiguration();
+        setGenerale(data.generale);
+        setAlertes(data.alertes);
+        setIntegration(data.integration);
+        setProvincesActives(data.provincesActives);
+      } catch (error) {
+        console.error('Erreur chargement configuration:', error);
+      }
+    };
+    loadConfiguration();
+  }, []);
+
+  const SECTION_KEYS: Record<string, 'generale' | 'alertes' | 'integration' | 'provincesActives'> = {
+    'Général': 'generale',
+    'Alertes & Seuils': 'alertes',
+    'Intégrations': 'integration',
+    'Provinces': 'provincesActives',
+  };
+
+  const SECTION_VALUES: Record<string, unknown> = {
+    'Général': generale,
+    'Alertes & Seuils': alertes,
+    'Intégrations': integration,
+    'Provinces': provincesActives,
+  };
+
+  const handleSave = async (section: string) => {
+    try {
+      await configurationService.updateSection(SECTION_KEYS[section], SECTION_VALUES[section]);
+      setSnackMessage(`Configuration "${section}" sauvegardée avec succès.`);
+      setSnackOpen(true);
+    } catch (error) {
+      console.error('Erreur sauvegarde configuration:', error);
+      setSnackMessage(`Erreur lors de la sauvegarde de "${section}".`);
+      setSnackOpen(true);
+    }
   };
 
   const toggleProvince = (p: string) => {

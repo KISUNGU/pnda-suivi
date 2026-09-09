@@ -1,107 +1,170 @@
-# PNDA Suivi-Evaluation
+# PNDA — Plateforme Suivi & Évaluation
 
-Application de suivi-evaluation du Programme National de Developpement Agricole, structuree en monorepo avec un backend Express/TypeScript et un frontend React/Vite.
+Application web de suivi-évaluation du **Projet National de Développement Agricole** (RDC,
+financement Banque Mondiale) : cadre de résultats, saisie et validation des réalisations,
+restitution cartographique (SIG).
 
-## Structure du projet
+L'authentification, les sessions et les droits sont gérés par l'API Node. Supabase est la base
+de données (Postgres + PostGIS) ; il n'est plus le fournisseur d'identité.
 
-- `backend/` : API Express, authentification, acces MySQL et routes metier
-- `frontend/` : interface React, tableaux de bord, formulaires et pages fonctionnelles
-- `scripts/` : scripts de demarrage du projet
+> Ce dépôt ne concerne que le Suivi & Évaluation. Les dossiers `_archive-assurance`,
+> `_sauvegarde-20260728-131313`, `supabase/migrations-assurancepay-archive` et `_to_delete` qui
+> provenaient d'un autre produit (PndaPay / assurance agricole) ont été retirés du dépôt.
 
-## Prerequis
+---
 
-- Node.js 20 ou plus recent
-- npm 10 ou plus recent
-- MySQL accessible localement ou a distance
+## Démarrage
 
-## Installation
+Node 18 ou plus.
 
-Depuis la racine du projet :
-
-```bash
-npm run install:all
-```
-
-Cette commande installe les dependances de la racine, du backend et du frontend.
-
-## Configuration backend
-
-Creer un fichier `backend/.env` avec au minimum :
-
-```env
-PORT=3000
-DB_HOST=127.0.0.1
-DB_PORT=3306
-DB_USER=root
-DB_PASSWORD=
-DB_NAME=pnda_se
-JWT_SECRET=pnda_secret_key_2026
-```
-
-Notes :
-
-- Le frontend cible par defaut `http://localhost:3000/api`.
-- Si MySQL tourne en local sur Windows, `127.0.0.1` est plus fiable que `localhost` en cas de resolution IPv6.
-- Sur cette machine de travail, la base validee pour le backend est `pnda_se`.
-- Le backend renvoie `GET /api/health` pour verifier rapidement que l'API repond.
-- La table `cadre_resultats` est creee et initialisee automatiquement au premier appel des endpoints `/api/cadre-resultats` et `/api/cadre-resultats/stats`.
-
-## Demarrage en developpement
-
-Lancer les deux applications en parallele :
+### Démonstration immédiate, sans base de données
 
 ```bash
-npm run dev:both
+npm install
+cp server/.env.example server/.env     # AUTH_MODE=jwt,demo puis DEMO_DATA=1
+npm run dev
 ```
 
-Ou separer les processus :
+L'écran de connexion propose cinq comptes cliquables, un par rôle (`admin@demo.pnda.cd` /
+`demo-admin`, etc. — voir `server/src/lib/demoAuth.js`).
+
+### Installation réelle
 
 ```bash
-npm run dev:backend
-npm run dev:frontend
+# 1. Appliquer les migrations supabase/migrations/0001 à 0007 sur le projet Supabase
+#    dédié au S&E (extensions + PostGIS, identité JWT, audit, cadre de résultats,
+#    seed du cadre, vues de synthèse, fonctions SIG).
+
+# 2. Configurer
+cp server/.env.example server/.env
+#    AUTH_MODE=jwt
+#    JWT_SECRET=$(node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))")
+#    SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY
+
+# 3. Créer le premier administrateur
+npm run creer-admin -- --email admin@pnda.cd --nom Mbuyi --prenom Jean
+
+# 4. Lancer
+npm run dev        # API sur :4000, front sur :5173
 ```
 
-Applications disponibles :
+Le front n'a pas besoin de `.env` en mode JWT seul : il découvre les fournisseurs actifs via
+`/api/auth/mode`. Un `web/.env` n'est nécessaire que si `AUTH_MODE` inclut `supabase`.
 
-- Frontend : `http://localhost:5173`
-- Backend : `http://localhost:3000`
-- Health check API : `http://localhost:3000/api/health`
+Ensuite, tous les comptes se créent depuis l'écran **Administration**.
 
-## Build
-
-Backend :
+**Production :** `AUTH_MODE=jwt` seul, `NODE_ENV=production`, `JWT_SECRET` fixe. Le serveur
+refuse de démarrer sans secret et rejette les jetons de démonstration.
 
 ```bash
-cd backend
-npm run build
+npm run build      # génère web/dist
+npm start
 ```
 
-Frontend :
+---
 
-```bash
-cd frontend
-npm run build
+## Authentification
+
+L'API émet ses propres jetons. Trois fournisseurs peuvent coexister, activés par `AUTH_MODE` ;
+le middleware reconnaît le type de jeton présenté et refuse ceux dont le fournisseur est
+désactivé.
+
+**Mots de passe** — hachés avec `scrypt` (paramètres N=16384, r=8, p=1) du module `crypto`
+natif. Politique : 10 caractères minimum, trois familles de caractères sur quatre, refus des
+mots de passe courants et de ceux contenant le nom ou l'adresse du titulaire.
+
+**Jetons** — JWT HS256 signés directement avec `crypto`, algorithme figé et vérifié avant la
+signature. Émetteur et audience contrôlés, expiration obligatoire. Le jeton d'accès vit 15
+minutes ; le front le renouvelle silencieusement avant expiration.
+
+**Rafraîchissement** — jetons opaques de 48 octets, dont seule l'empreinte SHA-256 est stockée.
+Chaque usage consomme le jeton et en émet un nouveau (rotation). Si un jeton déjà consommé est
+rejoué, toutes les sessions du compte sont révoquées — signature d'un vol de jeton.
+
+**Verrouillage** — cinq échecs consécutifs verrouillent le compte quinze minutes, message
+d'erreur identique que le compte existe ou non.
+
+**Révocation** — un changement de mot de passe, de rôle, de province, ou une désactivation
+ferment immédiatement toutes les sessions du compte.
+
+---
+
+## Rôles et périmètre
+
+Cinq rôles, alignés sur la contrainte `CHECK` de `app_users`. Les permissions portent sur le
+cadre de résultats (consultation, saisie des réalisations, validation) et le SIG.
+
+| Rôle | Périmètre | Droits |
+|---|---|---|
+| `admin` | National | Tout, + gestion des comptes |
+| `national` | National | Cadre, saisie, validation, SIG (lecture/écriture), audit |
+| `se_provincial` | Sa province | Cadre, saisie, validation (dans sa province), SIG (lecture), audit |
+| `ot` | Sa province | Cadre (lecture), saisie des réalisations, SIG (lecture) |
+| `ac` | Sa province | Cadre (lecture), réalisations (lecture), SIG (lecture) |
+
+La ligne nationale d'un indicateur (`province_id` = null) n'est saisissable que par les rôles à
+périmètre national : les valeurs provinciales remontent du terrain, la consolidation nationale
+reste un acte de la Coordination.
+
+---
+
+## Pages
+
+| Page | Route | Contenu | Permission |
+|---|---|---|---|
+| Cadre de résultats | `/` | Composantes, résultats, indicateurs IODP/IR, séries annuelles, taux d'atteinte | `cadre:read` |
+| Saisie des réalisations | `/saisie` | Cycle brouillon → soumis → validé (ou rejet), par indicateur/année/province/sexe | `realisations:read` |
+| Carte & SIG | `/carte` | Provinces géoréférencées (PostGIS), sites projet, import de contours GeoJSON | `sig:read` |
+| Administration | `/administration` | Comptes, rôles, réinitialisation/activation | `admin:read` |
+| Journal d'audit | `/audit` | Actions plateforme, filtrées par périmètre | `audit:read` |
+
+**Administration des comptes.** Création avec mot de passe provisoire affiché une seule fois,
+réinitialisation, activation et désactivation. Rien n'est jamais supprimé. Un administrateur ne
+peut ni retirer son propre rôle admin, ni désactiver son propre compte.
+
+---
+
+## Architecture
+
+```
+pnda-se/
+├── server/                 API Express (Node 18+)
+│   ├── scripts/
+│   │   └── creer-admin.js  Amorçage du premier compte
+│   └── src/
+│       ├── config.js       Fournisseurs d'authentification, secrets, durées
+│       ├── lib/
+│       │   ├── passwords.js scrypt, politique, mots de passe provisoires
+│       │   ├── users.js     app_users, sessions, rotation, verrouillage
+│       │   ├── supabase.js  Client service_role
+│       │   ├── demoAuth.js  Comptes locaux de démonstration
+│       │   ├── provinces.js Normalisation des libellés divergents
+│       │   └── audit.js     Journalisation applicative
+│       ├── middleware/
+│       │   ├── auth.js     Reconnaît le type de jeton, charge le profil
+│       │   ├── rbac.js     Matrice de droits — FAIT AUTORITÉ
+│       │   └── error.js
+│       └── routes/         auth, me, cadre, realisations, sig, admin, audit
+├── web/                    React 18 + Vite 5 + Tailwind
+│   └── src/
+│       ├── auth/           Contexte de session, copie indicative des droits
+│       ├── components/     Layout, Sidebar, Header, primitives, graphiques
+│       ├── pages/          CadreResultats, Saisie, CarteSig, Administration,
+│       │                   Audit, Profil, Connexion, ChangementMotDePasse
+│       └── lib/            Client API avec rotation, formatage
+└── supabase/migrations/    0001 extensions+PostGIS, 0002 identité, 0003 audit,
+                            0004 cadre de résultats + référentiel géo, 0005 seed,
+                            0006 vues de synthèse, 0007 fonctions SIG
 ```
 
-## Comptes de demonstration
+Le front ne parle jamais directement aux tables métier. Les permissions renvoyées au navigateur
+servent uniquement à masquer des écrans — l'API revalide chaque requête.
 
-L'authentification backend s'appuie maintenant sur la table MySQL `utilisateur`.
+---
 
-- Utiliser un email existant dans `utilisateur`.
-- Plusieurs lignes fournies utilisent `password123` comme mot de passe initial.
-- Lors d'une connexion reussie avec un mot de passe en clair, le backend le re-hache automatiquement avec `bcrypt`.
+## Legacy
 
-## Stack technique
+`backend/` et `frontend/` (TypeScript) sont une ancienne tentative de ce même produit S&E,
+initialement sur MySQL, dont la migration vers Supabase n'a pas été terminée. Le produit actif
+est `server/` + `web/` (workspaces npm racine). Ne pas les confondre.
 
-- Backend : Express, TypeScript, mysql2, JWT, bcryptjs
-- Frontend : React 19, TypeScript, Vite, Material UI, Redux Toolkit, React Router
-
-## Depannage rapide
-
-- Si le backend ne demarre pas et signale une configuration manquante, verifier `DB_USER` et `DB_NAME`.
-- Si l'authentification frontend echoue, verifier que `VITE_API_URL` pointe vers l'API backend attendue.
-- Si le port 3000 est deja occupe, modifier `PORT` dans `backend/.env` et ajuster `VITE_API_URL` cote frontend.
-
-## Licence
-
-Le projet contient une licence MIT dans `LICENSE`.

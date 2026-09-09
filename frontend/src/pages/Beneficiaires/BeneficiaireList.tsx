@@ -1,5 +1,6 @@
 // frontend/src/pages/Beneficiaires/BeneficiaireList.tsx
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -43,6 +44,7 @@ interface BeneficiaireStats {
 }
 
 export const BeneficiaireList: React.FC = () => {
+  const navigate = useNavigate();
   const [beneficiaires, setBeneficiaires] = useState<Beneficiaire[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -158,6 +160,7 @@ export const BeneficiaireList: React.FC = () => {
               value={(stats.total || 0).toLocaleString('fr-FR')}
               icon={<GoogleIcon name="groups" size={36} />}
               trend={{ value: stats.provinces || 0, direction: 'up', period: 'provinces couvertes' }}
+              onClick={() => navigate('/beneficiaires/dashboard')}
               color="primary"
             />
           </Grid>
@@ -167,6 +170,7 @@ export const BeneficiaireList: React.FC = () => {
               value={(stats.femmes || 0).toLocaleString('fr-FR')}
               icon={<GoogleIcon name="female" size={36} />}
               trend={{ value: (stats.total || 0) > 0 ? Math.round(((stats.femmes || 0) / (stats.total || 1)) * 100) : 0, direction: 'up', period: '% du total' }}
+              onClick={() => setFilters({ ...filters, sexe: 'F', page: 0 })}
               color="success"
             />
           </Grid>
@@ -175,6 +179,7 @@ export const BeneficiaireList: React.FC = () => {
               title="Hommes"
               value={(stats.hommes || 0).toLocaleString('fr-FR')}
               icon={<GoogleIcon name="male" size={36} />}
+              onClick={() => setFilters({ ...filters, sexe: 'M', page: 0 })}
               trend={{ value: (stats.total || 0) > 0 ? Math.round(((stats.hommes || 0) / (stats.total || 1)) * 100) : 0, direction: 'up', period: '% du total' }}
               color="info"
             />
@@ -184,6 +189,7 @@ export const BeneficiaireList: React.FC = () => {
               title="Provinces couvertes"
               value={stats.provinces || 0}
               icon={<GoogleIcon name="map" size={36} />}
+              onClick={() => navigate('/outils/cartographie')}
               trend={{ value: Math.round(((stats.provinces || 0) / 26) * 100), direction: 'up', period: 'sur 26 provinces' }}
               color="warning"
             />
@@ -272,7 +278,7 @@ export const BeneficiaireList: React.FC = () => {
       />
       <TableContainer component={Paper} sx={{ borderRadius: '10px', overflow: 'hidden' }}>
         <Table>
-          <TableHead sx={{ bgcolor: '#F1F8E9' }}>
+          <TableHead sx={{ bgcolor: 'action.hover' }}>
             <TableRow>
               <TableCell>RNA ID</TableCell>
               <TableCell>Nom complet</TableCell>
@@ -295,9 +301,9 @@ export const BeneficiaireList: React.FC = () => {
                 </TableCell>
                 <TableCell>
                   {beneficiaire.sexe === 'M' ? (
-                    <Chip icon={<GoogleIcon name="male" size={20} />} label="Homme" size="small" sx={{ bgcolor: '#E3F2FD' }} />
+                    <Chip icon={<GoogleIcon name="male" size={20} />} label="Homme" size="small" sx={{ bgcolor: 'rgba(57, 135, 229, 0.14)' }} />
                   ) : (
-                    <Chip icon={<GoogleIcon name="female" size={20} />} label="Femme" size="small" sx={{ bgcolor: '#FCE4EC' }} />
+                    <Chip icon={<GoogleIcon name="female" size={20} />} label="Femme" size="small" sx={{ bgcolor: 'rgba(217, 27, 92, 0.14)' }} />
                   )}
                 </TableCell>
                 <TableCell>{beneficiaire.province}</TableCell>

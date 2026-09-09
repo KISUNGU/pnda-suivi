@@ -16,6 +16,7 @@ import { useTheme } from '@mui/material/styles';
 import { useNavigate, useLocation } from 'react-router-dom';
 import GoogleIcon from '../GoogleIcon';
 import { SamentorLogo } from '../SamentorLogo';
+import { COULEURS_MODULE } from '../../../assets/styles/theme';
 
 interface SidebarProps {
   open: boolean;
@@ -36,16 +37,16 @@ const menuItems: MenuItem[] = [
     title: 'Tableaux de bord',
     icon: <GoogleIcon name="dashboard" size={26} />,
     children: [
-      { title: 'National', path: '/dashboard/national', icon: <GoogleIcon name="dashboard" size={24} />, roles: ['admin', 'uncp'] },
-      { title: 'Provincial', path: '/dashboard/provincial', icon: <GoogleIcon name="map" size={24} />, roles: ['admin', 'uncp', 'upep'] },
+      { title: 'National', path: '/dashboard/national', icon: <GoogleIcon name="dashboard" size={24} />, roles: ['super_admin', 'admin', 'uncp'] },
+      { title: 'Provincial', path: '/dashboard/provincial', icon: <GoogleIcon name="map" size={24} />, roles: ['super_admin', 'admin', 'uncp', 'upep'] },
       { title: 'Officier Terrain', path: '/dashboard/ot', icon: <GoogleIcon name="person_pin_circle" size={24} />, roles: ['ot'] },
-      { title: 'Partenaires', path: '/dashboard/partenaires', icon: <GoogleIcon name="handshake" size={24} />, roles: ['admin', 'uncp', 'upep', 'partenaire'] },
+      { title: 'Partenaires', path: '/dashboard/partenaires', icon: <GoogleIcon name="handshake" size={24} />, roles: ['super_admin', 'admin', 'uncp', 'upep', 'partenaire'] },
     ],
   },
   {
     title: 'Indicateurs de performance',
     icon: <GoogleIcon name="bar_chart" size={26} />,
-    roles: ['admin', 'uncp', 'upep', 'ot', 'partenaire'],
+    roles: ['super_admin', 'admin', 'uncp', 'upep', 'ot', 'partenaire'],
     children: [
       { title: 'IODP', path: '/indicateurs/iodp', icon: <GoogleIcon name="bar_chart" size={24} /> },
       { title: 'Résultats intermédiaires', path: '/indicateurs/ir', icon: <GoogleIcon name="trending_up" size={24} /> },
@@ -56,29 +57,30 @@ const menuItems: MenuItem[] = [
   {
     title: 'Bénéficiaires',
     icon: <GoogleIcon name="groups" size={26} />,
-    roles: ['admin', 'uncp', 'upep', 'ot'],
+    roles: ['super_admin', 'admin', 'uncp', 'upep', 'ot'],
     children: [
-      { title: 'Tableau de bord', path: '/beneficiaires/dashboard', icon: <GoogleIcon name="dashboard" size={24} />, roles: ['admin', 'uncp', 'upep'] },
+      { title: 'Tableau de bord', path: '/beneficiaires/dashboard', icon: <GoogleIcon name="dashboard" size={24} />, roles: ['super_admin', 'admin', 'uncp', 'upep'] },
       { title: 'RNA', path: '/beneficiaires/rna', icon: <GoogleIcon name="person" size={24} /> },
       { title: 'Cartes agriculteurs', path: '/beneficiaires/cartes', icon: <GoogleIcon name="badge" size={24} /> },
       { title: 'Ventes semences', path: '/beneficiaires/ventes-semences', icon: <GoogleIcon name="sell" size={24} /> },
       { title: 'Organisations paysannes', path: '/beneficiaires/organisations', icon: <GoogleIcon name="corporate_fare" size={24} /> },
-      { title: 'Fournisseurs', path: '/beneficiaires/fournisseurs', icon: <GoogleIcon name="local_shipping" size={24} />, roles: ['admin', 'uncp', 'upep'] },
+      { title: 'Fournisseurs', path: '/beneficiaires/fournisseurs', icon: <GoogleIcon name="local_shipping" size={24} />, roles: ['super_admin', 'admin', 'uncp', 'upep'] },
     ],
   },
   {
     title: 'Suivi opérationnel',
     icon: <GoogleIcon name="assignment" size={26} />,
-    roles: ['admin', 'uncp', 'upep', 'ot'],
+    roles: ['super_admin', 'admin', 'uncp', 'upep', 'ot'],
     children: [
       { title: 'Missions T4 2025', path: '/suivi/missions', icon: <GoogleIcon name="flight_takeoff" size={24} /> },
       { title: 'Activités du projet', path: '/suivi/activites', icon: <GoogleIcon name="task" size={24} /> },
+      { title: 'Suivi du PTBA 2026', path: '/suivi/ptba', icon: <GoogleIcon name="event_note" size={24} /> },
     ],
   },
   {
     title: 'Gestion des risques',
     icon: <GoogleIcon name="warning" size={26} />,
-    roles: ['admin', 'uncp', 'upep'],
+    roles: ['super_admin', 'admin', 'uncp', 'upep'],
     children: [
       { title: 'Registre des risques', path: '/risques/registre', icon: <GoogleIcon name="report_problem" size={24} /> },
       { title: "Plan d'atténuation", path: '/risques/plan', icon: <GoogleIcon name="security" size={24} /> },
@@ -88,7 +90,7 @@ const menuItems: MenuItem[] = [
   {
     title: 'Mécanisme de plaintes',
     icon: <GoogleIcon name="support_agent" size={26} />,
-    roles: ['admin', 'uncp', 'upep', 'ot'],
+    roles: ['super_admin', 'admin', 'uncp', 'upep', 'ot'],
     children: [
       { title: 'Registre des plaintes', path: '/database/plaintes', icon: <GoogleIcon name="feedback" size={24} /> },
     ],
@@ -96,7 +98,7 @@ const menuItems: MenuItem[] = [
   {
     title: 'Données du projet',
     icon: <GoogleIcon name="folder_open" size={26} />,
-    roles: ['admin', 'uncp', 'upep'],
+    roles: ['super_admin', 'admin', 'uncp', 'upep'],
     children: [
       { title: 'Base bénéficiaires', path: '/database/beneficiaires', icon: <GoogleIcon name="people" size={24} /> },
       { title: 'Base activités', path: '/database/activites', icon: <GoogleIcon name="list_alt" size={24} /> },
@@ -106,9 +108,9 @@ const menuItems: MenuItem[] = [
   {
     title: 'Outils terrain',
     icon: <GoogleIcon name="agriculture" size={26} />,
-    roles: ['admin', 'uncp', 'upep', 'ot'],
+    roles: ['super_admin', 'admin', 'uncp', 'upep', 'ot'],
     children: [
-      { title: 'Calculateur indicateurs', path: '/outils/calculateur', icon: <GoogleIcon name="calculate" size={24} />, roles: ['admin', 'uncp', 'upep'] },
+      { title: 'Calculateur indicateurs', path: '/outils/calculateur', icon: <GoogleIcon name="calculate" size={24} />, roles: ['super_admin', 'admin', 'uncp', 'upep'] },
       { title: 'Collecte mobile', path: '/outils/collecte', icon: <GoogleIcon name="phone_android" size={24} /> },
       { title: 'Cartographie', path: '/outils/cartographie', icon: <GoogleIcon name="map" size={24} /> },
     ],
@@ -117,12 +119,12 @@ const menuItems: MenuItem[] = [
     title: 'Rapports',
     path: '/rapports',
     icon: <GoogleIcon name="description" size={26} />,
-    roles: ['admin', 'uncp', 'upep', 'partenaire'],
+    roles: ['super_admin', 'admin', 'uncp', 'upep', 'partenaire'],
   },
   {
     title: 'Administration',
     icon: <GoogleIcon name="settings" size={26} />,
-    roles: ['admin'],
+    roles: ['super_admin'],
     children: [
       { title: 'Utilisateurs', path: '/admin/utilisateurs', icon: <GoogleIcon name="admin_panel_settings" size={24} /> },
       { title: 'Configurations', path: '/admin/configurations', icon: <GoogleIcon name="tune" size={24} /> },
@@ -191,9 +193,20 @@ export const Sidebar: React.FC<SidebarProps> = ({ open, onClose, variant }) => {
   const isActive = (path: string) => location.pathname === path;
 
   const drawerContent = (
-    <Box sx={{ width: 280, height: '100%', bgcolor: 'primary.main', color: 'white', display: 'flex', flexDirection: 'column' }}>
+    <Box sx={{ width: 280, height: '100%', color: 'text.primary', display: 'flex', flexDirection: 'column' }}>
       {/* Header avec logo */}
-      <Box sx={{ p: 3, borderBottom: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1.5 }}>
+      <Box
+        sx={{
+          p: 3,
+          borderBottom: 1,
+          borderColor: 'divider',
+          background: `linear-gradient(152deg, ${COULEURS_MODULE.base}2E 0%, ${COULEURS_MODULE.statistiques}14 100%)`,
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          gap: 1.5,
+        }}
+      >
         <Box>
           <SamentorLogo height={72} sx={{ mb: 1 }} />
           <Typography variant="h6" sx={{ fontWeight: 700, letterSpacing: 0.2 }}>
@@ -204,7 +217,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ open, onClose, variant }) => {
           </Typography>
         </Box>
         {variant === 'temporary' && (
-          <IconButton onClick={onClose} sx={{ color: 'white' }}>
+          <IconButton onClick={onClose}>
             <GoogleIcon name="close" size={26} />
           </IconButton>
         )}
@@ -218,6 +231,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ open, onClose, variant }) => {
               {(() => {
                 const isExpanded = expandedMenu === item.title;
                 const isDirectlyActive = isActive(item.path || '');
+                const isMenuSelected = isDirectlyActive || activeParentTitle === item.title;
 
                 return (
               <ListItemButton
@@ -225,23 +239,31 @@ export const Sidebar: React.FC<SidebarProps> = ({ open, onClose, variant }) => {
                 sx={{
                   borderRadius: '10px',
                   mb: 0.5,
-                  bgcolor: isDirectlyActive
-                    ? 'rgba(255,255,255,0.2)'
+                  color: isMenuSelected ? 'text.primary' : 'text.secondary',
+                  background: isMenuSelected
+                    ? `linear-gradient(135deg, ${COULEURS_MODULE.base}3D 0%, ${COULEURS_MODULE.statistiques}26 100%)`
                     : isExpanded
-                      ? 'rgba(255,255,255,0.14)'
+                      ? 'action.hover'
                       : 'transparent',
-                  boxShadow: isExpanded ? 'inset 0 0 0 1px rgba(255,255,255,0.14)' : 'none',
+                  boxShadow: isMenuSelected
+                    ? `inset 3px 0 0 ${COULEURS_MODULE.base}`
+                    : isExpanded
+                      ? 'inset 0 0 0 1px rgba(148,163,184,0.18)'
+                      : 'none',
                   transition: theme.transitions.create(['background-color', 'box-shadow', 'transform'], {
                     duration: 220,
                     easing: theme.transitions.easing.easeInOut,
                   }),
                   '&:hover': {
-                    bgcolor: isDirectlyActive ? 'rgba(255,255,255,0.24)' : 'rgba(255,255,255,0.1)',
+                    background: isMenuSelected
+                      ? `linear-gradient(135deg, ${COULEURS_MODULE.base}4D 0%, ${COULEURS_MODULE.statistiques}33 100%)`
+                      : 'action.hover',
+                    color: 'text.primary',
                     transform: 'translateX(2px)',
                   },
                 }}
               >
-                <ListItemIcon sx={{ color: 'white', minWidth: 40, fontSize: '26px' }}>
+                <ListItemIcon sx={{ color: 'inherit', minWidth: 40, fontSize: '26px' }}>
                   {item.icon}
                 </ListItemIcon>
                 <ListItemText 
@@ -292,11 +314,20 @@ export const Sidebar: React.FC<SidebarProps> = ({ open, onClose, variant }) => {
                         ml: 1,
                         mr: 1,
                         mb: 0.5,
-                        bgcolor: isActive(child.path || '') ? 'rgba(255,255,255,0.2)' : 'transparent',
-                        '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' },
+                        color: isActive(child.path || '') ? 'text.primary' : 'text.secondary',
+                        background: isActive(child.path || '')
+                          ? `linear-gradient(135deg, ${COULEURS_MODULE.base}33 0%, ${COULEURS_MODULE.statistiques}1F 100%)`
+                          : 'transparent',
+                        boxShadow: isActive(child.path || '') ? `inset 3px 0 0 ${COULEURS_MODULE.base}` : 'none',
+                        '&:hover': {
+                          background: isActive(child.path || '')
+                            ? `linear-gradient(135deg, ${COULEURS_MODULE.base}42 0%, ${COULEURS_MODULE.statistiques}2E 100%)`
+                            : 'action.hover',
+                          color: 'text.primary',
+                        },
                       }}
                     >
-                      <ListItemIcon sx={{ color: 'white', minWidth: 32, fontSize: '24px' }}>
+                      <ListItemIcon sx={{ color: 'inherit', minWidth: 32, fontSize: '24px' }}>
                         {child.icon}
                       </ListItemIcon>
                       <ListItemText 
@@ -313,8 +344,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ open, onClose, variant }) => {
       </List>
 
       {/* Footer */}
-      <Box sx={{ p: 2, borderTop: '1px solid rgba(255,255,255,0.2)' }}>
-        <Typography variant="caption" sx={{ opacity: 0.6 }}>
+      <Box sx={{ p: 2, borderTop: 1, borderColor: 'divider' }}>
+        <Typography variant="caption" color="text.disabled">
           Version 2.0 © SAMANTOR 2026
         </Typography>
       </Box>
@@ -325,14 +356,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ open, onClose, variant }) => {
     return (
       <Drawer
         variant="permanent"
+        className="sans-impression"
         sx={{
           width: 280,
           flexShrink: 0,
           '& .MuiDrawer-paper': {
             width: 280,
             boxSizing: 'border-box',
-            border: 'none',
-            bgcolor: 'transparent',
           },
         }}
       >

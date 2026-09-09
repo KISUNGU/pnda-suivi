@@ -1,6 +1,7 @@
 // frontend/src/pages/Beneficiaires/BeneficiaireDashboard.tsx
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -61,6 +62,7 @@ const typesActivite = [
 ];
 
 export const BeneficiaireDashboard: React.FC = () => {
+  const navigate = useNavigate();
   // State
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -389,49 +391,84 @@ export const BeneficiaireDashboard: React.FC = () => {
         Vue d'ensemble
       </Typography>
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <GradientWidget
             title="Producteurs"
             value={stats?.total_producteurs?.toLocaleString('fr-FR') || '0'}
             icon={<GoogleIcon name="agriculture" size={36} />}
             trend={{ value: stats?.total_producteurs || 0, direction: 'up', period: 'producteurs enregistrés' }}
             color="primary"
+            onClick={() => navigate('/beneficiaires/rna')}
           />
         </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <GradientWidget
             title="% Productrices"
             value={stats?.total_producteurs ? `${Math.round((stats.total_femmes / stats.total_producteurs) * 100)}%` : '0%'}
             icon={<GoogleIcon name="female" size={36} />}
             trend={{ value: stats?.total_femmes || 0, direction: 'up', period: 'femmes productrices' }}
+            onClick={() => navigate('/beneficiaires/rna')}
             color="info"
           />
         </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <GradientWidget
             title="Âge moyen"
             value={`${Math.round(stats?.age_moyen || 0)} ans`}
             icon={<GoogleIcon name="calendar_month" size={36} />}
             trend={{ value: stats?.age_moyen || 0, direction: 'up', period: 'moyenne d\'âge' }}
+            onClick={() => navigate('/beneficiaires/rna')}
             color="info"
           />
         </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <GradientWidget
             title="Chefs de ménage"
             value={stats?.chefs_menage?.toLocaleString('fr-FR') || '0'}
             icon={<GoogleIcon name="home" size={36} />}
+            onClick={() => navigate('/beneficiaires/rna')}
             trend={{ value: stats?.chefs_menage || 0, direction: 'up', period: 'chefs de ménage' }}
             color="warning"
           />
         </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <GradientWidget
             title="Membres déjà enregistrés"
             value={stats?.membres_deja_enregistres?.toLocaleString('fr-FR') || '0'}
             icon={<GoogleIcon name="group" size={36} />}
+            onClick={() => navigate('/beneficiaires/rna')}
             trend={{ value: stats?.membres_deja_enregistres || 0, direction: 'up', period: 'ayant un membre dans le programme' }}
             color="success"
+          />
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <GradientWidget
+            title="Part des chefs de ménage"
+            value={stats?.total_producteurs ? `${Math.round((stats.chefs_menage / stats.total_producteurs) * 100)}%` : '0%'}
+            icon={<GoogleIcon name="family_restroom" size={36} />}
+            onClick={() => navigate('/beneficiaires/rna')}
+            trend={{ value: stats?.chefs_menage || 0, direction: 'up', period: 'producteurs concernés' }}
+            color="primary"
+          />
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <GradientWidget
+            title="Part avec membre enregistré"
+            value={stats?.total_producteurs ? `${Math.round((stats.membres_deja_enregistres / stats.total_producteurs) * 100)}%` : '0%'}
+            onClick={() => navigate('/beneficiaires/rna')}
+            icon={<GoogleIcon name="how_to_reg" size={36} />}
+            trend={{ value: stats?.membres_deja_enregistres || 0, direction: 'up', period: 'producteurs concernés' }}
+            color="success"
+          />
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <GradientWidget
+            title="Cultures principales"
+            value={(advancedStats?.top_cultures?.length || 0).toLocaleString('fr-FR')}
+            onClick={() => navigate('/outils/collecte?form=enquete_production')}
+            icon={<GoogleIcon name="eco" size={36} />}
+            trend={{ value: advancedStats?.top_cultures?.length || 0, direction: 'up', period: 'cultures suivies' }}
+            color="info"
           />
         </Grid>
       </Grid>
@@ -661,7 +698,7 @@ export const BeneficiaireDashboard: React.FC = () => {
           <Box sx={{ p: 2 }}>
             {/* Widgets */}
             <Grid container spacing={3} sx={{ mb: 4 }}>
-              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+              <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                 <GradientWidget
                   title="Producteurs ayant sélectionné un pTech"
                   value={cartesVentesStats?.widgets?.producteurs_avec_ptech?.toLocaleString('fr-FR') || '0'}
@@ -670,7 +707,7 @@ export const BeneficiaireDashboard: React.FC = () => {
                   color="primary"
                 />
               </Grid>
-              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+              <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                 <GradientWidget
                   title="Producteurs ayant reçu une carte"
                   value={cartesVentesStats?.widgets?.ont_recu_carte?.toLocaleString('fr-FR') || '0'}
@@ -679,13 +716,22 @@ export const BeneficiaireDashboard: React.FC = () => {
                   color="success"
                 />
               </Grid>
-              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+              <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                 <GradientWidget
                   title="Producteurs ayant acheté des semences"
                   value={cartesVentesStats?.widgets?.ont_achete_semences?.toLocaleString('fr-FR') || '0'}
                   icon={<GoogleIcon name="sell" size={36} />}
                   trend={{ value: cartesVentesStats?.widgets?.ont_achete_semences || 0, direction: 'up', period: 'acheteurs' }}
                   color="warning"
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                <GradientWidget
+                  title="Fournisseurs actifs"
+                  value={cartesVentesStats?.widgets?.fournisseurs_actifs?.toLocaleString('fr-FR') || '0'}
+                  icon={<GoogleIcon name="local_shipping" size={36} />}
+                  trend={{ value: cartesVentesStats?.widgets?.kg_semences_vendues || 0, direction: 'up', period: 'kg de semences vendues' }}
+                  color="info"
                 />
               </Grid>
             </Grid>
@@ -702,7 +748,7 @@ export const BeneficiaireDashboard: React.FC = () => {
                     <TableContainer>
                       <Table size="small">
                         <TableHead>
-                          <TableRow sx={{ bgcolor: '#F1F8E9' }}>
+                          <TableRow sx={{ bgcolor: 'action.hover' }}>
                             <TableCell>Paquet technique</TableCell>
                             <TableCell align="right">Producteurs</TableCell>
                             <TableCell align="center">Provinces</TableCell>
@@ -736,7 +782,7 @@ export const BeneficiaireDashboard: React.FC = () => {
                     <TableContainer>
                       <Table size="small">
                         <TableHead>
-                          <TableRow sx={{ bgcolor: '#F1F8E9' }}>
+                          <TableRow sx={{ bgcolor: 'action.hover' }}>
                             <TableCell>Province</TableCell>
                             <TableCell>Paquet technique</TableCell>
                             <TableCell align="right">Producteurs</TableCell>
@@ -774,7 +820,7 @@ export const BeneficiaireDashboard: React.FC = () => {
             </Typography>
             <TableContainer component={Paper} sx={{ mb: 4 }}>
               <Table size="small">
-                <TableHead sx={{ bgcolor: '#F1F8E9' }}>
+                <TableHead sx={{ bgcolor: 'action.hover' }}>
                   <TableRow>
                     <TableCell>Province</TableCell>
                     <TableCell align="right">Total producteurs</TableCell>
@@ -820,7 +866,7 @@ export const BeneficiaireDashboard: React.FC = () => {
             </Typography>
             <TableContainer component={Paper} sx={{ mb: 4 }}>
               <Table size="small">
-                <TableHead sx={{ bgcolor: '#F1F8E9' }}>
+                <TableHead sx={{ bgcolor: 'action.hover' }}>
                   <TableRow>
                     <TableCell>Province</TableCell>
                     <TableCell align="right">Producteurs acheteurs</TableCell>
@@ -850,7 +896,7 @@ export const BeneficiaireDashboard: React.FC = () => {
             </Typography>
             <TableContainer component={Paper} sx={{ mb: 4 }}>
               <Table size="small">
-                <TableHead sx={{ bgcolor: '#F1F8E9' }}>
+                <TableHead sx={{ bgcolor: 'action.hover' }}>
                   <TableRow>
                     <TableCell>Village</TableCell>
                     <TableCell align="right">Total producteurs</TableCell>
@@ -916,7 +962,7 @@ export const BeneficiaireDashboard: React.FC = () => {
             </Typography>
             <TableContainer component={Paper}>
               <Table size="small">
-                <TableHead sx={{ bgcolor: '#F1F8E9' }}>
+                <TableHead sx={{ bgcolor: 'action.hover' }}>
                   <TableRow>
                     <TableCell>Fournisseur</TableCell>
                     <TableCell align="right">Kilogrammes vendus</TableCell>

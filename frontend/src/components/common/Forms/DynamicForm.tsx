@@ -216,19 +216,19 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
                     sx={{ 
                       width: 80, 
                       height: 80, 
-                      bgcolor: '#F5F5F5', 
+                      bgcolor: 'action.hover', 
                       borderRadius: 2,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      border: '1px solid #E0E0E0',
+                      border: 1, borderColor: 'divider',
                     }}
                   >
                     <GoogleIcon name="photo_camera" size={32} sx={{ color: '#9E9E9E' }} />
                   </Box>
                   <IconButton 
                     size="small" 
-                    sx={{ position: 'absolute', top: -8, right: -8, bgcolor: 'white' }}
+                    sx={{ position: 'absolute', top: -8, right: -8, bgcolor: 'background.paper' }}
                     onClick={() => handleRemovePhoto(index)}
                   >
                     <GoogleIcon name="close" size={14} />

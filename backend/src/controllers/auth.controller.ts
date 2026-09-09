@@ -1,87 +1,60 @@
 // backend/src/controllers/auth.controller.ts
 import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
-import bcrypt from 'bcryptjs';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'pnda_secret_key_2026';
+import {
+  authenticateUtilisateur,
+  getUtilisateurProfile
+} from '../db';
 
-// Utilisateurs fictifs (à remplacer par base de données)
-const users = [
-  {
-    id: 1,
-    nom: 'MUKENDI',
-    prenom: 'Jean',
-    email: 'admin@pnda.cd',
-    password: bcrypt.hashSync('admin123', 10),
-    role: 'admin',
-    province: null,
-  },
-  {
-    id: 2,
-    nom: 'KABEYA',
-    prenom: 'Marie',
-    email: 'uncp@pnda.cd',
-    password: bcrypt.hashSync('uncp123', 10),
-    role: 'uncp',
-    province: null,
-  },
-  {
-    id: 3,
-    nom: 'TSHIBOLA',
-    prenom: 'Pierre',
-    email: 'upep@pnda.cd',
-    password: bcrypt.hashSync('upep123', 10),
-    role: 'upep',
-    province: 'Kwilu',
-  },
-];
+// Pas de valeur de repli : la validation au demarrage est faite dans app.ts.
+const JWT_SECRET = process.env.JWT_SECRET as string;
 
 export const login = async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
 
-    const user = users.find(u => u.email === email);
+    if (!email || !password) {
+      return res.status(400).json({
+        message: 'Email et mot de passe requis'
+      });
+    }
+
+    // 1) Auth via MySQL (bcrypt + migration auto)
+    const user = await authenticateUtilisateur(email, password);
+
     if (!user) {
-      return res.status(401).json({ message: 'Email ou mot de passe incorrect' });
+      return res.status(401).json({
+        message: 'Email ou mot de passe incorrect'
+      });
     }
 
-    const isValidPassword = bcrypt.compareSync(password, user.password);
-    if (!isValidPassword) {
-      return res.status(401).json({ message: 'Email ou mot de passe incorrect' });
-    }
+    // 2) Profil complet
+    const profile = await getUtilisateurProfile(user.id);
 
+    // 3) Token JWT
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role },
+      {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        province: user.province
+      },
       JWT_SECRET,
       { expiresIn: '24h' }
     );
 
+    // 4) Réponse finale
     res.json({
       token,
-      user: {
-        id: user.id,
-        nom: user.nom,
-        prenom: user.prenom,
-        email: user.email,
-        role: user.role,
-        province: user.province,
-      },
+      user: profile
     });
-  } catch (error) {
-    res.status(500).json({ message: 'Erreur serveur' });
-  }
-};
 
-export const verifyToken = async (req: Request, res: Response) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  if (!token) {
-    return res.status(401).json({ message: 'Token manquant' });
-  }
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    res.json({ valid: true, user: decoded });
   } catch (error) {
-    res.status(401).json({ message: 'Token invalide' });
+    console.error(error);
+
+    res.status(500).json({
+      message: 'Erreur serveur'
+    });
   }
 };

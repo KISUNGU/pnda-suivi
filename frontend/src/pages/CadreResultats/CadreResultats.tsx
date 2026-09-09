@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -15,8 +16,6 @@ import {
   IconButton,
   Collapse,
   LinearProgress,
-  Card,
-  CardContent,
   Grid,
   Alert,
   CircularProgress,
@@ -27,6 +26,7 @@ import cadreResultatsService, {
   type CadreStats,
 } from '../../services/cadreResultats.service';
 import GoogleIcon from '../../components/common/GoogleIcon';
+import { GradientWidget } from '../../components/common/Widget/GradientWidget';
 
 // ─── helpers ──────────────────────────────────────────────────
 
@@ -70,20 +70,20 @@ interface StatCardProps {
   sub?: string;
 }
 
-const StatCard: React.FC<StatCardProps> = ({ icon, label, value, color = 'primary.main', sub }) => (
-  <Card sx={{ borderRadius: '10px', height: '100%' }}>
-    <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-      <Box sx={{ p: 1.5, borderRadius: '10px', bgcolor: `${color}15` }}>
-        <GoogleIcon name={icon} size={28} sx={{ color }} filled />
-      </Box>
-      <Box>
-        <Typography variant="h5" fontWeight={700} color={color}>{value}</Typography>
-        <Typography variant="body2" color="text.secondary">{label}</Typography>
-        {sub && <Typography variant="caption" color="text.disabled">{sub}</Typography>}
-      </Box>
-    </CardContent>
-  </Card>
-);
+const StatCard: React.FC<StatCardProps> = ({ icon, label, value, color = 'primary.main', sub }) => {
+  const navigate = useNavigate();
+  const versCollecte = label.includes('retard') || label.includes('cours');
+  return (
+    <GradientWidget
+      title={label}
+      value={value}
+      icon={<GoogleIcon name={icon} size={36} filled />}
+      detail={sub}
+      color={color === '#2E7D32' ? 'success' : color === '#F9A825' ? 'warning' : color === '#C62828' ? 'danger' : color === '#00838F' ? 'info' : 'primary'}
+      onClick={() => navigate(versCollecte ? '/outils/collecte' : '/database/indicateurs')}
+    />
+  );
+};
 
 // ─── IndicateurRow ────────────────────────────────────────────
 
@@ -92,6 +92,7 @@ interface RowProps {
 }
 
 const IndicateurRow: React.FC<RowProps> = ({ indicateur: ind }) => {
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const annee = ind.annees[ANNEE_ACTUELLE];
   const perf = calcPerf(annee.realise, annee.prevu);
@@ -101,9 +102,13 @@ const IndicateurRow: React.FC<RowProps> = ({ indicateur: ind }) => {
 
   return (
     <>
-      <TableRow hover sx={{ '& > td': { borderBottom: open ? 'none' : undefined } }}>
+      <TableRow
+        hover
+        onClick={() => navigate(`/indicateurs/${ind.id}`)}
+        sx={{ cursor: 'pointer', '& > td': { borderBottom: open ? 'none' : undefined } }}
+      >
         {/* expand */}
-        <TableCell padding="checkbox">
+        <TableCell padding="checkbox" onClick={(event) => event.stopPropagation()}>
           <IconButton size="small" onClick={() => setOpen(!open)}>
             <GoogleIcon name={open ? 'expand_less' : 'expand_more'} size={20} />
           </IconButton>
@@ -125,8 +130,13 @@ const IndicateurRow: React.FC<RowProps> = ({ indicateur: ind }) => {
         {/* nom */}
         <TableCell>
           <Typography variant="body2" fontWeight={600} sx={{ lineHeight: 1.4 }}>
-            {ind.nom}
+            {ind.libelle_court || ind.nom}
           </Typography>
+          {ind.libelle_court && (
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.3 }}>
+              {ind.nom}
+            </Typography>
+          )}
           <Typography variant="caption" color="text.secondary">
             {ind.frequence} · {ind.responsable}
           </Typography>
@@ -159,7 +169,7 @@ const IndicateurRow: React.FC<RowProps> = ({ indicateur: ind }) => {
                     flex: 1,
                     height: 6,
                     borderRadius: 3,
-                    bgcolor: '#F0F0F0',
+                    bgcolor: 'action.hover',
                     '& .MuiLinearProgress-bar': { bgcolor: perfColor(perf), borderRadius: 3 },
                   }}
                 />
@@ -196,29 +206,44 @@ const IndicateurRow: React.FC<RowProps> = ({ indicateur: ind }) => {
       </TableRow>
       {/* expanded: historical data */}
       <TableRow>
-        <TableCell colSpan={8} sx={{ py: 0, px: 2, bgcolor: '#FAFAFA' }}>
+        <TableCell colSpan={8} sx={{ py: 0, px: 2, bgcolor: 'action.hover' }}>
           <Collapse in={open} timeout="auto" unmountOnExit>
             <Box sx={{ py: 2 }}>
+              {ind.description && (
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5, fontStyle: 'italic' }}>
+                  {ind.description}
+                </Typography>
+              )}
               <Grid container spacing={2} sx={{ mb: 1.5 }}>
-                <Grid size={{ xs: 12, sm: 4 }}>
-                  <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                    Source des données
-                  </Typography>
-                  <Typography variant="body2">{ind.source_donnees}</Typography>
-                </Grid>
-                <Grid size={{ xs: 12, sm: 4 }}>
-                  <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                    Sous-composante
-                  </Typography>
-                  <Typography variant="body2">{ind.sous_composante || '—'}</Typography>
-                </Grid>
-                <Grid size={{ xs: 12, sm: 4 }}>
-                  <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                    Méthodologie de collecte
-                  </Typography>
-                  <Typography variant="body2">{ind.methodologie_collecte || '—'}</Typography>
-                </Grid>
+                {([
+                  ['Groupes cibles', ind.groupes_cibles],
+                  ['Objectif', ind.objectif],
+                  ['Justification', ind.justification],
+                  ['Hypothèse critique', ind.hypothese_critique],
+                  ['Désagrégé par', ind.desagrege_par],
+                  ['Éléments de calcul', ind.elements_calcul],
+                  ['Formule mathématique', ind.formule_mathematique],
+                  ['Niveau de validation', ind.niveau_validation],
+                  ['Outils de mesure', ind.outils_mesure],
+                  ['Source des données', ind.source_donnees],
+                  ['Méthode de collecte', ind.methodologie_collecte],
+                  ['Sous-composante', ind.sous_composante],
+                ] as Array<[string, string | null | undefined]>)
+                  .filter(([, value]) => value)
+                  .map(([label, value]) => (
+                    <Grid key={label} size={{ xs: 12, sm: 6, md: 4 }}>
+                      <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                        {label}
+                      </Typography>
+                      <Typography variant="body2">{value}</Typography>
+                    </Grid>
+                  ))}
               </Grid>
+              {ind.commentaires && (
+                <Alert severity="info" icon={false} sx={{ mb: 1.5, py: 0.5 }}>
+                  <Typography variant="caption">{ind.commentaires}</Typography>
+                </Alert>
+              )}
               <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '8px' }}>
                 <Table size="small">
                   <TableHead>
@@ -293,7 +318,7 @@ const IndicateursTable: React.FC<{ indicateurs: IndicateurCadre[] }> = ({ indica
   <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '10px' }}>
     <Table size="small">
       <TableHead>
-        <TableRow sx={{ bgcolor: 'grey.50' }}>
+        <TableRow sx={{ bgcolor: 'action.hover' }}>
           <TableCell padding="checkbox" />
           <TableCell sx={{ fontWeight: 700, minWidth: 90 }}>Code</TableCell>
           <TableCell sx={{ fontWeight: 700, minWidth: 300 }}>Indicateur</TableCell>
@@ -466,23 +491,29 @@ export const CadreResultats: React.FC = () => {
       {/* Stats cards */}
       {stats && (
         <Grid container spacing={2} sx={{ mb: 3 }}>
-          <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <StatCard icon="analytics" label="Total indicateurs" value={stats.total} color="#1565C0" />
           </Grid>
-          <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <StatCard icon="flag" label="Indicateurs ODP" value={stats.odp_count} color="#6A1B9A" />
           </Grid>
-          <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <StatCard icon="check_circle" label="Atteints" value={stats.atteint} color="#2E7D32" sub="≥ 100 %" />
           </Grid>
-          <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <StatCard icon="pending" label="En cours" value={stats.en_cours} color="#F9A825" sub="70 – 99 %" />
           </Grid>
-          <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <StatCard icon="warning" label="En retard" value={stats.en_retard} color="#C62828" sub="< 70 %" />
           </Grid>
-          <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <StatCard icon="speed" label="Performance moy." value={`${stats.moyenne_performance}%`} color="#00838F" sub="2025" />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <StatCard icon="database" label="Données disponibles" value={stats.avec_donnees_2025} color="#1565C0" sub="en 2025" />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <StatCard icon="account_tree" label="Composantes" value={stats.composantes.length} color="#2E7D32" sub="suivies" />
           </Grid>
         </Grid>
       )}
@@ -497,7 +528,7 @@ export const CadreResultats: React.FC = () => {
           sx={{
             borderBottom: 1,
             borderColor: 'divider',
-            bgcolor: 'grey.50',
+            bgcolor: 'action.hover',
             '& .MuiTab-root': { fontWeight: 600, minHeight: 52 },
           }}
         >

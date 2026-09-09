@@ -1,7 +1,12 @@
 import dotenv from 'dotenv';
-import mysql, { Pool, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
+import path from 'path';
+import type { Pool, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
+import { Pool as PgPool, type QueryResult } from 'pg';
 import bcrypt from 'bcryptjs';
 
+
+// .env.local surcharge .env pour le dev local (ignoré si les variables sont déjà définies, ex. Docker)
+dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
 dotenv.config();
 
 let pool: Pool | null = null;
@@ -17,8 +22,13 @@ let provincesTablesReady: Promise<void> | null = null;
 let powerBITablesReady: Promise<void> | null = null;
 let otTablesReady: Promise<void> | null = null;
 let suiviTablesReady: Promise<void> | null = null;
+let agentTablesReady: Promise<void> | null = null;
+let environnementTablesReady: Promise<void> | null = null;
+let aideTablesReady: Promise<void> | null = null;
+let configurationTablesReady: Promise<void> | null = null;
 let cartesAgriculteursTableReady: Promise<void> | null = null;
 let ventesSemencesTableReady: Promise<void> | null = null;
+let sigTablesReady: Promise<void> | null = null;
 
 interface CountRow extends RowDataPacket {
   total: number;
@@ -84,7 +94,13 @@ function mapDbRoleToAppRole(role: string | null, niveau: string | null): AppRole
     return 'invite';
   }
 
-  if (roleText.includes('super admin') || roleText.includes('administrateur')) {
+  // Le super administrateur est le seul a garder la main sur les comptes, les
+  // profils et la configuration : il se distingue donc de l'administrateur.
+  if (roleText.includes('super admin') || roleText.includes('super_admin')) {
+    return 'super_admin';
+  }
+
+  if (roleText.includes('administrateur')) {
     return 'admin';
   }
 
@@ -137,8 +153,10 @@ function mapDbRoleToAppRole(role: string | null, niveau: string | null): AppRole
 
 function mapAppRoleToDbRole(role: string | null | undefined): { role: string; niveau: string; profil: string } {
   switch (role) {
+    case 'super_admin':
+      return { role: 'Super Admin', niveau: 'National', profil: 'Super Admin' };
     case 'admin':
-      return { role: 'Super Admin', niveau: 'National', profil: 'Administrateur' };
+      return { role: 'Administrateur', niveau: 'National', profil: 'Administrateur' };
     case 'uncp':
       return { role: 'Coordinateur UCP', niveau: 'National', profil: 'UNCP' };
     case 'upep':
@@ -194,7 +212,7 @@ function getUtilisateurSelectSql(mode: 'flat' | 'normalized'): string {
         COALESCE(u.prenom, '') AS prenom,
         u.email AS email,
         p.nom_profil AS role,
-        CASE WHEN COALESCE(u.est_actif, 1) = 1 THEN 'Actif' ELSE 'Inactif' END AS statut,
+        CASE WHEN COALESCE(u.est_actif, true) THEN 'Actif' ELSE 'Inactif' END AS statut,
         u.dernier_connexion AS derniere_connexion,
         u.created_at AS created_at,
         u.updated_at AS updated_at,
@@ -242,24 +260,24 @@ function getUtilisateurSelectSql(mode: 'flat' | 'normalized'): string {
 async function getUtilisateurWhereClause(
   mode: 'flat' | 'normalized',
   filters: Pick<UtilisateurFilters, 'search' | 'statut' | 'province'>
-): Promise<{ whereSql: string; params: Array<string | number> }> {
+): Promise<{ whereSql: string; params: Array<string | number | boolean> }> {
   const whereClauses: string[] = [];
-  const params: Array<string | number> = [];
+  const params: Array<string | number | boolean> = [];
 
   if (filters.search) {
     const searchValue = `%${filters.search}%`;
     if (mode === 'normalized') {
-      whereClauses.push('(u.nom LIKE ? OR u.prenom LIKE ? OR u.email LIKE ? OR p.nom_profil LIKE ?)');
+      whereClauses.push('(u.nom ILIKE ? OR u.prenom ILIKE ? OR u.email ILIKE ? OR p.nom_profil ILIKE ?)');
     } else {
-      whereClauses.push('(nom LIKE ? OR prenom LIKE ? OR email LIKE ? OR role LIKE ?)');
+      whereClauses.push('(nom ILIKE ? OR prenom ILIKE ? OR email ILIKE ? OR role ILIKE ?)');
     }
     params.push(searchValue, searchValue, searchValue, searchValue);
   }
 
   if (filters.statut) {
     if (mode === 'normalized') {
-      whereClauses.push('COALESCE(u.est_actif, 1) = ?');
-      params.push(normalizeUtilisateurStatut(filters.statut) === 'actif' ? 1 : 0);
+      whereClauses.push('COALESCE(u.est_actif, true) = ?');
+      params.push(normalizeUtilisateurStatut(filters.statut) === 'actif' ? true : false);
     } else {
       whereClauses.push('LOWER(statut) = LOWER(?)');
       params.push(filters.statut);
@@ -279,7 +297,7 @@ async function getUtilisateurWhereClause(
 
 async function queryUtilisateurs(
   filters: Pick<UtilisateurFilters, 'search' | 'statut' | 'province'> = {},
-  extraWhere?: { clause: string; params: Array<string | number> },
+  extraWhere?: { clause: string; params: Array<string | number | boolean> },
   orderBy?: string
 ): Promise<UtilisateurRow[]> {
   const mode = await getUtilisateurSchemaMode();
@@ -310,7 +328,7 @@ async function resolveLocalisationId(province?: string | null, territoire?: stri
   }
 
   const [existingRows] = await getDbPool().execute<Array<RowDataPacket & { id_localisation: number }>>(
-    'SELECT id_localisation FROM localisation WHERE province <=> ? AND territoire <=> ? LIMIT 1',
+    'SELECT id_localisation FROM localisation WHERE province IS NOT DISTINCT FROM ? AND territoire IS NOT DISTINCT FROM ? LIMIT 1',
     [provinceValue, territoireValue]
   );
 
@@ -576,7 +594,7 @@ export async function createUtilisateur(input: UtilisateurCreateInput): Promise<
         input.telephone?.trim() || null,
         profilId,
         localisationId,
-        normalizeUtilisateurStatut(input.statut) === 'actif' ? 1 : 0,
+        normalizeUtilisateurStatut(input.statut) === 'actif' ? true : false,
       ]
     );
     result = insertResult;
@@ -625,7 +643,7 @@ export async function createUtilisateur(input: UtilisateurCreateInput): Promise<
 export async function updateUtilisateur(id: number, input: UtilisateurUpdateInput): Promise<AuthUserProfile | null> {
   const mode = await getUtilisateurSchemaMode();
   const fields: string[] = [];
-  const values: Array<string | null | number> = [];
+  const values: Array<string | null | number | boolean> = [];
 
   if (typeof input.nom === 'string') {
     fields.push('nom = ?');
@@ -660,7 +678,7 @@ export async function updateUtilisateur(id: number, input: UtilisateurUpdateInpu
   if (typeof input.statut === 'string') {
     if (mode === 'normalized') {
       fields.push('est_actif = ?');
-      values.push(normalizeUtilisateurStatut(input.statut) === 'actif' ? 1 : 0);
+      values.push(normalizeUtilisateurStatut(input.statut) === 'actif' ? true : false);
     } else {
       fields.push('statut = ?');
       values.push(input.statut.trim());
@@ -731,7 +749,7 @@ export async function updateUtilisateurStatut(id: number, statut: string): Promi
 
   if (mode === 'normalized') {
     await getDbPool().execute('UPDATE utilisateur SET est_actif = ?, updated_at = NOW() WHERE id_utilisateur = ?', [
-      normalizeUtilisateurStatut(statut) === 'actif' ? 1 : 0,
+      normalizeUtilisateurStatut(statut) === 'actif' ? true : false,
       id,
     ]);
   } else {
@@ -2912,6 +2930,8 @@ export interface AnneeCadre {
 export interface IndicateurCadre {
   id: number;
   code: string;
+  /** Libellé court du classeur v6 reformulé (21/08/2026). */
+  libelle_court?: string;
   nom: string;
   composante: string;
   sous_composante: string;
@@ -2922,14 +2942,43 @@ export interface IndicateurCadre {
   source_donnees: string;
   methodologie_collecte?: string | null;
   responsable: string;
+  // Métadonnées des fiches d'opérationnalisation (classeur Cadre_des_resultats_PNDA.xlsx)
+  description?: string | null;
+  groupes_cibles?: string | null;
+  objectif?: string | null;
+  justification?: string | null;
+  hypothese_critique?: string | null;
+  desagrege_par?: string | null;
+  elements_calcul?: string | null;
+  formule_mathematique?: string | null;
+  niveau_validation?: string | null;
+  outils_mesure?: string | null;
+  commentaires?: string | null;
   annees: {
     '2023': AnneeCadre;
     '2024': AnneeCadre;
     '2025': AnneeCadre;
     '2026': AnneeCadre;
+    '2027'?: AnneeCadre;
   };
   final_prevu: number | null;
   final_realise?: number | null;
+}
+
+export interface CibleProvinciale {
+  code_cadre: string;
+  province: string;
+  annee: number;
+  cible: number;
+}
+
+export interface ProvinceContour {
+  id: string;
+  name: string;
+  code: string;
+  coord_lat: number | null;
+  coord_lng: number | null;
+  contour_geojson: unknown | null;
 }
 
 export interface CadreResultatsFilters {
@@ -3043,7 +3092,7 @@ export interface DashboardData {
   evolution: Array<{ month: string; iodp1: number; iodp2: number; iodp3: number }>;
 }
 
-export type AppRole = 'admin' | 'uncp' | 'upep' | 'ot' | 'partenaire' | 'invite';
+export type AppRole = 'super_admin' | 'admin' | 'uncp' | 'upep' | 'ot' | 'partenaire' | 'invite';
 
 export interface AuthUserProfile {
   id: number;
@@ -3159,16 +3208,28 @@ interface IndicateurAliasMeta {
 interface CadreResultatRow extends RowDataPacket {
   id: number;
   code: string;
+  libelle_court: string;
   nom: string;
   composante: string;
   sous_composante: string;
-  est_odp: number;
+  est_odp: number | boolean;
   reference_value: string;
   unite: string;
   frequence: string;
   source_donnees: string;
   methodologie_collecte: string | null;
   responsable: string;
+  description: string | null;
+  groupes_cibles: string | null;
+  objectif: string | null;
+  justification: string | null;
+  hypothese_critique: string | null;
+  desagrege_par: string | null;
+  elements_calcul: string | null;
+  formule_mathematique: string | null;
+  niveau_validation: string | null;
+  outils_mesure: string | null;
+  commentaires: string | null;
   prevu_2023: number | string | null;
   realise_2023: number | string | null;
   prevu_2024: number | string | null;
@@ -3177,6 +3238,8 @@ interface CadreResultatRow extends RowDataPacket {
   realise_2025: number | string | null;
   prevu_2026: number | string | null;
   realise_2026: number | string | null;
+  prevu_2027: number | string | null;
+  realise_2027: number | string | null;
   final_prevu: number | string | null;
   final_realise: number | string | null;
 }
@@ -3201,41 +3264,12 @@ interface UtilisateurRow extends RowDataPacket {
   niveau_acces: number | null;
 }
 
-type CadreYear = '2023' | '2024' | '2025' | '2026';
+type CadreYear = '2023' | '2024' | '2025' | '2026' | '2027';
 
 let cadreResultatsTableReady: Promise<void> | null = null;
 
-const CADRE_TO_ALIAS_MAP: Record<string, IndicateurAliasMeta> = {
-  'ODP-1': { code: 'IODP1.1', composanteId: 2, composanteLabel: 'Acces au marche' },
-  'ODP-2': { code: 'IODP2.1', composanteId: 1, composanteLabel: 'Productivite agricole' },
-  'ODP-2F': { code: 'IODP2.2', composanteId: 1, composanteLabel: 'Productivite agricole' },
-  'ODP-3': { code: 'IODP2.3', composanteId: 1, composanteLabel: 'Productivite agricole' },
-  'ODP-4': { code: 'IODP2.4', composanteId: 1, composanteLabel: 'Productivite agricole' },
-  'ODP-5': { code: 'IODP2.6', composanteId: 1, composanteLabel: 'Productivite agricole' },
-  'ODP-6': { code: 'IODP3.2', composanteId: 3, composanteLabel: 'Capacite du secteur public' },
-  'ODP-7': { code: 'IODP3.3', composanteId: 3, composanteLabel: 'Capacite du secteur public' },
-  'ODP-7F': { code: 'IODP3.4', composanteId: 3, composanteLabel: 'Capacite du secteur public' },
-  'IR-1.1.1': { code: 'IR1.1.1', composanteId: 1, composanteLabel: 'Productivite agricole' },
-  'IR-1.1.1F': { code: 'IR1.1.2', composanteId: 1, composanteLabel: 'Productivite agricole' },
-  'IR-1.1.2': { code: 'IR1.1.3', composanteId: 1, composanteLabel: 'Productivite agricole' },
-  'IR-1.1.3': { code: 'IR1.1.4', composanteId: 1, composanteLabel: 'Productivite agricole' },
-  'IR-1.1.3F': { code: 'IR1.1.5', composanteId: 1, composanteLabel: 'Productivite agricole' },
-  'IR-1.1.4': { code: 'IR1.1.6', composanteId: 1, composanteLabel: 'Productivite agricole' },
-  'IR-2.1.1': { code: 'IR2.1.1', composanteId: 2, composanteLabel: 'Acces au marche' },
-  'IR-2.1.2': { code: 'IR2.1.4', composanteId: 2, composanteLabel: 'Acces au marche' },
-  'IR-2.1.3': { code: 'IR2.1.5', composanteId: 2, composanteLabel: 'Acces au marche' },
-  'IR-2.1.4': { code: 'IR2.1.6', composanteId: 2, composanteLabel: 'Acces au marche' },
-  'IR-2.2.1': { code: 'IR2.2.1', composanteId: 2, composanteLabel: 'Acces au marche' },
-  'IR-2.2.1F': { code: 'IR2.2.2', composanteId: 2, composanteLabel: 'Acces au marche' },
-  'IR-2.2.2': { code: 'IR2.2.7', composanteId: 2, composanteLabel: 'Acces au marche' },
-  'IR-2.2.2F': { code: 'IR2.2.8', composanteId: 2, composanteLabel: 'Acces au marche' },
-  'IR-2.2.3': { code: 'IR2.2.3', composanteId: 2, composanteLabel: 'Acces au marche' },
-  'IR-2.2.4': { code: 'IR2.2.4', composanteId: 2, composanteLabel: 'Acces au marche' },
-  'IR-3.1.1': { code: 'IR3.1.1', composanteId: 3, composanteLabel: 'Services publics agricoles' },
-  'IR-3.1.2': { code: 'IR3.1.4', composanteId: 3, composanteLabel: 'Services publics agricoles' },
-  'IR-3.1.3': { code: 'IR3.1.5', composanteId: 3, composanteLabel: 'Services publics agricoles' },
-  'IR-4.1': { code: 'IR4.1', composanteId: 4, composanteLabel: 'Intervention d\'urgence agricole' },
-};
+// Les codes en base sont désormais les codes réels du classeur v6 reformulé
+// (IODP1.1 … IR3.1.6) : la composante « métier » se déduit du code lui-même.
 
 const CADRE_RESULTATS_SEED: IndicateurCadre[] = [
   {
@@ -3733,6 +3767,8 @@ const CADRE_RESULTATS_SEED: IndicateurCadre[] = [
   },
 ];
 
+const ANNEE_CADRE_VIDE: AnneeCadre = { prevu: null, realise: null };
+
 const parseNullableNumber = (value: number | string | null | undefined): number | null => {
   if (value === null || value === undefined || value === '') {
     return null;
@@ -3745,21 +3781,34 @@ const parseNullableNumber = (value: number | string | null | undefined): number 
 const mapCadreResultatRow = (row: CadreResultatRow): IndicateurCadre => ({
   id: row.id,
   code: row.code,
+  libelle_court: row.libelle_court ?? '',
   nom: row.nom,
   composante: row.composante,
   sous_composante: row.sous_composante,
-  est_odp: row.est_odp === 1,
+  est_odp: row.est_odp === true || row.est_odp === 1,
   reference: row.reference_value,
   unite: row.unite,
   frequence: row.frequence,
   source_donnees: row.source_donnees,
   methodologie_collecte: row.methodologie_collecte,
   responsable: row.responsable,
+  description: row.description ?? null,
+  groupes_cibles: row.groupes_cibles ?? null,
+  objectif: row.objectif ?? null,
+  justification: row.justification ?? null,
+  hypothese_critique: row.hypothese_critique ?? null,
+  desagrege_par: row.desagrege_par ?? null,
+  elements_calcul: row.elements_calcul ?? null,
+  formule_mathematique: row.formule_mathematique ?? null,
+  niveau_validation: row.niveau_validation ?? null,
+  outils_mesure: row.outils_mesure ?? null,
+  commentaires: row.commentaires ?? null,
   annees: {
     '2023': { prevu: parseNullableNumber(row.prevu_2023), realise: parseNullableNumber(row.realise_2023) },
     '2024': { prevu: parseNullableNumber(row.prevu_2024), realise: parseNullableNumber(row.realise_2024) },
     '2025': { prevu: parseNullableNumber(row.prevu_2025), realise: parseNullableNumber(row.realise_2025) },
     '2026': { prevu: parseNullableNumber(row.prevu_2026), realise: parseNullableNumber(row.realise_2026) },
+    '2027': { prevu: parseNullableNumber(row.prevu_2027), realise: parseNullableNumber(row.realise_2027) },
   },
   final_prevu: parseNullableNumber(row.final_prevu),
   final_realise: parseNullableNumber(row.final_realise),
@@ -3786,6 +3835,8 @@ const buildCadreSeedValues = (indicateur: IndicateurCadre): Array<number | strin
   indicateur.annees['2025'].realise,
   indicateur.annees['2026'].prevu,
   indicateur.annees['2026'].realise,
+  indicateur.annees['2027']?.prevu ?? null,
+  indicateur.annees['2027']?.realise ?? null,
   indicateur.final_prevu,
   indicateur.final_realise ?? null,
 ];
@@ -3793,38 +3844,7 @@ const buildCadreSeedValues = (indicateur: IndicateurCadre): Array<number | strin
 const ensureCadreResultatsTable = async (): Promise<void> => {
   if (!cadreResultatsTableReady) {
     cadreResultatsTableReady = (async () => {
-      await getDbPool().query(
-        `CREATE TABLE IF NOT EXISTS cadre_resultats (
-          id INT NOT NULL,
-          code VARCHAR(50) NOT NULL,
-          nom VARCHAR(500) NOT NULL,
-          composante VARCHAR(100) NOT NULL,
-          sous_composante VARCHAR(255) NOT NULL DEFAULT '',
-          est_odp TINYINT(1) NOT NULL DEFAULT 0,
-          reference_value VARCHAR(100) NOT NULL DEFAULT '',
-          unite VARCHAR(50) NOT NULL,
-          frequence VARCHAR(50) NOT NULL DEFAULT '',
-          source_donnees VARCHAR(255) NOT NULL DEFAULT '',
-          methodologie_collecte TEXT NULL,
-          responsable VARCHAR(255) NOT NULL DEFAULT '',
-          prevu_2023 DECIMAL(18,2) NULL,
-          realise_2023 DECIMAL(18,2) NULL,
-          prevu_2024 DECIMAL(18,2) NULL,
-          realise_2024 DECIMAL(18,2) NULL,
-          prevu_2025 DECIMAL(18,2) NULL,
-          realise_2025 DECIMAL(18,2) NULL,
-          prevu_2026 DECIMAL(18,2) NULL,
-          realise_2026 DECIMAL(18,2) NULL,
-          final_prevu DECIMAL(18,2) NULL,
-          final_realise DECIMAL(18,2) NULL,
-          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          PRIMARY KEY (id),
-          UNIQUE KEY uq_cadre_resultats_code (code),
-          KEY idx_cadre_resultats_composante (composante),
-          KEY idx_cadre_resultats_est_odp (est_odp)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-      );
+      // (schéma déjà créé par supabase/migrations/0001_schema_initial_from_mysql.sql — table "cadre_resultats")
 
       const [rows] = await getDbPool().query<CountRow[]>('SELECT COUNT(*) AS total FROM cadre_resultats');
       const total = Number(rows[0]?.total ?? 0);
@@ -3834,7 +3854,7 @@ const ensureCadreResultatsTable = async (): Promise<void> => {
       }
 
       const placeholders = CADRE_RESULTATS_SEED.map(
-        () => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        () => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       ).join(', ');
       const values = CADRE_RESULTATS_SEED.flatMap(buildCadreSeedValues);
 
@@ -3860,6 +3880,8 @@ const ensureCadreResultatsTable = async (): Promise<void> => {
           realise_2025,
           prevu_2026,
           realise_2026,
+          prevu_2027,
+          realise_2027,
           final_prevu,
           final_realise
         ) VALUES ${placeholders}`,
@@ -3882,15 +3904,7 @@ const calcCadrePerformance = (realise: number | null, prevu: number | null): num
 const ensureNotificationsTable = async (): Promise<void> => {
   if (!notificationsTableReady) {
     notificationsTableReady = (async () => {
-      await getDbPool().query(
-        `CREATE TABLE IF NOT EXISTS notification_reads (
-          user_id INT NOT NULL,
-          notification_id VARCHAR(191) NOT NULL,
-          read_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          PRIMARY KEY (user_id, notification_id),
-          INDEX idx_notification_reads_user_id (user_id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-      );
+      // (schéma déjà créé par supabase/migrations/0001_schema_initial_from_mysql.sql — table "notification_reads")
     })();
   }
 
@@ -3900,49 +3914,9 @@ const ensureNotificationsTable = async (): Promise<void> => {
 const ensureGrmTables = async (): Promise<void> => {
   if (!grmTablesReady) {
     grmTablesReady = (async () => {
-      await getDbPool().query(
-        `CREATE TABLE IF NOT EXISTS grm_plaintes (
-          id INT NOT NULL AUTO_INCREMENT,
-          numero_plainte VARCHAR(64) NOT NULL,
-          type VARCHAR(32) NOT NULL,
-          description TEXT NOT NULL,
-          province VARCHAR(128) DEFAULT NULL,
-          territoire VARCHAR(128) DEFAULT NULL,
-          village VARCHAR(255) DEFAULT NULL,
-          beneficiaire_nom VARCHAR(255) DEFAULT NULL,
-          beneficiaire_rna VARCHAR(64) DEFAULT NULL,
-          date_reception DATETIME NOT NULL,
-          date_traitement DATETIME DEFAULT NULL,
-          statut VARCHAR(32) NOT NULL DEFAULT 'recue',
-          delai_traite INT DEFAULT NULL,
-          prise_en_charge VARCHAR(255) DEFAULT NULL,
-          resolution TEXT DEFAULT NULL,
-          est_confidentiel TINYINT(1) NOT NULL DEFAULT 0,
-          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          PRIMARY KEY (id),
-          UNIQUE KEY uq_grm_plaintes_numero (numero_plainte),
-          KEY idx_grm_plaintes_type (type),
-          KEY idx_grm_plaintes_province (province),
-          KEY idx_grm_plaintes_statut (statut),
-          KEY idx_grm_plaintes_confidentiel (est_confidentiel),
-          KEY idx_grm_plaintes_date_reception (date_reception)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-      );
+      // (schéma déjà créé par supabase/migrations/0001_schema_initial_from_mysql.sql — table "grm_plaintes")
 
-      await getDbPool().query(
-        `CREATE TABLE IF NOT EXISTS grm_services (
-          id INT NOT NULL AUTO_INCREMENT,
-          nom VARCHAR(255) NOT NULL,
-          type VARCHAR(64) NOT NULL,
-          province VARCHAR(128) DEFAULT NULL,
-          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          PRIMARY KEY (id),
-          KEY idx_grm_services_type (type),
-          KEY idx_grm_services_province (province)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-      );
+      // (schéma déjà créé par supabase/migrations/0001_schema_initial_from_mysql.sql — table "grm_services")
 
       const [plaintesCountRows] = await getDbPool().query<CountRow[]>('SELECT COUNT(*) AS total FROM grm_plaintes');
       if (Number(plaintesCountRows[0]?.total ?? 0) === 0 && GRM_PLAINTES_SEED.length > 0) {
@@ -4009,33 +3983,7 @@ const ensureGrmTables = async (): Promise<void> => {
 const ensureFournisseursTable = async (): Promise<void> => {
   if (!fournisseursTablesReady) {
     fournisseursTablesReady = (async () => {
-      await getDbPool().query(
-        `CREATE TABLE IF NOT EXISTS fournisseurs (
-          id INT NOT NULL AUTO_INCREMENT,
-          nom VARCHAR(255) NOT NULL,
-          sigle VARCHAR(64) DEFAULT NULL,
-          type VARCHAR(128) NOT NULL,
-          province VARCHAR(128) NOT NULL,
-          territoire VARCHAR(128) NOT NULL,
-          responsable VARCHAR(255) NOT NULL,
-          telephone VARCHAR(64) NOT NULL,
-          email VARCHAR(255) DEFAULT NULL,
-          statut VARCHAR(64) NOT NULL DEFAULT 'En cours',
-          stock_disponible INT NOT NULL DEFAULT 0,
-          stock_total INT NOT NULL DEFAULT 0,
-          beneficiaires_servis INT NOT NULL DEFAULT 0,
-          montant_contrat DECIMAL(15,2) NOT NULL DEFAULT 0,
-          taux_livraison INT NOT NULL DEFAULT 0,
-          date_contrat DATE NOT NULL,
-          intrants TEXT DEFAULT NULL,
-          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          PRIMARY KEY (id),
-          KEY idx_fournisseurs_type (type),
-          KEY idx_fournisseurs_province (province),
-          KEY idx_fournisseurs_statut (statut)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-      );
+      // (schéma déjà créé par supabase/migrations/0001_schema_initial_from_mysql.sql — table "fournisseurs")
 
       const [countRows] = await getDbPool().query<CountRow[]>('SELECT COUNT(*) AS total FROM fournisseurs');
       if (Number(countRows[0]?.total ?? 0) === 0 && FOURNISSEURS_SEED.length > 0) {
@@ -4093,44 +4041,7 @@ const ensureFournisseursTable = async (): Promise<void> => {
 const ensureOrganisationsTable = async (): Promise<void> => {
   if (!organisationsTablesReady) {
     organisationsTablesReady = (async () => {
-      await getDbPool().query(
-        `CREATE TABLE IF NOT EXISTS organisations (
-          id INT NOT NULL AUTO_INCREMENT,
-          code VARCHAR(64) NOT NULL,
-          nom VARCHAR(255) NOT NULL,
-          sigle VARCHAR(64) DEFAULT NULL,
-          nom_complet VARCHAR(255) DEFAULT NULL,
-          type VARCHAR(64) NOT NULL,
-          source_type VARCHAR(64) DEFAULT NULL,
-          date_creation DATE NOT NULL,
-          date_agrement DATE DEFAULT NULL,
-          province VARCHAR(128) NOT NULL,
-          territoire VARCHAR(128) DEFAULT NULL,
-          commune VARCHAR(128) DEFAULT NULL,
-          adresse VARCHAR(255) DEFAULT NULL,
-          responsable VARCHAR(255) NOT NULL,
-          telephone VARCHAR(64) NOT NULL,
-          email VARCHAR(255) DEFAULT NULL,
-          role VARCHAR(255) DEFAULT NULL,
-          beneficiaires_couverts INT NOT NULL DEFAULT 0,
-          budget_alloue DECIMAL(15,2) NOT NULL DEFAULT 0,
-          taux_execution INT NOT NULL DEFAULT 0,
-          statut VARCHAR(64) NOT NULL DEFAULT 'active',
-          membres_total INT NOT NULL DEFAULT 0,
-          membres_femmes INT NOT NULL DEFAULT 0,
-          membres_hommes INT NOT NULL DEFAULT 0,
-          membres_jeunes INT NOT NULL DEFAULT 0,
-          productions TEXT DEFAULT NULL,
-          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          PRIMARY KEY (id),
-          UNIQUE KEY uq_organisations_code (code),
-          KEY idx_organisations_type (type),
-          KEY idx_organisations_source_type (source_type),
-          KEY idx_organisations_province (province),
-          KEY idx_organisations_statut (statut)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-      );
+      // (schéma déjà créé par supabase/migrations/0001_schema_initial_from_mysql.sql — table "organisations")
 
       const [countRows] = await getDbPool().query<CountRow[]>('SELECT COUNT(*) AS total FROM organisations');
       if (Number(countRows[0]?.total ?? 0) === 0 && ORGANISATIONS_SEED.length > 0) {
@@ -4206,51 +4117,7 @@ const ensureOrganisationsTable = async (): Promise<void> => {
 const ensureActivitesTable = async (): Promise<void> => {
   if (!activitesTablesReady) {
     activitesTablesReady = (async () => {
-      await getDbPool().query(
-        `CREATE TABLE IF NOT EXISTS activites (
-          id INT NOT NULL AUTO_INCREMENT,
-          code VARCHAR(64) NOT NULL,
-          titre VARCHAR(255) NOT NULL,
-          description TEXT DEFAULT NULL,
-          type VARCHAR(64) NOT NULL,
-          composante VARCHAR(128) DEFAULT NULL,
-          statut VARCHAR(64) NOT NULL DEFAULT 'planifiee',
-          priorite VARCHAR(32) NOT NULL DEFAULT 'moyenne',
-          date_debut DATE NOT NULL,
-          date_fin DATE NOT NULL,
-          lieu VARCHAR(255) DEFAULT NULL,
-          province VARCHAR(128) NOT NULL,
-          territoire VARCHAR(128) DEFAULT NULL,
-          commune VARCHAR(128) DEFAULT NULL,
-          village VARCHAR(128) DEFAULT NULL,
-          responsable VARCHAR(255) NOT NULL,
-          responsable_contact VARCHAR(128) DEFAULT NULL,
-          equipe TEXT DEFAULT NULL,
-          participants_prevus INT NOT NULL DEFAULT 0,
-          participants_reels INT DEFAULT NULL,
-          budget_prevu DECIMAL(15,2) NOT NULL DEFAULT 0,
-          budget_reel DECIMAL(15,2) DEFAULT NULL,
-          objectifs TEXT DEFAULT NULL,
-          resultats_attendus TEXT DEFAULT NULL,
-          resultats_obtenus TEXT DEFAULT NULL,
-          difficultes TEXT DEFAULT NULL,
-          lecons_apprises TEXT DEFAULT NULL,
-          documents TEXT DEFAULT NULL,
-          photos TEXT DEFAULT NULL,
-          created_by VARCHAR(255) DEFAULT NULL,
-          beneficiaires_cibles INT NOT NULL DEFAULT 0,
-          beneficiaires_atteints INT NOT NULL DEFAULT 0,
-          taux_execution INT NOT NULL DEFAULT 0,
-          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          PRIMARY KEY (id),
-          UNIQUE KEY uq_activites_code (code),
-          KEY idx_activites_type (type),
-          KEY idx_activites_statut (statut),
-          KEY idx_activites_province (province),
-          KEY idx_activites_date_debut (date_debut)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-      );
+      // (schéma déjà créé par supabase/migrations/0001_schema_initial_from_mysql.sql — table "activites")
 
       const [countRows] = await getDbPool().query<CountRow[]>('SELECT COUNT(*) AS total FROM activites');
       if (Number(countRows[0]?.total ?? 0) === 0 && ACTIVITES_SEED.length > 0) {
@@ -4342,64 +4209,11 @@ const ensureActivitesTable = async (): Promise<void> => {
 const ensureRisquesTables = async (): Promise<void> => {
   if (!risquesTablesReady) {
     risquesTablesReady = (async () => {
-      await getDbPool().query(
-        `CREATE TABLE IF NOT EXISTS risques (
-          id INT NOT NULL AUTO_INCREMENT,
-          code VARCHAR(64) NOT NULL,
-          nom VARCHAR(255) NOT NULL,
-          description TEXT DEFAULT NULL,
-          categorie VARCHAR(64) NOT NULL,
-          probabilite TINYINT NOT NULL,
-          impact TINYINT NOT NULL,
-          niveau VARCHAR(32) NOT NULL,
-          statut VARCHAR(32) NOT NULL,
-          plan_attenuation TEXT DEFAULT NULL,
-          responsable VARCHAR(255) DEFAULT NULL,
-          date_identification DATE NOT NULL,
-          date_cloture DATE DEFAULT NULL,
-          province VARCHAR(128) DEFAULT NULL,
-          actions_prevues TEXT DEFAULT NULL,
-          indicateurs_surveillance TEXT DEFAULT NULL,
-          dernier_suivi DATE DEFAULT NULL,
-          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          PRIMARY KEY (id),
-          UNIQUE KEY uq_risques_code (code),
-          KEY idx_risques_niveau (niveau),
-          KEY idx_risques_statut (statut),
-          KEY idx_risques_province (province)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-      );
+      // (schéma déjà créé par supabase/migrations/0001_schema_initial_from_mysql.sql — table "risques")
 
-      await getDbPool().query(
-        `CREATE TABLE IF NOT EXISTS risque_alertes (
-          id INT NOT NULL AUTO_INCREMENT,
-          id_risque INT NOT NULL,
-          message TEXT NOT NULL,
-          date_alerte DATE NOT NULL,
-          est_lue TINYINT(1) NOT NULL DEFAULT 0,
-          niveau VARCHAR(16) NOT NULL,
-          PRIMARY KEY (id),
-          KEY idx_risque_alertes_risque (id_risque),
-          CONSTRAINT fk_risque_alertes_risque FOREIGN KEY (id_risque) REFERENCES risques(id) ON DELETE CASCADE
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-      );
+      // (schéma déjà créé par supabase/migrations/0001_schema_initial_from_mysql.sql — table "risque_alertes")
 
-      await getDbPool().query(
-        `CREATE TABLE IF NOT EXISTS risque_actions (
-          id INT NOT NULL AUTO_INCREMENT,
-          id_risque INT NOT NULL,
-          action TEXT NOT NULL,
-          responsable VARCHAR(255) NOT NULL,
-          date_debut DATE NOT NULL,
-          date_fin DATE NOT NULL,
-          statut VARCHAR(32) NOT NULL,
-          resultat TEXT DEFAULT NULL,
-          PRIMARY KEY (id),
-          KEY idx_risque_actions_risque (id_risque),
-          CONSTRAINT fk_risque_actions_risque FOREIGN KEY (id_risque) REFERENCES risques(id) ON DELETE CASCADE
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-      );
+      // (schéma déjà créé par supabase/migrations/0001_schema_initial_from_mysql.sql — table "risque_actions")
 
       const [countRows] = await getDbPool().query<CountRow[]>('SELECT COUNT(*) AS total FROM risques');
       if (Number(countRows[0]?.total ?? 0) === 0 && RISQUES_SEED.length > 0) {
@@ -4475,44 +4289,9 @@ const ensureRisquesTables = async (): Promise<void> => {
 const ensureProvincesTables = async (): Promise<void> => {
   if (!provincesTablesReady) {
     provincesTablesReady = (async () => {
-      await getDbPool().query(
-        `CREATE TABLE IF NOT EXISTS provinces (
-          id VARCHAR(64) NOT NULL,
-          name VARCHAR(128) NOT NULL,
-          code VARCHAR(16) NOT NULL,
-          region VARCHAR(64) NOT NULL,
-          population BIGINT NOT NULL DEFAULT 0,
-          progression INT NOT NULL DEFAULT 0,
-          performance_score INT NOT NULL DEFAULT 0,
-          progression_delta INT NOT NULL DEFAULT 0,
-          beneficiaires JSON NOT NULL,
-          production JSON NOT NULL,
-          infrastructures JSON NOT NULL,
-          indicateurs JSON NOT NULL,
-          risques JSON NOT NULL,
-          plaintes JSON NOT NULL,
-          dernier_suivi DATE NOT NULL,
-          coord_lat DECIMAL(10,6) DEFAULT NULL,
-          coord_lng DECIMAL(10,6) DEFAULT NULL,
-          PRIMARY KEY (id),
-          UNIQUE KEY uq_provinces_code (code)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-      );
+      // (schéma déjà créé par supabase/migrations/0001_schema_initial_from_mysql.sql — table "provinces")
 
-      await getDbPool().query(
-        `CREATE TABLE IF NOT EXISTS province_evolution (
-          id INT NOT NULL AUTO_INCREMENT,
-          province_id VARCHAR(64) NOT NULL,
-          mois VARCHAR(16) NOT NULL,
-          beneficiaires INT NOT NULL DEFAULT 0,
-          production INT NOT NULL DEFAULT 0,
-          routes INT NOT NULL DEFAULT 0,
-          sort_order INT NOT NULL DEFAULT 0,
-          PRIMARY KEY (id),
-          KEY idx_province_evolution_province (province_id),
-          CONSTRAINT fk_province_evolution_province FOREIGN KEY (province_id) REFERENCES provinces(id) ON DELETE CASCADE
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-      );
+      // (schéma déjà créé par supabase/migrations/0001_schema_initial_from_mysql.sql — table "province_evolution")
 
       const [countRows] = await getDbPool().query<CountRow[]>('SELECT COUNT(*) AS total FROM provinces');
       if (Number(countRows[0]?.total ?? 0) === 0 && PROVINCES_SEED.length > 0) {
@@ -4573,36 +4352,9 @@ const ensureProvincesTables = async (): Promise<void> => {
 const ensurePowerBITables = async (): Promise<void> => {
   if (!powerBITablesReady) {
     powerBITablesReady = (async () => {
-      await getDbPool().query(
-        `CREATE TABLE IF NOT EXISTS powerbi_reports (
-          id VARCHAR(32) NOT NULL,
-          name VARCHAR(255) NOT NULL,
-          description TEXT NOT NULL,
-          embed_url VARCHAR(512) NOT NULL,
-          report_id VARCHAR(128) NOT NULL,
-          dataset_id VARCHAR(128) NOT NULL,
-          category VARCHAR(64) NOT NULL,
-          thumbnail_url VARCHAR(512) DEFAULT NULL,
-          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          PRIMARY KEY (id),
-          UNIQUE KEY uq_powerbi_reports_report_id (report_id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-      );
+      // (schéma déjà créé par supabase/migrations/0001_schema_initial_from_mysql.sql — table "powerbi_reports")
 
-      await getDbPool().query(
-        `CREATE TABLE IF NOT EXISTS powerbi_dashboards (
-          id VARCHAR(32) NOT NULL,
-          name VARCHAR(255) NOT NULL,
-          description TEXT NOT NULL,
-          embed_url VARCHAR(512) NOT NULL,
-          dashboard_id VARCHAR(128) NOT NULL,
-          category VARCHAR(64) NOT NULL,
-          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          PRIMARY KEY (id),
-          UNIQUE KEY uq_powerbi_dashboards_dashboard_id (dashboard_id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-      );
+      // (schéma déjà créé par supabase/migrations/0001_schema_initial_from_mysql.sql — table "powerbi_dashboards")
 
       const [reportsCountRows] = await getDbPool().query<CountRow[]>('SELECT COUNT(*) AS total FROM powerbi_reports');
       if (Number(reportsCountRows[0]?.total ?? 0) === 0 && POWERBI_REPORTS_SEED.length > 0) {
@@ -4651,74 +4403,13 @@ const ensurePowerBITables = async (): Promise<void> => {
 const ensureOTTables = async (): Promise<void> => {
   if (!otTablesReady) {
     otTablesReady = (async () => {
-      await getDbPool().query(
-        `CREATE TABLE IF NOT EXISTS ot_profile (
-          id VARCHAR(32) NOT NULL,
-          nom VARCHAR(255) NOT NULL,
-          sigle VARCHAR(64) NOT NULL,
-          region VARCHAR(128) NOT NULL,
-          provinces JSON NOT NULL,
-          responsable JSON NOT NULL,
-          performances JSON NOT NULL,
-          indicateurs JSON NOT NULL,
-          objectifs JSON NOT NULL,
-          zones JSON NOT NULL,
-          dernier_suivi DATE NOT NULL,
-          PRIMARY KEY (id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-      );
+      // (schéma déjà créé par supabase/migrations/0001_schema_initial_from_mysql.sql — table "ot_profile")
 
-      await getDbPool().query(
-        `CREATE TABLE IF NOT EXISTS ot_activites (
-          id INT NOT NULL AUTO_INCREMENT,
-          type VARCHAR(32) NOT NULL,
-          titre VARCHAR(255) NOT NULL,
-          description TEXT DEFAULT NULL,
-          date DATE NOT NULL,
-          province VARCHAR(128) NOT NULL,
-          territoire VARCHAR(128) DEFAULT NULL,
-          village VARCHAR(128) DEFAULT NULL,
-          statut VARCHAR(32) NOT NULL,
-          responsable VARCHAR(255) DEFAULT NULL,
-          participants INT DEFAULT NULL,
-          resultats TEXT DEFAULT NULL,
-          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          PRIMARY KEY (id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-      );
+      // (schéma déjà créé par supabase/migrations/0001_schema_initial_from_mysql.sql — table "ot_activites")
 
-      await getDbPool().query(
-        `CREATE TABLE IF NOT EXISTS ot_equipiers (
-          id INT NOT NULL AUTO_INCREMENT,
-          nom VARCHAR(128) NOT NULL,
-          prenom VARCHAR(128) NOT NULL,
-          fonction VARCHAR(32) NOT NULL,
-          telephone VARCHAR(64) DEFAULT NULL,
-          email VARCHAR(255) DEFAULT NULL,
-          province VARCHAR(128) NOT NULL,
-          performance INT NOT NULL DEFAULT 0,
-          enquetes_realisees INT NOT NULL DEFAULT 0,
-          dernier_suivi DATE NOT NULL,
-          est_actif TINYINT(1) NOT NULL DEFAULT 1,
-          PRIMARY KEY (id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-      );
+      // (schéma déjà créé par supabase/migrations/0001_schema_initial_from_mysql.sql — table "ot_equipiers")
 
-      await getDbPool().query(
-        `CREATE TABLE IF NOT EXISTS ot_rapports (
-          id INT NOT NULL AUTO_INCREMENT,
-          mois VARCHAR(32) NOT NULL,
-          annee INT NOT NULL,
-          enquetes INT NOT NULL DEFAULT 0,
-          formations INT NOT NULL DEFAULT 0,
-          suivis INT NOT NULL DEFAULT 0,
-          qualite_donnees INT NOT NULL DEFAULT 0,
-          commentaires TEXT DEFAULT NULL,
-          soumis_le DATE NOT NULL,
-          valide TINYINT(1) NOT NULL DEFAULT 0,
-          PRIMARY KEY (id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-      );
+      // (schéma déjà créé par supabase/migrations/0001_schema_initial_from_mysql.sql — table "ot_rapports")
 
       const [profileRows] = await getDbPool().query<CountRow[]>('SELECT COUNT(*) AS total FROM ot_profile');
       if (Number(profileRows[0]?.total ?? 0) === 0 && OT_PROFILE_SEED.id) {
@@ -4815,25 +4506,7 @@ const ensureOTTables = async (): Promise<void> => {
 const ensureSuiviTables = async (): Promise<void> => {
   if (!suiviTablesReady) {
     suiviTablesReady = (async () => {
-      await getDbPool().query(
-        `CREATE TABLE IF NOT EXISTS suivi_missions (
-          id INT NOT NULL,
-          num VARCHAR(32) NOT NULL,
-          section INT NOT NULL,
-          section_label VARCHAR(255) NOT NULL,
-          nature_mission TEXT NOT NULL,
-          objectif TEXT DEFAULT NULL,
-          hors_projet INT NOT NULL DEFAULT 0,
-          projet INT NOT NULL DEFAULT 0,
-          montant_usd DECIMAL(12,2) NOT NULL DEFAULT 0,
-          dates VARCHAR(64) DEFAULT NULL,
-          avance_usd DECIMAL(12,2) NOT NULL DEFAULT 0,
-          solde DECIMAL(12,2) NOT NULL DEFAULT 0,
-          province VARCHAR(128) NOT NULL,
-          PRIMARY KEY (id),
-          KEY idx_suivi_missions_province (province)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-      );
+      // (schéma déjà créé par supabase/migrations/0001_schema_initial_from_mysql.sql — table "suivi_missions")
 
       const [countRows] = await getDbPool().query<CountRow[]>('SELECT COUNT(*) AS total FROM suivi_missions');
       if (Number(countRows[0]?.total ?? 0) === 0 && SUIVI_MISSIONS_SEED.length > 0) {
@@ -4870,16 +4543,246 @@ const ensureSuiviTables = async (): Promise<void> => {
 const getMissingDatabaseConfig = (): string[] => {
   const missing: string[] = [];
 
-  if (!process.env.DB_USER) {
-    missing.push('DB_USER');
-  }
-
-  if (!process.env.DB_NAME) {
-    missing.push('DB_NAME');
+  if (!process.env.DATABASE_URL) {
+    missing.push('DATABASE_URL');
   }
 
   return missing;
 };
+
+// Table -> colonne de clé primaire à valeur unique, issue de
+// supabase/migrations/0001_schema_initial_from_mysql.sql. Sert uniquement à
+// injecter un RETURNING automatique sur les INSERT pour émuler result.insertId
+// (mysql2) — les tables à clé composite (notification_reads, ...) sont absentes
+// exprès : elles ne s'appuient jamais sur insertId.
+const TABLE_PRIMARY_KEY: Record<string, string> = {
+  activite: 'id_activite',
+  activites: 'id',
+  agriculteurs: 'id',
+  agriculteurs_cultures: 'id',
+  alerte_risque: 'id_alerte',
+  beneficiaire: 'id_beneficiaire',
+  beneficiaires: 'id',
+  cadre_resultats: 'id',
+  calculateur_historique: 'id',
+  cartes_agriculteurs: 'id',
+  cler: 'id_cler',
+  composante: 'id_composante',
+  cultures: 'id',
+  distribution_cartes: 'id',
+  donnee_collectee: 'id_donnee',
+  formation: 'id_formation',
+  formulaire: 'id_formulaire',
+  fournisseurs: 'id',
+  fournisseurs_semences: 'id',
+  grm_plaintes: 'id',
+  grm_services: 'id',
+  indicateur: 'id_indicateur',
+  indicateur_formule: 'id',
+  infrastructure: 'id_infrastructure',
+  localisation: 'id_localisation',
+  organisations: 'id',
+  ot_activites: 'id',
+  ot_equipiers: 'id',
+  ot_profile: 'id',
+  ot_rapports: 'id',
+  paquets_techniques: 'id',
+  participation_formation: 'id_participation',
+  periode: 'id_periode',
+  plainte_grm: 'id_plainte',
+  plan_contingence: 'id_plan',
+  powerbi_dashboards: 'id',
+  powerbi_reports: 'id',
+  prise_en_charge: 'id_prise_charge',
+  profil: 'id_profil',
+  provinces: 'id',
+  province_evolution: 'id',
+  ptba_activites: 'id',
+  risque: 'id_risque',
+  risques: 'id',
+  risque_actions: 'id',
+  risque_alertes: 'id',
+  sig_sites: 'id',
+  sous_composante: 'id_sous_composante',
+  subvention: 'id_subvention',
+  suivi_missions: 'id',
+  theme_formation: 'id_theme',
+  tranche_subvention: 'id_tranche',
+  type_infrastructure: 'id_type_infrastructure',
+  type_plainte: 'id_type_plainte',
+  type_risque: 'id_type_risque',
+  type_subvention: 'id_type_subvention',
+  utilisateur: 'id_utilisateur',
+  valeur_indicateur: 'id_valeur',
+  ventes_semences: 'id',
+};
+
+/**
+ * Couche de compatibilité mysql2 -> pg. La base a migré vers Postgres/Supabase
+ * mais tout ce fichier (et app.ts) appelle encore getDbPool().query()/.execute()
+ * avec la syntaxe mysql2 : placeholders `?`, tuple [rows], result.insertId,
+ * DESCRIBE table. Plutôt que réécrire des milliers d'appels, ce shim traduit
+ * cette syntaxe vers pg à ce point d'entrée unique.
+ */
+let pgPool: PgPool | null = null;
+
+/** Nombre entier lu dans l'environnement, avec repli si absent ou invalide. */
+const entierEnv = (nom: string, defaut: number): number => {
+  const brut = Number(process.env[nom]);
+  return Number.isFinite(brut) && brut > 0 ? brut : defaut;
+};
+
+/**
+ * Pool Postgres.
+ *
+ * DATABASE_URL pointe sur le pooler Supavisor de Supabase. En mode transaction
+ * (port 6543), le pooler recycle agressivement les connexions inactives : un
+ * pool Node à longue durée de vie garde alors des clients que le serveur a
+ * déjà fermés, et la requête suivante meurt en ECONNRESET. D'où le cadrage
+ * ci-dessous — peu de connexions, gardées peu de temps, avec keep-alive TCP.
+ *
+ * Le `pool.on('error')` n'est pas cosmétique : sans lui, une erreur survenant
+ * sur un client *inactif* est un évènement 'error' non écouté sur un
+ * EventEmitter, ce qui termine le processus Node. C'est la différence entre
+ * une requête qui échoue et l'API qui tombe.
+ */
+function getPgPool(): PgPool {
+  if (!pgPool) {
+    pgPool = new PgPool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: process.env.DATABASE_SSL === 'false' ? undefined : { rejectUnauthorized: false },
+      max: entierEnv('DATABASE_POOL_MAX', 5),
+      idleTimeoutMillis: entierEnv('DATABASE_POOL_IDLE_MS', 10_000),
+      connectionTimeoutMillis: entierEnv('DATABASE_CONNECT_TIMEOUT_MS', 15_000),
+      keepAlive: true,
+      keepAliveInitialDelayMillis: 5_000,
+      application_name: 'pnda-se-api',
+    });
+
+    pgPool.on('error', (erreur) => {
+      console.warn('[db] connexion inactive fermée par le serveur :', (erreur as Error).message);
+    });
+  }
+
+  return pgPool;
+}
+
+/**
+ * Codes signalant une connexion perdue plutôt qu'une requête fautive. Une
+ * requête qui échoue là-dessus a toutes les chances de passer au second essai,
+ * sur une connexion neuve.
+ */
+const CODES_CONNEXION_PERDUE = new Set([
+  'ECONNRESET', 'EPIPE', 'ECONNABORTED', 'ETIMEDOUT', 'ERR_STREAM_PREMATURE_CLOSE',
+  '08000', '08001', '08003', '08004', '08006', '08P01', '57P01', '57P02', '57P03',
+]);
+
+const estConnexionPerdue = (erreur: unknown): boolean => {
+  if (!erreur || typeof erreur !== 'object') {
+    return false;
+  }
+
+  const code = 'code' in erreur ? String((erreur as { code?: unknown }).code ?? '') : '';
+  if (CODES_CONNEXION_PERDUE.has(code)) {
+    return true;
+  }
+
+  const message = 'message' in erreur ? String((erreur as { message?: unknown }).message ?? '') : '';
+  return /Connection terminated|Client has encountered a connection error|server closed the connection/i.test(message);
+};
+
+const patienter = (ms: number) => new Promise((resoudre) => setTimeout(resoudre, ms));
+
+// `?` positionnels (mysql2) -> `$1, $2, ...` (pg) : les deux pilotes sont
+// strictement positionnels dans l'ordre, la conversion est donc sûre sans
+// avoir à réordonner le tableau de paramètres.
+function toPgPlaceholders(sql: string): string {
+  let n = 0;
+  return sql.replace(/\?/g, () => `$${++n}`);
+}
+
+async function describeTable(table: string): Promise<Array<RowDataPacket & { Field: string }>> {
+  const { rows } = await getPgPool().query(
+    `select column_name as "Field", data_type as "Type",
+            (is_nullable = 'YES') as "Null", column_default as "Default"
+       from information_schema.columns
+      where table_schema = 'public' and table_name = $1
+      order by ordinal_position`,
+    [table]
+  );
+  return rows as unknown as Array<RowDataPacket & { Field: string }>;
+}
+
+function withReturningForInsertId(sql: string): { sql: string; pk: string | null } {
+  const match = sql.match(/^INSERT\s+INTO\s+["`]?(\w+)["`]?/i);
+  const table = match?.[1];
+  const pk = table ? TABLE_PRIMARY_KEY[table] ?? null : null;
+  if (pk && !/RETURNING/i.test(sql)) {
+    return { sql: `${sql} RETURNING "${pk}"`, pk };
+  }
+  return { sql, pk: null };
+}
+
+type CompatHeader = {
+  affectedRows: number;
+  insertId: number;
+  fieldCount: number;
+  info: string;
+  serverStatus: number;
+  warningStatus: number;
+};
+
+async function compatQuery<T = unknown>(sqlText: string, params: unknown[] = []): Promise<[T, unknown[]]> {
+  const trimmed = sqlText.trim();
+
+  if (/^DESCRIBE\s/i.test(trimmed)) {
+    const table = trimmed.replace(/^DESCRIBE\s+/i, '').replace(/[`";]/g, '').trim();
+    const rows = await describeTable(table);
+    return [rows as unknown as T, []];
+  }
+
+  const isWrite = /^(INSERT|UPDATE|DELETE)\b/i.test(trimmed);
+  const { sql: finalSql, pk } = isWrite ? withReturningForInsertId(trimmed) : { sql: trimmed, pk: null };
+
+  const sqlPg = toPgPlaceholders(finalSql);
+  let result: QueryResult;
+
+  // Une connexion recyclée par le pooler entre deux requêtes est un incident
+  // normal, pas une panne : on retente une fois sur une connexion neuve avant
+  // de remonter l'erreur. Seules les pertes de connexion sont retentées — une
+  // requête fautive doit échouer tout de suite, pas deux fois.
+  for (let essai = 1; ; essai += 1) {
+    try {
+      result = await getPgPool().query(sqlPg, params as unknown[]);
+      break;
+    } catch (e) {
+      if (essai === 1 && estConnexionPerdue(e)) {
+        console.warn(`[db] connexion perdue, nouvelle tentative (${(e as Error).message})`);
+        await patienter(120);
+        continue;
+      }
+
+      // Le SQL final (placeholders convertis) aide énormément au diagnostic des
+      // incompatibilités MySQL -> Postgres restantes — gardé volontairement.
+      console.error('[db] requête en échec:', sqlPg);
+      throw e;
+    }
+  }
+
+  if (isWrite) {
+    const header: CompatHeader = {
+      affectedRows: result.rowCount ?? 0,
+      insertId: pk ? Number((result.rows?.[0] as Record<string, unknown> | undefined)?.[pk] ?? 0) : 0,
+      fieldCount: 0,
+      info: '',
+      serverStatus: 0,
+      warningStatus: 0,
+    };
+    return [header as unknown as T, []];
+  }
+
+  return [result.rows as unknown as T, []];
+}
 
 export const getDbPool = (): Pool => {
   const missingConfig = getMissingDatabaseConfig();
@@ -4889,22 +4792,15 @@ export const getDbPool = (): Pool => {
   }
 
   if (!pool) {
-    pool = mysql.createPool({
-      host: process.env.DB_HOST || '127.0.0.1',
-      port: Number(process.env.DB_PORT || 3306),
-      user: process.env.DB_USER,
-      password: process.env.DB_PASSWORD || '',
-      database: process.env.DB_NAME,
-      waitForConnections: true,
-      connectionLimit: 10,
-      queueLimit: 0,
-    });
+    getPgPool(); // instancie/valide la connexion pg dès le premier appel
+    pool = { query: compatQuery, execute: compatQuery } as unknown as Pool;
   }
 
   return pool;
 };
 
-const sqlIdentifier = (value: string) => `\`${value.replace(/`/g, '``')}\``;
+const sqlIdentifier = (value: string) => `"${value.replace(/"/g, '""')}"`;
+
 
 const buildQualifiedColumnExpr = (tableRef: string, columns: Set<string>, candidates: string[], fallback = 'NULL') => {
   for (const candidate of candidates) {
@@ -4936,7 +4832,7 @@ const buildBeneficiaireSourceConfig = (tableName: string, columns: Set<string>):
     return null;
   }
 
-  const rnaExpr = buildCoalescedColumnExpr(tableRef, columns, ['rna_id', 'farmer_id', 'code_rna'], `CAST(${idExpr} AS CHAR)`);
+  const rnaExpr = buildCoalescedColumnExpr(tableRef, columns, ['rna_id', 'farmer_id', 'code_rna'], `CAST(${idExpr} AS TEXT)`);
   const provinceExpr = buildCoalescedColumnExpr(tableRef, columns, ['province'], "''");
   const territoireExpr = buildCoalescedColumnExpr(tableRef, columns, ['territoire'], "''");
   const secteurExpr = buildCoalescedColumnExpr(tableRef, columns, ['secteur'], "''");
@@ -4962,7 +4858,7 @@ const buildBeneficiaireSourceConfig = (tableName: string, columns: Set<string>):
   }
 
   if (nomCompletExpr === 'NULL') {
-    nomCompletExpr = `CAST(${idExpr} AS CHAR)`;
+    nomCompletExpr = `CAST(${idExpr} AS TEXT)`;
   }
 
   return {
@@ -4989,35 +4885,35 @@ const buildBeneficiaireSourceConfig = (tableName: string, columns: Set<string>):
 const ensureBeneficiairesTable = async (): Promise<void> => {
   await getDbPool().query(
     `CREATE TABLE IF NOT EXISTS beneficiaires (
-      id INT NOT NULL AUTO_INCREMENT,
-      rna_id VARCHAR(64) DEFAULT NULL,
-      nom_complet VARCHAR(255) NOT NULL,
-      sexe VARCHAR(16) DEFAULT NULL,
-      province VARCHAR(128) DEFAULT NULL,
-      territoire VARCHAR(128) DEFAULT NULL,
-      secteur VARCHAR(128) DEFAULT NULL,
-      groupement VARCHAR(255) DEFAULT NULL,
-      village VARCHAR(255) DEFAULT NULL,
-      saison VARCHAR(128) DEFAULT NULL,
-      ptech VARCHAR(255) DEFAULT NULL,
-      type_exploitant VARCHAR(64) DEFAULT 'agriculteur',
-      created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      PRIMARY KEY (id),
-      KEY idx_beneficiaires_rna_id (rna_id),
-      KEY idx_beneficiaires_province (province),
-      KEY idx_beneficiaires_sexe (sexe)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+      id integer GENERATED ALWAYS AS IDENTITY,
+      rna_id varchar(64) DEFAULT NULL,
+      nom_complet varchar(255) NOT NULL,
+      sexe varchar(16) DEFAULT NULL,
+      province varchar(128) DEFAULT NULL,
+      territoire varchar(128) DEFAULT NULL,
+      secteur varchar(128) DEFAULT NULL,
+      groupement varchar(255) DEFAULT NULL,
+      village varchar(255) DEFAULT NULL,
+      saison varchar(128) DEFAULT NULL,
+      ptech varchar(255) DEFAULT NULL,
+      type_exploitant varchar(64) DEFAULT 'agriculteur',
+      created_at timestamptz DEFAULT now(),
+      updated_at timestamptz DEFAULT now(),
+      PRIMARY KEY (id)
+    )`,
   );
+  await getDbPool().query('CREATE INDEX IF NOT EXISTS idx_beneficiaires_rna_id ON beneficiaires (rna_id)');
+  await getDbPool().query('CREATE INDEX IF NOT EXISTS idx_beneficiaires_province ON beneficiaires (province)');
+  await getDbPool().query('CREATE INDEX IF NOT EXISTS idx_beneficiaires_sexe ON beneficiaires (sexe)');
 };
 
 const resolveBeneficiaireSource = async (): Promise<BeneficiaireSourceConfig> => {
   if (!beneficiaireSourcePromise) {
     beneficiaireSourcePromise = (async () => {
       const [rows] = await getDbPool().query<BeneficiaireSourceColumnRow[]>(
-        `SELECT TABLE_NAME, COLUMN_NAME
+        `SELECT TABLE_NAME AS "TABLE_NAME", COLUMN_NAME AS "COLUMN_NAME"
          FROM INFORMATION_SCHEMA.COLUMNS
-         WHERE TABLE_SCHEMA = DATABASE()
+         WHERE TABLE_SCHEMA = 'public'
            AND TABLE_NAME IN ('beneficiaires', 'agriculteurs')`,
       );
 
@@ -5097,10 +4993,10 @@ export const getAgriculteursDashboardOverview = async (): Promise<AgriculteursDa
        GROUP BY NULLIF(TRIM(COALESCE(${source.provinceExpr}, '')), '')`
     ),
     pool.query<BeneficiaireGroupRow[]>(
-      `SELECT DATE_FORMAT(${source.createdAtExpr}, '%Y-%m') AS label, COUNT(*) AS total
+      `SELECT to_char(${source.createdAtExpr}, 'YYYY-MM') AS label, COUNT(*) AS total
        FROM ${source.tableRef}
-       GROUP BY DATE_FORMAT(${source.createdAtExpr}, '%Y-%m')
-       ORDER BY DATE_FORMAT(${source.createdAtExpr}, '%Y-%m') ASC`
+       GROUP BY to_char(${source.createdAtExpr}, 'YYYY-MM')
+       ORDER BY to_char(${source.createdAtExpr}, 'YYYY-MM') ASC`
     ),
   ]);
 
@@ -5142,7 +5038,7 @@ const buildBeneficiaireWhereClause = (filters: SqlBeneficiaireFilters, source: B
   const values: Array<string> = [];
 
   if (filters.search) {
-    clauses.push(`(${source.nomCompletExpr} LIKE ? OR CAST(${source.rnaExpr} AS CHAR) LIKE ? OR ${source.provinceExpr} LIKE ? OR ${source.territoireExpr} LIKE ? OR ${source.villageExpr} LIKE ?)`);
+    clauses.push(`(${source.nomCompletExpr} ILIKE ? OR CAST(${source.rnaExpr} AS TEXT) ILIKE ? OR ${source.provinceExpr} ILIKE ? OR ${source.territoireExpr} ILIKE ? OR ${source.villageExpr} ILIKE ?)`);
     const search = `%${filters.search}%`;
     values.push(search, search, search, search, search);
   }
@@ -5154,16 +5050,16 @@ const buildBeneficiaireWhereClause = (filters: SqlBeneficiaireFilters, source: B
 
   if (filters.sexe) {
     if (filters.sexe === 'F') {
-      clauses.push(`LOWER(COALESCE(${source.sexeExpr}, "")) LIKE ?`);
+      clauses.push(`LOWER(COALESCE(${source.sexeExpr}, '')) LIKE ?`);
       values.push('f%');
     } else if (filters.sexe === 'M') {
-      clauses.push(`(LOWER(COALESCE(${source.sexeExpr}, "")) LIKE ? OR ${source.sexeExpr} IS NULL OR ${source.sexeExpr} = "")`);
+      clauses.push(`(LOWER(COALESCE(${source.sexeExpr}, '')) LIKE ? OR ${source.sexeExpr} IS NULL OR ${source.sexeExpr} = '')`);
       values.push('m%');
     }
   }
 
   if (filters.type) {
-    clauses.push(`LOWER(COALESCE(${source.typeExploitantExpr}, "")) = ?`);
+    clauses.push(`LOWER(COALESCE(${source.typeExploitantExpr}, '')) = ?`);
     values.push(filters.type.trim().toLowerCase());
   }
 
@@ -5265,24 +5161,7 @@ export const getBeneficiaireStats = async (): Promise<SqlBeneficiaireStats> => {
 const ensureCartesAgriculteursTable = async (): Promise<void> => {
   if (!cartesAgriculteursTableReady) {
     cartesAgriculteursTableReady = (async () => {
-      await getDbPool().query(
-        `CREATE TABLE IF NOT EXISTS cartes_agriculteurs (
-          id INT NOT NULL AUTO_INCREMENT,
-          rna_id VARCHAR(64) NOT NULL,
-          numero_carte VARCHAR(64) DEFAULT NULL,
-          statut_carte VARCHAR(32) NOT NULL DEFAULT 'a_imprimer',
-          date_distribution DATE DEFAULT NULL,
-          agent_distribution VARCHAR(255) DEFAULT NULL,
-          observations TEXT DEFAULT NULL,
-          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          PRIMARY KEY (id),
-          UNIQUE KEY uq_cartes_agriculteurs_rna (rna_id),
-          UNIQUE KEY uq_cartes_agriculteurs_numero (numero_carte),
-          KEY idx_cartes_agriculteurs_statut (statut_carte),
-          KEY idx_cartes_agriculteurs_date_distribution (date_distribution)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-      );
+      // (schéma déjà créé par supabase/migrations/0001_schema_initial_from_mysql.sql — table "cartes_agriculteurs")
     })().catch((error) => {
       cartesAgriculteursTableReady = null;
       throw error;
@@ -5295,26 +5174,7 @@ const ensureCartesAgriculteursTable = async (): Promise<void> => {
 const ensureVentesSemencesTable = async (): Promise<void> => {
   if (!ventesSemencesTableReady) {
     ventesSemencesTableReady = (async () => {
-      await getDbPool().query(
-        `CREATE TABLE IF NOT EXISTS ventes_semences (
-          id INT NOT NULL AUTO_INCREMENT,
-          rna_id VARCHAR(64) NOT NULL,
-          province VARCHAR(128) DEFAULT NULL,
-          producteur_nom VARCHAR(255) DEFAULT NULL,
-          type_semence VARCHAR(255) NOT NULL,
-          quantite_kg DECIMAL(12, 2) NOT NULL DEFAULT 0,
-          montant_usd DECIMAL(12, 2) NOT NULL DEFAULT 0,
-          date_vente DATE NOT NULL,
-          observations TEXT DEFAULT NULL,
-          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          PRIMARY KEY (id),
-          KEY idx_ventes_semences_rna_id (rna_id),
-          KEY idx_ventes_semences_province (province),
-          KEY idx_ventes_semences_type_semence (type_semence),
-          KEY idx_ventes_semences_date_vente (date_vente)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-      );
+      // (schéma déjà créé par supabase/migrations/0001_schema_initial_from_mysql.sql — table "ventes_semences")
     })().catch((error) => {
       ventesSemencesTableReady = null;
       throw error;
@@ -5347,7 +5207,7 @@ const buildCarteAgriculteurWhereClause = (
 
   if (filters.search) {
     const search = `%${filters.search}%`;
-    clauses.push(`(${source.nomCompletExpr} LIKE ? OR CAST(${source.rnaExpr} AS CHAR) LIKE ? OR ${source.territoireExpr} LIKE ? OR cartes_agriculteurs.numero_carte LIKE ?)`);
+    clauses.push(`(${source.nomCompletExpr} ILIKE ? OR CAST(${source.rnaExpr} AS TEXT) ILIKE ? OR ${source.territoireExpr} ILIKE ? OR cartes_agriculteurs.numero_carte ILIKE ?)`);
     values.push(search, search, search, search);
   }
 
@@ -5391,14 +5251,14 @@ export const getCartesAgriculteurs = async (filters: SqlCarteAgriculteurFilters)
   const [countRows] = await getDbPool().query<CountRow[]>(
     `SELECT COUNT(*) AS total
      FROM ${source.tableRef}
-     LEFT JOIN cartes_agriculteurs ON cartes_agriculteurs.rna_id = CAST(${source.rnaExpr} AS CHAR)
+     LEFT JOIN cartes_agriculteurs ON cartes_agriculteurs.rna_id = CAST(${source.rnaExpr} AS TEXT)
      ${whereClause}`,
     values,
   );
 
   const [rows] = await getDbPool().query<CarteAgriculteurRow[]>(
     `SELECT ${source.idExpr} AS id,
-            CAST(${source.rnaExpr} AS CHAR) AS rna_id,
+            CAST(${source.rnaExpr} AS TEXT) AS rna_id,
             ${source.nomCompletExpr} AS nom_complet,
             ${source.sexeExpr} AS sexe,
             ${source.provinceExpr} AS province,
@@ -5408,7 +5268,7 @@ export const getCartesAgriculteurs = async (filters: SqlCarteAgriculteurFilters)
             cartes_agriculteurs.numero_carte AS numero_carte,
             cartes_agriculteurs.date_distribution AS date_distribution
      FROM ${source.tableRef}
-     LEFT JOIN cartes_agriculteurs ON cartes_agriculteurs.rna_id = CAST(${source.rnaExpr} AS CHAR)
+     LEFT JOIN cartes_agriculteurs ON cartes_agriculteurs.rna_id = CAST(${source.rnaExpr} AS TEXT)
      ${whereClause}
      ORDER BY ${source.idExpr} DESC
      LIMIT ? OFFSET ?`,
@@ -5441,7 +5301,7 @@ export const getCartesAgriculteursStats = async (
         SUM(CASE WHEN COALESCE(cartes_agriculteurs.statut_carte, 'a_imprimer') = 'a_imprimer' THEN 1 ELSE 0 END) AS a_imprimer,
         COUNT(DISTINCT NULLIF(TRIM(COALESCE(${source.provinceExpr}, '')), '')) AS provinces
      FROM ${source.tableRef}
-     LEFT JOIN cartes_agriculteurs ON cartes_agriculteurs.rna_id = CAST(${source.rnaExpr} AS CHAR)
+     LEFT JOIN cartes_agriculteurs ON cartes_agriculteurs.rna_id = CAST(${source.rnaExpr} AS TEXT)
      ${whereClause}`,
     values,
   );
@@ -5465,7 +5325,7 @@ const buildVenteSemenceWhereClause = (
 
   if (filters.search) {
     const search = `%${filters.search}%`;
-    clauses.push(`(COALESCE(${source.nomCompletExpr}, ventes_semences.producteur_nom, '') LIKE ? OR ventes_semences.rna_id LIKE ? OR ventes_semences.type_semence LIKE ?)`);
+    clauses.push(`(COALESCE(${source.nomCompletExpr}, ventes_semences.producteur_nom, '') ILIKE ? OR ventes_semences.rna_id ILIKE ? OR ventes_semences.type_semence ILIKE ?)`);
     values.push(search, search, search);
   }
 
@@ -5508,7 +5368,7 @@ export const getVentesSemences = async (
             ventes_semences.montant_usd AS montant_usd,
             ventes_semences.date_vente AS date_vente
      FROM ventes_semences
-     LEFT JOIN ${source.tableRef} ON ventes_semences.rna_id = CAST(${source.rnaExpr} AS CHAR)
+     LEFT JOIN ${source.tableRef} ON ventes_semences.rna_id = CAST(${source.rnaExpr} AS TEXT)
      ${whereClause}
      ORDER BY ventes_semences.date_vente DESC, ventes_semences.id DESC`,
     values,
@@ -5534,7 +5394,7 @@ export const getVentesSemencesStats = async (
         COALESCE(SUM(ventes_semences.quantite_kg), 0) AS semences_vendues_kg,
         COALESCE(SUM(ventes_semences.montant_usd), 0) AS montant_total_usd
      FROM ventes_semences
-     LEFT JOIN ${source.tableRef} ON ventes_semences.rna_id = CAST(${source.rnaExpr} AS CHAR)
+     LEFT JOIN ${source.tableRef} ON ventes_semences.rna_id = CAST(${source.rnaExpr} AS TEXT)
      ${whereClause}`,
     values,
   );
@@ -5982,7 +5842,7 @@ const buildFournisseurWhereClause = (filters: SqlFournisseurFilters) => {
 
   if (filters.search) {
     const search = `%${filters.search}%`;
-    clauses.push('(nom LIKE ? OR responsable LIKE ? OR territoire LIKE ? OR province LIKE ?)');
+    clauses.push('(nom ILIKE ? OR responsable ILIKE ? OR territoire ILIKE ? OR province ILIKE ?)');
     values.push(search, search, search, search);
   }
 
@@ -6084,7 +5944,7 @@ const buildOrganisationWhereClause = (filters: SqlOrganisationFilters) => {
 
   if (filters.search) {
     const search = `%${filters.search}%`;
-    clauses.push('(nom LIKE ? OR nom_complet LIKE ? OR code LIKE ? OR responsable LIKE ?)');
+    clauses.push('(nom ILIKE ? OR nom_complet ILIKE ? OR code ILIKE ? OR responsable ILIKE ?)');
     values.push(search, search, search, search);
   }
 
@@ -6228,7 +6088,7 @@ const buildActiviteWhereClause = (filters: SqlActiviteFilters) => {
 
   if (filters.search) {
     const search = `%${filters.search}%`;
-    clauses.push('(code LIKE ? OR titre LIKE ? OR description LIKE ? OR responsable LIKE ? OR province LIKE ? OR territoire LIKE ?)');
+    clauses.push('(code ILIKE ? OR titre ILIKE ? OR description ILIKE ? OR responsable ILIKE ? OR province ILIKE ? OR territoire ILIKE ?)');
     values.push(search, search, search, search, search, search);
   }
 
@@ -6279,7 +6139,7 @@ const buildPlainteWhereClause = (filters: SqlPlainteFilters) => {
 
   if (filters.search) {
     const search = `%${filters.search}%`;
-    clauses.push('(numero_plainte LIKE ? OR description LIKE ? OR beneficiaire_nom LIKE ? OR beneficiaire_rna LIKE ?)');
+    clauses.push('(numero_plainte ILIKE ? OR description ILIKE ? OR beneficiaire_nom ILIKE ? OR beneficiaire_rna ILIKE ?)');
     values.push(search, search, search, search);
   }
 
@@ -6372,7 +6232,7 @@ export const getPlainteStats = async (): Promise<SqlPlainteStats> => {
         COUNT(*) AS total,
         SUM(CASE WHEN statut = 'en_cours' THEN 1 ELSE 0 END) AS en_cours,
         SUM(CASE WHEN statut = 'traitee' THEN 1 ELSE 0 END) AS traitees,
-        SUM(CASE WHEN est_confidentiel = 1 OR type IN ('VBG', 'EAS', 'HS') THEN 1 ELSE 0 END) AS sensibles
+        SUM(CASE WHEN est_confidentiel = true OR type IN ('VBG', 'EAS', 'HS') THEN 1 ELSE 0 END) AS sensibles
      FROM grm_plaintes`,
   );
 
@@ -6807,10 +6667,10 @@ export const getActivitesStats = async (): Promise<SqlActiviteStats> => {
     pool.query<BeneficiaireGroupRow[]>('SELECT statut AS label, COUNT(*) AS total FROM activites GROUP BY statut'),
     pool.query<BeneficiaireGroupRow[]>('SELECT province AS label, COUNT(*) AS total FROM activites GROUP BY province'),
     pool.query<BeneficiaireGroupRow[]>(
-      `SELECT DATE_FORMAT(date_debut, '%Y-%m') AS label, COUNT(*) AS total
+      `SELECT to_char(date_debut, 'YYYY-MM') AS label, COUNT(*) AS total
        FROM activites
-       GROUP BY DATE_FORMAT(date_debut, '%Y-%m')
-       ORDER BY DATE_FORMAT(date_debut, '%Y-%m') ASC`
+       GROUP BY to_char(date_debut, 'YYYY-MM')
+       ORDER BY to_char(date_debut, 'YYYY-MM') ASC`
     ),
     pool.query<Array<RowDataPacket & {
       total: number;
@@ -7287,7 +7147,7 @@ export const updateRisqueAction = async (
   values.push(actionId, risqueId);
 
   const [result] = await getDbPool().execute<ResultSetHeader>(
-    `UPDATE risque_actions SET ${fields.join(', ')}, updated_at = NOW() WHERE id = ? AND id_risque = ?`,
+    `UPDATE risque_actions SET ${fields.join(', ')} WHERE id = ? AND id_risque = ?`,
     values,
   );
 
@@ -7310,9 +7170,9 @@ export const getProvinces = async (): Promise<SqlProvinceData[]> => {
   const source = await resolveBeneficiaireSource();
   const pool = getDbPool();
   const youthExpr = source.ageExpr !== 'NULL'
-    ? `CASE WHEN CAST(COALESCE(${source.ageExpr}, 0) AS SIGNED) BETWEEN 15 AND 35 THEN 1 ELSE 0 END`
+    ? `CASE WHEN CAST(COALESCE(${source.ageExpr}, 0) AS INTEGER) BETWEEN 15 AND 35 THEN 1 ELSE 0 END`
     : source.dateNaissanceExpr !== 'NULL'
-      ? `CASE WHEN TIMESTAMPDIFF(YEAR, ${source.dateNaissanceExpr}, CURDATE()) BETWEEN 15 AND 35 THEN 1 ELSE 0 END`
+      ? `CASE WHEN DATE_PART('year', AGE(CURRENT_DATE, ${source.dateNaissanceExpr})) BETWEEN 15 AND 35 THEN 1 ELSE 0 END`
       : '0';
 
   const [provinceRows, monthlyRows] = await Promise.all([
@@ -7347,7 +7207,7 @@ export const getProvinces = async (): Promise<SqlProvinceData[]> => {
           MAX(${source.createdAtExpr}) AS dernier_suivi
        FROM ${source.tableRef}
        GROUP BY NULLIF(TRIM(COALESCE(${source.provinceExpr}, '')), '')
-       HAVING province IS NOT NULL
+       HAVING NULLIF(TRIM(COALESCE(${source.provinceExpr}, '')), '') IS NOT NULL
        ORDER BY province ASC`
     ),
     pool.query<Array<RowDataPacket & {
@@ -7357,11 +7217,11 @@ export const getProvinces = async (): Promise<SqlProvinceData[]> => {
     }>>(
       `SELECT
           NULLIF(TRIM(COALESCE(${source.provinceExpr}, '')), '') AS province,
-          DATE_FORMAT(${source.createdAtExpr}, '%Y-%m') AS mois,
+          to_char(${source.createdAtExpr}, 'YYYY-MM') AS mois,
           COUNT(*) AS total
        FROM ${source.tableRef}
        WHERE NULLIF(TRIM(COALESCE(${source.provinceExpr}, '')), '') IS NOT NULL
-       GROUP BY NULLIF(TRIM(COALESCE(${source.provinceExpr}, '')), ''), DATE_FORMAT(${source.createdAtExpr}, '%Y-%m')`
+       GROUP BY NULLIF(TRIM(COALESCE(${source.provinceExpr}, '')), ''), to_char(${source.createdAtExpr}, 'YYYY-MM')`
     ),
   ]);
 
@@ -7473,12 +7333,12 @@ export const getProvinceEvolution = async (provinceId: string): Promise<SqlProvi
 
   const [rows] = await getDbPool().query<Array<RowDataPacket & { province: string | null; mois: string | null; total: number }>>(
     `SELECT NULLIF(TRIM(COALESCE(${source.provinceExpr}, '')), '') AS province,
-            DATE_FORMAT(${source.createdAtExpr}, '%Y-%m') AS mois,
+            to_char(${source.createdAtExpr}, 'YYYY-MM') AS mois,
             COUNT(*) AS total
      FROM ${source.tableRef}
      WHERE NULLIF(TRIM(COALESCE(${source.provinceExpr}, '')), '') IS NOT NULL
-     GROUP BY NULLIF(TRIM(COALESCE(${source.provinceExpr}, '')), ''), DATE_FORMAT(${source.createdAtExpr}, '%Y-%m')
-     ORDER BY DATE_FORMAT(${source.createdAtExpr}, '%Y-%m') ASC`,
+     GROUP BY NULLIF(TRIM(COALESCE(${source.provinceExpr}, '')), ''), to_char(${source.createdAtExpr}, 'YYYY-MM')
+     ORDER BY to_char(${source.createdAtExpr}, 'YYYY-MM') ASC`,
   );
 
   return rows
@@ -7737,7 +7597,7 @@ export const getOTRapports = async (): Promise<SqlOTRapportMensuel[]> => {
     `SELECT id, mois, annee, enquetes, formations, suivis, qualite_donnees, commentaires, soumis_le, valide
      FROM ot_rapports
      ORDER BY annee DESC,
-       FIELD(mois, 'Décembre','Novembre','Octobre','Septembre','Août','Juillet','Juin','Mai','Avril','Mars','Février','Janvier') ASC,
+       array_position(ARRAY['Décembre','Novembre','Octobre','Septembre','Août','Juillet','Juin','Mai','Avril','Mars','Février','Janvier'], mois) ASC,
        id DESC`
   );
 
@@ -8070,7 +7930,7 @@ export const getBeneficiairesDatabaseStats = async (): Promise<BeneficiaireDatab
        GROUP BY label`,
     ),
     pool.query<BeneficiaireMonthlyRow[]>(
-      `SELECT DATE_FORMAT(${source.createdAtExpr}, '%Y-%m') AS month_key, COUNT(*) AS total
+      `SELECT to_char(${source.createdAtExpr}, 'YYYY-MM') AS month_key, COUNT(*) AS total
        FROM ${source.tableRef}
        WHERE ${source.createdAtExpr} IS NOT NULL
        GROUP BY month_key
@@ -8118,7 +7978,7 @@ export const markNotificationAsRead = async (userId: number, notificationId: str
   await getDbPool().query<ResultSetHeader>(
     `INSERT INTO notification_reads (user_id, notification_id, read_at)
      VALUES (?, ?, CURRENT_TIMESTAMP)
-     ON DUPLICATE KEY UPDATE read_at = CURRENT_TIMESTAMP`,
+     ON CONFLICT (user_id, notification_id) DO UPDATE SET read_at = CURRENT_TIMESTAMP`,
     [userId, notificationId],
   );
 };
@@ -8136,7 +7996,7 @@ export const markNotificationsAsRead = async (userId: number, notificationIds: s
   await getDbPool().query<ResultSetHeader>(
     `INSERT INTO notification_reads (user_id, notification_id, read_at)
      VALUES ${placeholders}
-     ON DUPLICATE KEY UPDATE read_at = CURRENT_TIMESTAMP`,
+     ON CONFLICT (user_id, notification_id) DO UPDATE SET read_at = CURRENT_TIMESTAMP`,
     values,
   );
 };
@@ -8145,11 +8005,11 @@ export const getCadreResultats = async (filters: CadreResultatsFilters = {}): Pr
   await ensureCadreResultatsTable();
 
   const clauses: string[] = [];
-  const values: Array<string | number> = [];
+  const values: Array<string | number | boolean> = [];
 
   if (typeof filters.odp === 'boolean') {
     clauses.push('est_odp = ?');
-    values.push(filters.odp ? 1 : 0);
+    values.push(filters.odp);
   }
 
   if (filters.composante) {
@@ -8162,6 +8022,7 @@ export const getCadreResultats = async (filters: CadreResultatsFilters = {}): Pr
     `SELECT
         id,
         code,
+        libelle_court,
         nom,
         composante,
         sous_composante,
@@ -8172,6 +8033,17 @@ export const getCadreResultats = async (filters: CadreResultatsFilters = {}): Pr
         source_donnees,
         methodologie_collecte,
         responsable,
+        description,
+        groupes_cibles,
+        objectif,
+        justification,
+        hypothese_critique,
+        desagrege_par,
+        elements_calcul,
+        formule_mathematique,
+        niveau_validation,
+        outils_mesure,
+        commentaires,
         prevu_2023,
         realise_2023,
         prevu_2024,
@@ -8180,6 +8052,8 @@ export const getCadreResultats = async (filters: CadreResultatsFilters = {}): Pr
         realise_2025,
         prevu_2026,
         realise_2026,
+        prevu_2027,
+        realise_2027,
         final_prevu,
         final_realise
       FROM cadre_resultats
@@ -8194,12 +8068,15 @@ export const getCadreResultats = async (filters: CadreResultatsFilters = {}): Pr
 export const getCadreResultatsStats = async (year: CadreYear = '2025'): Promise<CadreStats> => {
   const data = await getCadreResultats();
   const avecRealise = data.filter((indicateur) => {
-    const annee = indicateur.annees[year];
+    const annee = indicateur.annees[year] ?? ANNEE_CADRE_VIDE;
     return annee.prevu !== null && annee.prevu > 0 && annee.realise !== null;
   });
 
   const performances = avecRealise
-    .map((indicateur) => calcCadrePerformance(indicateur.annees[year].realise, indicateur.annees[year].prevu))
+    .map((indicateur) => {
+      const annee = indicateur.annees[year] ?? ANNEE_CADRE_VIDE;
+      return calcCadrePerformance(annee.realise, annee.prevu);
+    })
     .filter((performance): performance is number => performance !== null);
 
   const enRetard = performances.filter((performance) => performance < 70).length;
@@ -8222,6 +8099,343 @@ export const getCadreResultatsStats = async (year: CadreYear = '2025'): Promise<
     atteint,
     moyenne_performance: moyennePerf,
     composantes,
+  };
+};
+
+/**
+ * Cibles annuelles par province issues des fiches d'operationnalisation du
+ * Cadre de resultats v6 (21/08/2026). Regroupees par code d'indicateur.
+ */
+export const getCadreCiblesProvinciales = async (): Promise<Record<string, CibleProvinciale[]>> => {
+  const [rows] = await getDbPool().query<Array<RowDataPacket & {
+    code_cadre: string;
+    province: string;
+    annee: number;
+    cible: number | string;
+  }>>(
+    `SELECT code_cadre, province, annee, cible
+       FROM cadre_cibles_provinciales
+      ORDER BY code_cadre, province, annee`,
+  );
+
+  const grouped: Record<string, CibleProvinciale[]> = {};
+  for (const row of rows) {
+    const cible = Number(row.cible);
+    if (!Number.isFinite(cible)) {
+      continue;
+    }
+    if (!grouped[row.code_cadre]) {
+      grouped[row.code_cadre] = [];
+    }
+    grouped[row.code_cadre].push({
+      code_cadre: row.code_cadre,
+      province: row.province,
+      annee: Number(row.annee),
+      cible,
+    });
+  }
+
+  return grouped;
+};
+
+/** Contours GeoJSON des provinces (SIG) — null tant qu'ils ne sont pas importes. */
+export const getProvincesContours = async (): Promise<ProvinceContour[]> => {
+  const [rows] = await getDbPool().query<Array<RowDataPacket & {
+    id: string;
+    name: string;
+    code: string;
+    coord_lat: number | string | null;
+    coord_lng: number | string | null;
+    contour_geojson: unknown | null;
+  }>>(
+    `SELECT id, name, code, coord_lat, coord_lng, contour_geojson
+       FROM provinces
+      ORDER BY name`,
+  );
+
+  return rows.map((row) => ({
+    id: row.id,
+    name: mapProvinceName(row.name),
+    code: row.code,
+    coord_lat: row.coord_lat === null ? null : Number(row.coord_lat),
+    coord_lng: row.coord_lng === null ? null : Number(row.coord_lng),
+    contour_geojson: typeof row.contour_geojson === 'string'
+      ? JSON.parse(row.contour_geojson)
+      : row.contour_geojson,
+  }));
+};
+
+/** Enregistre le contour GeoJSON (Polygon/MultiPolygon WGS84) d'une province. */
+export const setProvinceContour = async (id: string, geometry: unknown): Promise<boolean> => {
+  const [result] = await getDbPool().query<ResultSetHeader>(
+    `UPDATE provinces SET contour_geojson = CAST(? AS jsonb) WHERE id = ?`,
+    [JSON.stringify(geometry), id],
+  );
+  return Number((result as ResultSetHeader).affectedRows ?? 0) > 0;
+};
+
+// ==================== SIG / GÉOSPATIAL ====================
+
+export interface SigSite {
+  id: number;
+  nom: string;
+  type: string;
+  province: string;
+  territoire: string;
+  lat: number;
+  lng: number;
+  statut: string;
+  details: Record<string, unknown>;
+  created_at: string | null;
+}
+
+export interface SigSiteInput {
+  nom: string;
+  type: string;
+  province: string;
+  territoire?: string;
+  lat: number;
+  lng: number;
+  statut?: string;
+  details?: Record<string, unknown>;
+}
+
+export interface SigTerritoireDensite {
+  province: string;
+  territoire: string;
+  beneficiaires: number;
+  femmes: number;
+  villages: number;
+}
+
+export interface SigOverview {
+  sites_total: number;
+  sites_par_type: Record<string, number>;
+  provinces_couvertes: number;
+  territoires_couverts: number;
+  villages_couverts: number;
+}
+
+const SIG_SITE_TYPES = ['bureau', 'perimetre', 'route', 'marche', 'cler', 'entrepot', 'autre'];
+
+const SIG_SITES_SEED: SigSiteInput[] = [
+  { nom: 'Bureau provincial UPEP Kwilu', type: 'bureau', province: 'Kwilu', territoire: 'Bandundu', lat: -3.3167, lng: 17.3667, statut: 'operationnel' },
+  { nom: 'Périmètre maraîcher de Masi-Manimba', type: 'perimetre', province: 'Kwilu', territoire: 'Masi-Manimba', lat: -4.7772, lng: 17.9124, statut: 'operationnel', details: { superficie_ha: 120 } },
+  { nom: 'Axe routier Kikwit–Idiofa (42 km)', type: 'route', province: 'Kwilu', territoire: 'Idiofa', lat: -4.9673, lng: 19.0125, statut: 'en_travaux', details: { km: 42 } },
+  { nom: 'Marché rural de Tshikapa', type: 'marche', province: 'Kasaï', territoire: 'Tshikapa', lat: -6.4167, lng: 20.8, statut: 'operationnel' },
+  { nom: 'CLER de Kamonia', type: 'cler', province: 'Kasaï', territoire: 'Kamonia', lat: -7.05, lng: 21.0, statut: 'operationnel', details: { km_couverts: 65 } },
+  { nom: 'Entrepôt semencier de Kananga', type: 'entrepot', province: 'Kasaï Central', territoire: 'Kananga', lat: -5.8975, lng: 22.45, statut: 'operationnel', details: { capacite_tonnes: 800 } },
+  { nom: 'Périmètre rizicole de Dibaya', type: 'perimetre', province: 'Kasaï Central', territoire: 'Dibaya', lat: -6.5089, lng: 22.8681, statut: 'en_travaux', details: { superficie_ha: 85 } },
+  { nom: 'Bureau provincial UPEP Kongo Central', type: 'bureau', province: 'Kongo Central', territoire: 'Matadi', lat: -5.8167, lng: 13.4833, statut: 'operationnel' },
+  { nom: 'Marché transfrontalier de Lufu', type: 'marche', province: 'Kongo Central', territoire: 'Songololo', lat: -5.6333, lng: 14.05, statut: 'operationnel' },
+  { nom: 'Axe routier Boma–Tshela (58 km)', type: 'route', province: 'Kongo Central', territoire: 'Tshela', lat: -4.9833, lng: 12.9333, statut: 'planifie', details: { km: 58 } },
+];
+
+const ensureSigTables = async (): Promise<void> => {
+  if (!sigTablesReady) {
+    sigTablesReady = (async () => {
+      await getDbPool().query(
+        `CREATE TABLE IF NOT EXISTS sig_sites (
+          id integer GENERATED ALWAYS AS IDENTITY,
+          nom varchar(255) NOT NULL,
+          type varchar(32) NOT NULL DEFAULT 'autre',
+          province varchar(128) NOT NULL,
+          territoire varchar(128) NOT NULL DEFAULT '',
+          lat double precision NOT NULL,
+          lng double precision NOT NULL,
+          statut varchar(32) NOT NULL DEFAULT 'operationnel',
+          details jsonb NOT NULL DEFAULT '{}'::jsonb,
+          created_at timestamptz NOT NULL DEFAULT now(),
+          updated_at timestamptz NOT NULL DEFAULT now(),
+          PRIMARY KEY (id)
+        )`,
+      );
+      await getDbPool().query('CREATE INDEX IF NOT EXISTS idx_sig_sites_province ON sig_sites (province)');
+      await getDbPool().query('CREATE INDEX IF NOT EXISTS idx_sig_sites_type ON sig_sites (type)');
+
+      const [countRows] = await getDbPool().query<CountRow[]>('SELECT COUNT(*) AS total FROM sig_sites');
+      if (Number(countRows[0]?.total ?? 0) === 0) {
+        const placeholders = SIG_SITES_SEED.map(() => '(?, ?, ?, ?, ?, ?, ?, CAST(? AS jsonb))').join(', ');
+        const values = SIG_SITES_SEED.flatMap((site) => [
+          site.nom,
+          site.type,
+          site.province,
+          site.territoire ?? '',
+          site.lat,
+          site.lng,
+          site.statut ?? 'operationnel',
+          JSON.stringify(site.details ?? {}),
+        ]);
+        await getDbPool().query<ResultSetHeader>(
+          `INSERT INTO sig_sites (nom, type, province, territoire, lat, lng, statut, details) VALUES ${placeholders}`,
+          values,
+        );
+      }
+    })().catch((error) => {
+      sigTablesReady = null;
+      throw error;
+    });
+  }
+
+  await sigTablesReady;
+};
+
+interface SigSiteRow extends RowDataPacket {
+  id: number;
+  nom: string;
+  type: string;
+  province: string;
+  territoire: string;
+  lat: number | string;
+  lng: number | string;
+  statut: string;
+  details: unknown;
+  created_at: string | Date | null;
+}
+
+const mapSigSiteRow = (row: SigSiteRow): SigSite => ({
+  id: Number(row.id),
+  nom: row.nom,
+  type: row.type,
+  province: row.province,
+  territoire: row.territoire,
+  lat: Number(row.lat),
+  lng: Number(row.lng),
+  statut: row.statut,
+  details: (typeof row.details === 'string' ? JSON.parse(row.details) : row.details ?? {}) as Record<string, unknown>,
+  created_at: toIsoString(row.created_at),
+});
+
+export const getSigSites = async (filters: { province?: string; type?: string } = {}): Promise<SigSite[]> => {
+  await ensureSigTables();
+
+  const clauses: string[] = [];
+  const params: unknown[] = [];
+  if (filters.province) {
+    clauses.push('province = ?');
+    params.push(filters.province);
+  }
+  if (filters.type) {
+    clauses.push('type = ?');
+    params.push(filters.type);
+  }
+  const whereSql = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
+
+  const [rows] = await getDbPool().query<SigSiteRow[]>(
+    `SELECT id, nom, type, province, territoire, lat, lng, statut, details, created_at
+       FROM sig_sites ${whereSql}
+      ORDER BY province, nom`,
+    params,
+  );
+  return rows.map(mapSigSiteRow);
+};
+
+export const createSigSite = async (input: SigSiteInput): Promise<SigSite> => {
+  await ensureSigTables();
+
+  const type = SIG_SITE_TYPES.includes(input.type) ? input.type : 'autre';
+  const [result] = await getDbPool().query<ResultSetHeader>(
+    `INSERT INTO sig_sites (nom, type, province, territoire, lat, lng, statut, details)
+     VALUES (?, ?, ?, ?, ?, ?, ?, CAST(? AS jsonb))`,
+    [
+      input.nom,
+      type,
+      input.province,
+      input.territoire ?? '',
+      input.lat,
+      input.lng,
+      input.statut ?? 'operationnel',
+      JSON.stringify(input.details ?? {}),
+    ],
+  );
+
+  const [rows] = await getDbPool().query<SigSiteRow[]>(
+    `SELECT id, nom, type, province, territoire, lat, lng, statut, details, created_at
+       FROM sig_sites WHERE id = ?`,
+    [Number((result as ResultSetHeader).insertId)],
+  );
+  return mapSigSiteRow(rows[0]);
+};
+
+export const deleteSigSite = async (id: number): Promise<boolean> => {
+  await ensureSigTables();
+  const [result] = await getDbPool().query<ResultSetHeader>('DELETE FROM sig_sites WHERE id = ?', [id]);
+  return Number((result as ResultSetHeader).affectedRows ?? 0) > 0;
+};
+
+/** Densité de bénéficiaires par territoire, issue du registre RNA. */
+export const getSigTerritoiresDensite = async (province?: string): Promise<SigTerritoireDensite[]> => {
+  const source = await resolveBeneficiaireSource();
+
+  const params: unknown[] = [];
+  let whereSql = `WHERE NULLIF(TRIM(COALESCE(${source.territoireExpr}, '')), '') IS NOT NULL`;
+  if (province) {
+    whereSql += ` AND TRIM(COALESCE(${source.provinceExpr}, '')) = ?`;
+    params.push(province);
+  }
+
+  const [rows] = await getDbPool().query<Array<RowDataPacket & {
+    province: string | null;
+    territoire: string | null;
+    beneficiaires: number | string;
+    femmes: number | string;
+    villages: number | string;
+  }>>(
+    `SELECT
+        TRIM(COALESCE(${source.provinceExpr}, '')) AS province,
+        TRIM(COALESCE(${source.territoireExpr}, '')) AS territoire,
+        COUNT(*) AS beneficiaires,
+        SUM(CASE WHEN LOWER(COALESCE(${source.sexeExpr}, '')) LIKE 'f%' THEN 1 ELSE 0 END) AS femmes,
+        COUNT(DISTINCT NULLIF(TRIM(COALESCE(${source.villageExpr}, '')), '')) AS villages
+       FROM ${source.tableRef}
+       ${whereSql}
+       GROUP BY TRIM(COALESCE(${source.provinceExpr}, '')), TRIM(COALESCE(${source.territoireExpr}, ''))
+       ORDER BY COUNT(*) DESC`,
+    params,
+  );
+
+  return rows.map((row) => ({
+    province: mapProvinceName(String(row.province ?? '')),
+    territoire: String(row.territoire ?? ''),
+    beneficiaires: Number(row.beneficiaires ?? 0),
+    femmes: Number(row.femmes ?? 0),
+    villages: Number(row.villages ?? 0),
+  }));
+};
+
+/** Synthèse SIG : sites du projet + couverture géographique du RNA. */
+export const getSigOverview = async (): Promise<SigOverview> => {
+  await ensureSigTables();
+  const source = await resolveBeneficiaireSource();
+  const pool = getDbPool();
+
+  const [sitesRows, couvertureRows] = await Promise.all([
+    pool.query<Array<RowDataPacket & { type: string; total: number | string }>>(
+      'SELECT type, COUNT(*) AS total FROM sig_sites GROUP BY type',
+    ),
+    pool.query<Array<RowDataPacket & { provinces: number | string; territoires: number | string; villages: number | string }>>(
+      `SELECT
+          COUNT(DISTINCT NULLIF(TRIM(COALESCE(${source.provinceExpr}, '')), '')) AS provinces,
+          COUNT(DISTINCT NULLIF(TRIM(COALESCE(${source.territoireExpr}, '')), '')) AS territoires,
+          COUNT(DISTINCT NULLIF(TRIM(COALESCE(${source.villageExpr}, '')), '')) AS villages
+         FROM ${source.tableRef}`,
+    ),
+  ]);
+
+  const sitesParType: Record<string, number> = {};
+  let sitesTotal = 0;
+  for (const row of sitesRows[0]) {
+    const total = Number(row.total ?? 0);
+    sitesParType[String(row.type)] = total;
+    sitesTotal += total;
+  }
+
+  return {
+    sites_total: sitesTotal,
+    sites_par_type: sitesParType,
+    provinces_couvertes: Number(couvertureRows[0][0]?.provinces ?? 0),
+    territoires_couverts: Number(couvertureRows[0][0]?.territoires ?? 0),
+    villages_couverts: Number(couvertureRows[0][0]?.villages ?? 0),
   };
 };
 
@@ -8260,13 +8474,13 @@ const buildIndicatorDescription = (indicateur: IndicateurCadre): string => {
 };
 
 const getAliasMeta = (indicateur: IndicateurCadre): IndicateurAliasMeta => {
-  const mapped = CADRE_TO_ALIAS_MAP[indicateur.code];
-
-  if (mapped) {
-    return mapped;
-  }
-
   if (indicateur.est_odp) {
+    if (indicateur.code.startsWith('IODP1')) {
+      return { code: indicateur.code, composanteId: 2, composanteLabel: 'Acces au marche' };
+    }
+    if (indicateur.code.startsWith('IODP2')) {
+      return { code: indicateur.code, composanteId: 1, composanteLabel: 'Productivite agricole' };
+    }
     return {
       code: indicateur.code,
       composanteId: 3,
@@ -8290,7 +8504,7 @@ const getAliasMeta = (indicateur: IndicateurCadre): IndicateurAliasMeta => {
 };
 
 const getYearValueForUi = (indicateur: IndicateurCadre, year: CadreYear = '2025') => {
-  const currentYear = indicateur.annees[year];
+  const currentYear = indicateur.annees[year] ?? ANNEE_CADRE_VIDE;
   const cibleAnnuelle = currentYear.prevu ?? 0;
   const cibleFinale = indicateur.final_prevu ?? cibleAnnuelle;
   const cible = cibleFinale > 0 ? cibleFinale : cibleAnnuelle;
@@ -8336,11 +8550,14 @@ const mapCadreToLegacyIndicateur = (indicateur: IndicateurCadre, year: CadreYear
 };
 
 const mapCadreToHistorique = (indicateur: IndicateurCadre): HistoriqueValeur[] => {
-  const years: CadreYear[] = ['2023', '2024', '2025', '2026'];
-  return years.map((year) => ({
-    periode: year,
-    valeur: indicateur.annees[year].realise ?? indicateur.annees[year].prevu ?? 0,
-  }));
+  const years: CadreYear[] = ['2023', '2024', '2025', '2026', '2027'];
+  return years.map((year) => {
+    const annee = indicateur.annees[year] ?? ANNEE_CADRE_VIDE;
+    return {
+      periode: year,
+      valeur: annee.realise ?? annee.prevu ?? 0,
+    };
+  });
 };
 
 const mapCadreToDatabaseItem = (indicateur: IndicateurCadre, year: CadreYear = '2025'): IndicateurDatabaseItem => {
@@ -8422,7 +8639,7 @@ export const getLegacyHistorique = async (id: number): Promise<HistoriqueValeur[
 export const getIndicateursDashboardData = async (): Promise<DashboardData> => {
   const indicateurs = await getLegacyIndicateurs({ type: 'iodp' });
   const iodp1 = indicateurs.find((indicateur) => indicateur.code === 'IODP1.1') ?? indicateurs[0];
-  const iodp2 = indicateurs.find((indicateur) => indicateur.code === 'IODP2.1') ?? indicateurs[1] ?? iodp1;
+  const iodp2 = indicateurs.find((indicateur) => indicateur.code === 'IODP2.1.1') ?? indicateurs[1] ?? iodp1;
   const iodp3 = indicateurs.find((indicateur) => indicateur.code === 'IODP2.3') ?? indicateurs[2] ?? iodp2;
   const buildEvolution = (indicateurId: number) => ['2023', '2024', '2025', '2026'].map((year) => ({ year, value: 0 }));
   const cadre = await getCadreResultats({ odp: true });
@@ -8432,7 +8649,8 @@ export const getIndicateursDashboardData = async (): Promise<DashboardData> => {
   const resolveSeries = (id: number) => months.map((month) => {
     const indicateur = byId.get(id);
     const year = month as CadreYear;
-    return indicateur?.annees[year].realise ?? indicateur?.annees[year].prevu ?? 0;
+    const annee = indicateur?.annees[year] ?? ANNEE_CADRE_VIDE;
+    return annee.realise ?? annee.prevu ?? 0;
   });
 
   const iodp1Series = iodp1 ? resolveSeries(iodp1.id) : [0, 0, 0, 0];
@@ -8545,11 +8763,22 @@ export const isDatabaseConnectivityError = (error: unknown): boolean => {
     ? String((error as { code?: string }).code)
     : '';
 
-  return ['ECONNREFUSED', 'PROTOCOL_CONNECTION_LOST', 'ENOTFOUND', 'ETIMEDOUT'].includes(code);
+  // Codes socket (identiques mysql2/pg, tous deux au-dessus de net/tls) + codes
+  // SQLSTATE pg de la famille connection_exception / cannot_connect_now.
+  const injoignable = [
+    'ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'PROTOCOL_CONNECTION_LOST',
+  ].includes(code);
+
+  // Une connexion coupée en cours de route est une indisponibilité, pas une
+  // erreur applicative : sans ce cas, la route répondait 500 là où le client
+  // attend un 503 et sait réessayer. C'était la cause des 500 sur
+  // /api/notifications.
+  return injoignable || estConnexionPerdue(error);
 };
 
 const ROLE_PERMISSIONS: Record<AppRole, string[]> = {
-  admin: ['*'],
+  super_admin: ['*'],
+  admin: ['dashboard', 'indicateurs', 'beneficiaires', 'collecte', 'rapports', 'suivi', 'risques', 'sig'],
   uncp: ['dashboard', 'indicateurs', 'beneficiaires', 'collecte', 'rapports', 'admin'],
   upep: ['dashboard', 'indicateurs', 'beneficiaires', 'collecte'],
   ot: ['collecte', 'beneficiaires', 'rapports_terrain'],
@@ -8558,10 +8787,1220 @@ const ROLE_PERMISSIONS: Record<AppRole, string[]> = {
 };
 
 const ROLE_LABELS: Record<AppRole, string> = {
+  super_admin: 'Super administrateur',
   admin: 'Administrateur',
   uncp: 'UNCP',
   upep: 'UPEP',
   ot: 'Opérateur Technique',
   partenaire: 'Partenaire',
   invite: 'Invité',
+};
+
+// ==================== AGENT COLLECTEUR ====================
+
+export interface SqlAgentProfil {
+  id: number;
+  nom: string;
+  prenom: string;
+  matricule: string;
+  telephone: string;
+  email: string;
+  province: string;
+  territoire: string;
+  zones: string[];
+  statut: 'actif' | 'inactif';
+  date_affectation: string;
+  superviseur: string;
+}
+
+export interface SqlAgentFormulaire {
+  id: string;
+  nom: string;
+  version: string;
+}
+
+export interface SqlAgentCollecte {
+  id: number;
+  formulaire_id: string;
+  formulaire_nom: string;
+  donnees: Record<string, unknown>;
+  latitude: number | null;
+  longitude: number | null;
+  photos: string[];
+  date_collecte: string;
+  synced: boolean;
+  beneficiaire?: { nom: string; prenom: string; rna_id: string } | null;
+}
+
+export interface SqlAgentCollecteInput {
+  formulaire_id: string | number;
+  id_beneficiaire?: number | null;
+  donnees?: Record<string, unknown>;
+  latitude?: number | null;
+  longitude?: number | null;
+  photos?: string[];
+}
+
+export interface SqlAgentStats {
+  total_collectes: number;
+  collectes_semaine: number;
+  collectes_mois: number;
+  formulaires_disponibles: number;
+  beneficiaires_couverts: number;
+  taux_synchronisation: number;
+  dernier_sync: string | null;
+}
+
+interface FormulaireRow extends RowDataPacket {
+  id_formulaire: number;
+  nom_formulaire: string;
+  version: string | null;
+}
+
+interface CollecteRow extends RowDataPacket {
+  id_donnee: number;
+  id_formulaire: number;
+  nom_formulaire: string;
+  donnees_json: Record<string, unknown> | null;
+  latitude: string | number | null;
+  longitude: string | number | null;
+  photos_urls: string | null;
+  est_synchro: boolean;
+  date_collecte: string;
+  beneficiaire_nom: string | null;
+  beneficiaire_prenom: string | null;
+  beneficiaire_rna: string | null;
+}
+
+const FORMULAIRE_SEED = [
+  { nom_formulaire: 'Enquête production agricole', version: '1.0', json_schema: { champs: ['culture', 'superficie', 'production'] } },
+  { nom_formulaire: 'Adoption des technologies', version: '1.0', json_schema: { champs: ['technologies', 'satisfaction'] } },
+  { nom_formulaire: 'Enregistrement de plainte', version: '1.0', json_schema: { champs: ['type_plainte', 'description'] } },
+  { nom_formulaire: 'Évaluation de satisfaction', version: '1.0', json_schema: { champs: ['note', 'commentaire'] } },
+];
+
+const ensureAgentTables = async (): Promise<void> => {
+  if (!agentTablesReady) {
+    agentTablesReady = (async () => {
+      // (schéma déjà créé par supabase/migrations/0001_schema_initial_from_mysql.sql — tables "formulaire"/"donnee_collectee")
+
+      const [countRows] = await getDbPool().query<CountRow[]>('SELECT COUNT(*) AS total FROM formulaire');
+      if (Number(countRows[0]?.total ?? 0) === 0) {
+        const placeholders = FORMULAIRE_SEED.map(() => '(?, ?, ?, ?)').join(', ');
+        const values = FORMULAIRE_SEED.flatMap((item) => [item.nom_formulaire, item.version, JSON.stringify(item.json_schema), true]);
+        await getDbPool().query(
+          `INSERT INTO formulaire (nom_formulaire, version, json_schema, est_actif) VALUES ${placeholders}`,
+          values,
+        );
+      }
+    })().catch((error) => {
+      agentTablesReady = null;
+      throw error;
+    });
+  }
+
+  await agentTablesReady;
+};
+
+const mapCollecteRow = (row: CollecteRow): SqlAgentCollecte => ({
+  id: row.id_donnee,
+  formulaire_id: String(row.id_formulaire),
+  formulaire_nom: row.nom_formulaire,
+  donnees: row.donnees_json ?? {},
+  latitude: row.latitude === null ? null : Number(row.latitude),
+  longitude: row.longitude === null ? null : Number(row.longitude),
+  photos: row.photos_urls ? JSON.parse(row.photos_urls) : [],
+  date_collecte: toIsoString(row.date_collecte) ?? new Date().toISOString(),
+  synced: Boolean(row.est_synchro),
+  beneficiaire: row.beneficiaire_rna
+    ? { nom: row.beneficiaire_nom ?? '', prenom: row.beneficiaire_prenom ?? '', rna_id: row.beneficiaire_rna }
+    : null,
+});
+
+export const getAgentProfil = async (userId: number): Promise<SqlAgentProfil | null> => {
+  const [rows] = await getDbPool().query<Array<RowDataPacket & {
+    id: number; nom: string; prenom: string | null; email: string; telephone: string | null;
+    province: string | null; territoire: string | null; est_actif: boolean; created_at: string;
+  }>>(
+    `SELECT u.id_utilisateur AS id, u.nom, u.prenom, u.email, u.telephone,
+            l.province, l.territoire, u.est_actif, u.created_at
+     FROM utilisateur u
+     LEFT JOIN localisation l ON l.id_localisation = u.id_localisation
+     WHERE u.id_utilisateur = ?
+     LIMIT 1`,
+    [userId],
+  );
+
+  const row = rows[0];
+  if (!row) {
+    return null;
+  }
+
+  return {
+    id: row.id,
+    nom: row.nom,
+    prenom: row.prenom ?? '',
+    matricule: `AC-${row.id}`,
+    telephone: row.telephone ?? '',
+    email: row.email,
+    province: row.province ?? '',
+    territoire: row.territoire ?? '',
+    zones: [],
+    statut: row.est_actif ? 'actif' : 'inactif',
+    date_affectation: toDateOnly(row.created_at),
+    superviseur: '',
+  };
+};
+
+export const getAgentFormulaires = async (): Promise<SqlAgentFormulaire[]> => {
+  await ensureAgentTables();
+
+  const [rows] = await getDbPool().query<FormulaireRow[]>(
+    'SELECT id_formulaire, nom_formulaire, version FROM formulaire WHERE est_actif = true ORDER BY nom_formulaire ASC',
+  );
+
+  return rows.map((row) => ({
+    id: String(row.id_formulaire),
+    nom: row.nom_formulaire,
+    version: row.version ?? '1.0',
+  }));
+};
+
+export const getAgentCollectes = async (
+  userId: number,
+  params: { page?: number; limit?: number; synced?: boolean } = {},
+): Promise<{ data: SqlAgentCollecte[]; total: number; page: number; totalPages: number }> => {
+  await ensureAgentTables();
+
+  const page = Math.max(Number(params.page ?? 0), 0);
+  const limit = Math.max(Number(params.limit ?? 10), 1);
+  const offset = page * limit;
+
+  const clauses = ['dc.id_agent = ?'];
+  const values: Array<string | number | boolean> = [userId];
+
+  if (typeof params.synced === 'boolean') {
+    clauses.push('dc.est_synchro = ?');
+    values.push(params.synced);
+  }
+
+  const whereClause = `WHERE ${clauses.join(' AND ')}`;
+
+  const [countRows] = await getDbPool().query<CountRow[]>(
+    `SELECT COUNT(*) AS total FROM donnee_collectee dc ${whereClause}`,
+    values,
+  );
+
+  const [rows] = await getDbPool().query<CollecteRow[]>(
+    `SELECT dc.id_donnee, dc.id_formulaire, f.nom_formulaire, dc.donnees_json, dc.latitude, dc.longitude,
+            dc.photos_urls, dc.est_synchro, dc.date_collecte,
+            b.nom AS beneficiaire_nom, b.prenom AS beneficiaire_prenom, b.rna_id AS beneficiaire_rna
+     FROM donnee_collectee dc
+     LEFT JOIN formulaire f ON f.id_formulaire = dc.id_formulaire
+     LEFT JOIN beneficiaire b ON b.id_beneficiaire = dc.id_beneficiaire
+     ${whereClause}
+     ORDER BY dc.date_collecte DESC
+     LIMIT ? OFFSET ?`,
+    [...values, limit, offset],
+  );
+
+  const total = Number(countRows[0]?.total ?? 0);
+
+  return {
+    data: rows.map(mapCollecteRow),
+    total,
+    page,
+    totalPages: Math.ceil(total / limit),
+  };
+};
+
+export const createAgentCollecte = async (userId: number, input: SqlAgentCollecteInput): Promise<SqlAgentCollecte> => {
+  await ensureAgentTables();
+
+  const [result] = await getDbPool().execute<ResultSetHeader>(
+    `INSERT INTO donnee_collectee (id_formulaire, id_beneficiaire, id_agent, donnees_json, latitude, longitude, photos_urls, est_synchro, date_collecte)
+     VALUES (?, ?, ?, ?, ?, ?, ?, false, NOW())`,
+    [
+      Number(input.formulaire_id),
+      input.id_beneficiaire ?? null,
+      userId,
+      JSON.stringify(input.donnees ?? {}),
+      input.latitude ?? null,
+      input.longitude ?? null,
+      JSON.stringify(input.photos ?? []),
+    ],
+  );
+
+  const [rows] = await getDbPool().query<CollecteRow[]>(
+    `SELECT dc.id_donnee, dc.id_formulaire, f.nom_formulaire, dc.donnees_json, dc.latitude, dc.longitude,
+            dc.photos_urls, dc.est_synchro, dc.date_collecte,
+            b.nom AS beneficiaire_nom, b.prenom AS beneficiaire_prenom, b.rna_id AS beneficiaire_rna
+     FROM donnee_collectee dc
+     LEFT JOIN formulaire f ON f.id_formulaire = dc.id_formulaire
+     LEFT JOIN beneficiaire b ON b.id_beneficiaire = dc.id_beneficiaire
+     WHERE dc.id_donnee = ?
+     LIMIT 1`,
+    [result.insertId],
+  );
+
+  return mapCollecteRow(rows[0]);
+};
+
+export const getAgentBeneficiaires = async (
+  params: { search?: string; page?: number; limit?: number } = {},
+): Promise<{ data: Array<{ id: number; nom: string; prenom: string; rna_id: string; sexe: string; village: string; telephone: string }>; total: number; page: number; totalPages: number }> => {
+  const page = Math.max(Number(params.page ?? 0), 0);
+  const limit = Math.max(Number(params.limit ?? 10), 1);
+  const offset = page * limit;
+  const search = params.search?.trim();
+
+  const whereClause = search ? 'WHERE (b.nom ILIKE ? OR b.prenom ILIKE ? OR b.rna_id ILIKE ?)' : '';
+  const values = search ? [`%${search}%`, `%${search}%`, `%${search}%`] : [];
+
+  const [countRows] = await getDbPool().query<CountRow[]>(
+    `SELECT COUNT(*) AS total FROM beneficiaire b ${whereClause}`,
+    values,
+  );
+
+  const [rows] = await getDbPool().query<Array<RowDataPacket & {
+    id: number; nom: string; prenom: string | null; rna_id: string | null; sexe: string | null;
+    village: string | null; telephone: string | null;
+  }>>(
+    `SELECT b.id_beneficiaire AS id, b.nom, b.prenom, b.rna_id, b.sexe, l.village, b.telephone
+     FROM beneficiaire b
+     LEFT JOIN localisation l ON l.id_localisation = b.id_localisation
+     ${whereClause}
+     ORDER BY b.nom ASC
+     LIMIT ? OFFSET ?`,
+    [...values, limit, offset],
+  );
+
+  const total = Number(countRows[0]?.total ?? 0);
+
+  return {
+    data: rows.map((row) => ({
+      id: row.id,
+      nom: row.nom,
+      prenom: row.prenom ?? '',
+      rna_id: row.rna_id ?? '',
+      sexe: row.sexe ?? '',
+      village: row.village ?? '',
+      telephone: row.telephone ?? '',
+    })),
+    total,
+    page,
+    totalPages: Math.ceil(total / limit),
+  };
+};
+
+export const getAgentStats = async (userId: number): Promise<SqlAgentStats> => {
+  await ensureAgentTables();
+
+  const pool = getDbPool();
+
+  const [[totalRow], [semaineRow], [moisRow], [formsRow], [beneficiairesRow], [syncRow]] = await Promise.all([
+    pool.query<CountRow[]>('SELECT COUNT(*) AS total FROM donnee_collectee WHERE id_agent = ?', [userId]),
+    pool.query<CountRow[]>(
+      `SELECT COUNT(*) AS total FROM donnee_collectee WHERE id_agent = ? AND date_collecte >= NOW() - INTERVAL '7 days'`,
+      [userId],
+    ),
+    pool.query<CountRow[]>(
+      `SELECT COUNT(*) AS total FROM donnee_collectee WHERE id_agent = ? AND date_collecte >= date_trunc('month', NOW())`,
+      [userId],
+    ),
+    pool.query<CountRow[]>('SELECT COUNT(*) AS total FROM formulaire WHERE est_actif = true'),
+    pool.query<CountRow[]>(
+      'SELECT COUNT(DISTINCT id_beneficiaire) AS total FROM donnee_collectee WHERE id_agent = ? AND id_beneficiaire IS NOT NULL',
+      [userId],
+    ),
+    pool.query<Array<RowDataPacket & { total: number; synced: number; last_sync: string | null }>>(
+      `SELECT COUNT(*) AS total, SUM(CASE WHEN est_synchro THEN 1 ELSE 0 END) AS synced,
+              MAX(CASE WHEN est_synchro THEN date_collecte END) AS last_sync
+       FROM donnee_collectee WHERE id_agent = ?`,
+      [userId],
+    ),
+  ]);
+
+  const total = Number(totalRow[0]?.total ?? 0);
+  const synced = Number(syncRow[0]?.synced ?? 0);
+
+  return {
+    total_collectes: total,
+    collectes_semaine: Number(semaineRow[0]?.total ?? 0),
+    collectes_mois: Number(moisRow[0]?.total ?? 0),
+    formulaires_disponibles: Number(formsRow[0]?.total ?? 0),
+    beneficiaires_couverts: Number(beneficiairesRow[0]?.total ?? 0),
+    taux_synchronisation: total > 0 ? Math.round((synced / total) * 100) : 0,
+    dernier_sync: syncRow[0]?.last_sync ? toIsoString(syncRow[0].last_sync) : null,
+  };
+};
+
+export const syncAgentCollectes = async (userId: number): Promise<number> => {
+  const [result] = await getDbPool().execute<ResultSetHeader>(
+    'UPDATE donnee_collectee SET est_synchro = true WHERE id_agent = ? AND est_synchro = false',
+    [userId],
+  );
+
+  return result.affectedRows ?? 0;
+};
+
+// ==================== ENVIRONNEMENT / VBG ====================
+
+export interface SqlIndicateurEnvironnemental {
+  id: number | string;
+  code: string;
+  nom: string;
+  description: string;
+  categorie: 'environnement' | 'vbg' | 'eas' | 'hs';
+  unite: string;
+  valeur_actuelle: number;
+  valeur_cible: number;
+  progression: number;
+  tendance: 'hausse' | 'baisse' | 'stable';
+  periode: string;
+  observations?: string;
+}
+
+export interface SqlPlainteSensible {
+  id: number;
+  numero: string;
+  type: 'VBG' | 'EAS' | 'HS';
+  description: string;
+  date_reception: string;
+  statut: 'recue' | 'en_cours' | 'referee' | 'traitee' | 'cloturee';
+  delai_traitement: number;
+  province: string;
+  territoire: string;
+  est_confidentiel: boolean;
+  prise_en_charge?: string;
+  resolution?: string;
+}
+
+export interface SqlFormationSensibilisation {
+  id: number;
+  titre: string;
+  type: 'formation' | 'sensibilisation';
+  date: string;
+  lieu: string;
+  participants: number;
+  participants_femmes: number;
+  participants_hommes: number;
+  province: string;
+  formateur: string;
+  evaluation?: number;
+}
+
+export interface SqlFormationInput {
+  titre: string;
+  type?: 'formation' | 'sensibilisation';
+  date?: string;
+  lieu?: string;
+  province?: string;
+  formateur?: string;
+}
+
+export interface SqlStatsEnvironnement {
+  entreprises_conformes: number;
+  total_entreprises: number;
+  taux_conformite: number;
+  eies_realisees: number;
+  eies_prevues: number;
+  personnes_formees: number;
+  personnes_sensibilisees: number;
+  plaintes_vbg: number;
+  plaintes_eas: number;
+  plaintes_hs: number;
+  plaintes_traitees: number;
+  delai_moyen_traitement: number;
+  code_conduite_signes: number;
+  total_personnel: number;
+}
+
+interface IndicateurEnvironnementalRow extends RowDataPacket {
+  id: number;
+  code: string;
+  nom: string;
+  description: string | null;
+  categorie: string;
+  unite: string;
+  valeur_actuelle: string | number;
+  valeur_cible: string | number;
+  tendance: string;
+  periode: string | null;
+  observations: string | null;
+}
+
+interface FormationRow extends RowDataPacket {
+  id_formation: number;
+  titre: string;
+  type: string;
+  date_debut: string;
+  lieu: string | null;
+  province: string | null;
+  formateur: string | null;
+  participants: string | number;
+  participants_femmes: string | number;
+  participants_hommes: string | number;
+  evaluation: string | number | null;
+}
+
+const INDICATEUR_ENVIRONNEMENTAL_SEED = [
+  { code: 'ENV-01', nom: 'Entreprises respectant les dispositions environnementales', description: "Pourcentage d'entreprises conformes aux clauses environnementales sur leurs chantiers", categorie: 'environnement', unite: '%', valeur_actuelle: 78, valeur_cible: 100, tendance: 'hausse', periode: 'T1 2026', observations: 'Progression significative depuis le dernier trimestre' },
+  { code: 'ENV-01-N', nom: 'Entreprises respectant les dispositions environnementales (effectif)', description: "Nombre d'entreprises conformes sur le nombre total suivi", categorie: 'environnement', unite: 'nombre', valeur_actuelle: 42, valeur_cible: 54, tendance: 'hausse', periode: 'T1 2026', observations: null },
+  { code: 'ENV-02', nom: "Études d'impact environnemental réalisées", description: "Nombre de sous-projets ayant fait l'objet d'une ÉIES avec PGES mis en œuvre", categorie: 'environnement', unite: 'nombre', valeur_actuelle: 12, valeur_cible: 20, tendance: 'hausse', periode: 'T1 2026', observations: null },
+  { code: 'CODE-01', nom: 'Code de conduite signé', description: 'Pourcentage du personnel ayant signé le code de conduite', categorie: 'environnement', unite: '%', valeur_actuelle: 92, valeur_cible: 100, tendance: 'hausse', periode: 'T1 2026', observations: null },
+  { code: 'CODE-01-N', nom: 'Code de conduite signé (effectif)', description: 'Nombre de membres du personnel ayant signé le code de conduite', categorie: 'environnement', unite: 'nombre', valeur_actuelle: 156, valeur_cible: 170, tendance: 'hausse', periode: 'T1 2026', observations: null },
+];
+
+const ensureEnvironnementTables = async (): Promise<void> => {
+  if (!environnementTablesReady) {
+    environnementTablesReady = (async () => {
+      // (schéma créé par supabase/migrations/0002_agent_environnement_aide_configuration.sql — table "indicateur_environnemental")
+
+      const [countRows] = await getDbPool().query<CountRow[]>('SELECT COUNT(*) AS total FROM indicateur_environnemental');
+      if (Number(countRows[0]?.total ?? 0) === 0) {
+        const placeholders = INDICATEUR_ENVIRONNEMENTAL_SEED.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
+        const values = INDICATEUR_ENVIRONNEMENTAL_SEED.flatMap((item) => [
+          item.code, item.nom, item.description, item.categorie, item.unite,
+          item.valeur_actuelle, item.valeur_cible, item.tendance, item.periode, item.observations,
+        ]);
+        await getDbPool().query(
+          `INSERT INTO indicateur_environnemental (code, nom, description, categorie, unite, valeur_actuelle, valeur_cible, tendance, periode, observations) VALUES ${placeholders}`,
+          values,
+        );
+      }
+    })().catch((error) => {
+      environnementTablesReady = null;
+      throw error;
+    });
+  }
+
+  await environnementTablesReady;
+};
+
+const mapIndicateurEnvironnementalRow = (row: IndicateurEnvironnementalRow): SqlIndicateurEnvironnemental => {
+  const actuelle = Number(row.valeur_actuelle);
+  const cible = Number(row.valeur_cible);
+
+  return {
+    id: row.id,
+    code: row.code,
+    nom: row.nom,
+    description: row.description ?? '',
+    categorie: row.categorie as SqlIndicateurEnvironnemental['categorie'],
+    unite: row.unite,
+    valeur_actuelle: actuelle,
+    valeur_cible: cible,
+    progression: cible > 0 ? Math.round((actuelle / cible) * 100) : 0,
+    tendance: row.tendance as SqlIndicateurEnvironnemental['tendance'],
+    periode: row.periode ?? '',
+    observations: row.observations ?? undefined,
+  };
+};
+
+export const getEnvironnementIndicateurs = async (): Promise<SqlIndicateurEnvironnemental[]> => {
+  await ensureEnvironnementTables();
+  await ensureGrmTables();
+
+  const [rows] = await getDbPool().query<IndicateurEnvironnementalRow[]>(
+    'SELECT id, code, nom, description, categorie, unite, valeur_actuelle, valeur_cible, tendance, periode, observations FROM indicateur_environnemental ORDER BY code ASC',
+  );
+
+  const [plaintesRows] = await getDbPool().query<Array<RowDataPacket & { type: string; total: number; traitees: number }>>(
+    `SELECT type, COUNT(*) AS total, SUM(CASE WHEN statut = 'traitee' THEN 1 ELSE 0 END) AS traitees
+     FROM grm_plaintes WHERE type IN ('VBG', 'EAS', 'HS') GROUP BY type`,
+  );
+
+  const plaintesByType = new Map(plaintesRows.map((row) => [row.type, { total: Number(row.total), traitees: Number(row.traitees) }]));
+  const vbg = plaintesByType.get('VBG') ?? { total: 0, traitees: 0 };
+  const eas = plaintesByType.get('EAS') ?? { total: 0, traitees: 0 };
+  const hs = plaintesByType.get('HS') ?? { total: 0, traitees: 0 };
+
+  const dynamicIndicateurs: SqlIndicateurEnvironnemental[] = [
+    { id: 'VBG-01', code: 'VBG-01', nom: 'Plaintes VBG reçues', description: 'Nombre de plaintes liées aux Violences Basées sur le Genre', categorie: 'vbg', unite: 'nombre', valeur_actuelle: vbg.total, valeur_cible: 0, progression: 0, tendance: 'stable', periode: 'cumul' },
+    { id: 'VBG-02', code: 'VBG-02', nom: 'Plaintes VBG traitées', description: 'Pourcentage de plaintes VBG traitées', categorie: 'vbg', unite: '%', valeur_actuelle: vbg.total > 0 ? Math.round((vbg.traitees / vbg.total) * 100) : 0, valeur_cible: 100, progression: vbg.total > 0 ? Math.round((vbg.traitees / vbg.total) * 100) : 0, tendance: 'stable', periode: 'cumul' },
+    { id: 'EAS-01', code: 'EAS-01', nom: "Cas d'Exploitation et Abus Sexuels", description: "Nombre de cas d'EAS signalés", categorie: 'eas', unite: 'nombre', valeur_actuelle: eas.total, valeur_cible: 0, progression: 0, tendance: 'stable', periode: 'cumul' },
+    { id: 'HS-01', code: 'HS-01', nom: 'Cas de Harcèlement Sexuel', description: 'Nombre de cas de harcèlement sexuel signalés', categorie: 'hs', unite: 'nombre', valeur_actuelle: hs.total, valeur_cible: 0, progression: 0, tendance: 'stable', periode: 'cumul' },
+  ];
+
+  return [...rows.map(mapIndicateurEnvironnementalRow), ...dynamicIndicateurs];
+};
+
+export const getEnvironnementPlaintes = async (
+  filters: { type?: string; statut?: string; province?: string } = {},
+): Promise<SqlPlainteSensible[]> => {
+  await ensureGrmTables();
+
+  const clauses = [`type IN ('VBG', 'EAS', 'HS')`];
+  const values: string[] = [];
+
+  if (filters.type) {
+    clauses.push('type = ?');
+    values.push(filters.type);
+  }
+  if (filters.statut) {
+    clauses.push('statut = ?');
+    values.push(filters.statut);
+  }
+  if (filters.province) {
+    clauses.push('province = ?');
+    values.push(filters.province);
+  }
+
+  const [rows] = await getDbPool().query<PlainteRow[]>(
+    `SELECT id, numero_plainte, type, description, province, territoire, village, beneficiaire_nom, beneficiaire_rna,
+            date_reception, date_traitement, statut, delai_traite, prise_en_charge, resolution, est_confidentiel,
+            created_at, updated_at
+     FROM grm_plaintes
+     WHERE ${clauses.join(' AND ')}
+     ORDER BY date_reception DESC`,
+    values,
+  );
+
+  return rows.map((row) => {
+    const plainte = mapPlainteRow(row);
+    return {
+      id: plainte.id,
+      numero: plainte.numero_plainte,
+      type: plainte.type as SqlPlainteSensible['type'],
+      description: plainte.description,
+      date_reception: plainte.date_reception,
+      statut: plainte.statut,
+      delai_traitement: plainte.delai_traite ?? 0,
+      province: plainte.province,
+      territoire: plainte.territoire,
+      est_confidentiel: plainte.est_confidentiel,
+      prise_en_charge: plainte.prise_en_charge,
+      resolution: plainte.resolution,
+    };
+  });
+};
+
+export const getEnvironnementFormations = async (): Promise<SqlFormationSensibilisation[]> => {
+  const [rows] = await getDbPool().query<FormationRow[]>(
+    `SELECT f.id_formation, f.titre, f.type, f.date_debut, f.lieu, f.province, f.formateur,
+            COUNT(pf.id_participation) FILTER (WHERE pf.present) AS participants,
+            COUNT(pf.id_participation) FILTER (WHERE pf.present AND b.sexe = 'F') AS participants_femmes,
+            COUNT(pf.id_participation) FILTER (WHERE pf.present AND b.sexe = 'M') AS participants_hommes,
+            ROUND(AVG(pf.note_test)) AS evaluation
+     FROM formation f
+     LEFT JOIN participation_formation pf ON pf.id_formation = f.id_formation
+     LEFT JOIN beneficiaire b ON b.id_beneficiaire = pf.id_beneficiaire
+     GROUP BY f.id_formation, f.titre, f.type, f.date_debut, f.lieu, f.province, f.formateur
+     ORDER BY f.date_debut DESC`,
+  );
+
+  return rows.map((row) => ({
+    id: row.id_formation,
+    titre: row.titre,
+    type: row.type as SqlFormationSensibilisation['type'],
+    date: toDateOnly(row.date_debut),
+    lieu: row.lieu ?? '',
+    participants: Number(row.participants ?? 0),
+    participants_femmes: Number(row.participants_femmes ?? 0),
+    participants_hommes: Number(row.participants_hommes ?? 0),
+    province: row.province ?? '',
+    formateur: row.formateur ?? '',
+    evaluation: row.evaluation !== null ? Number(row.evaluation) : undefined,
+  }));
+};
+
+export const addEnvironnementFormation = async (input: SqlFormationInput): Promise<SqlFormationSensibilisation> => {
+  const [themeRows] = await getDbPool().query<Array<RowDataPacket & { id_theme: number }>>(
+    "SELECT id_theme FROM theme_formation WHERE nom_theme = 'VBG et sensibilisation' LIMIT 1",
+  );
+
+  let themeId = themeRows[0]?.id_theme;
+  if (!themeId) {
+    const [insertTheme] = await getDbPool().execute<ResultSetHeader>(
+      "INSERT INTO theme_formation (nom_theme) VALUES ('VBG et sensibilisation')",
+    );
+    themeId = insertTheme.insertId;
+  }
+
+  const dateDebut = input.date?.trim() || new Date().toISOString().slice(0, 10);
+  const code = `FORM-${Date.now()}`;
+
+  const [result] = await getDbPool().execute<ResultSetHeader>(
+    `INSERT INTO formation (code_formation, id_theme, titre, date_debut, date_fin, lieu, province, formateur, type)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      code,
+      themeId,
+      input.titre.trim(),
+      dateDebut,
+      dateDebut,
+      input.lieu?.trim() || '',
+      input.province?.trim() || '',
+      input.formateur?.trim() || '',
+      input.type ?? 'formation',
+    ],
+  );
+
+  return {
+    id: result.insertId,
+    titre: input.titre.trim(),
+    type: input.type ?? 'formation',
+    date: dateDebut,
+    lieu: input.lieu?.trim() || '',
+    participants: 0,
+    participants_femmes: 0,
+    participants_hommes: 0,
+    province: input.province?.trim() || '',
+    formateur: input.formateur?.trim() || '',
+  };
+};
+
+export const getEnvironnementStats = async (): Promise<SqlStatsEnvironnement> => {
+  await ensureEnvironnementTables();
+  await ensureGrmTables();
+
+  const [indicateurRows] = await getDbPool().query<IndicateurEnvironnementalRow[]>(
+    'SELECT id, code, nom, description, categorie, unite, valeur_actuelle, valeur_cible, tendance, periode, observations FROM indicateur_environnemental',
+  );
+  const indicateursByCode = new Map(indicateurRows.map((row) => [row.code, row]));
+
+  const [plaintesRows] = await getDbPool().query<Array<RowDataPacket & { type: string; total: number; traitees: number; delai_moyen: number | null }>>(
+    `SELECT type, COUNT(*) AS total, SUM(CASE WHEN statut = 'traitee' THEN 1 ELSE 0 END) AS traitees,
+            AVG(delai_traite) FILTER (WHERE statut = 'traitee') AS delai_moyen
+     FROM grm_plaintes WHERE type IN ('VBG', 'EAS', 'HS') GROUP BY type`,
+  );
+
+  const [formationRows] = await getDbPool().query<Array<RowDataPacket & { type: string; total: number }>>(
+    `SELECT f.type, COUNT(pf.id_participation) FILTER (WHERE pf.present) AS total
+     FROM formation f
+     LEFT JOIN participation_formation pf ON pf.id_formation = f.id_formation
+     GROUP BY f.type`,
+  );
+
+  const byType = new Map(plaintesRows.map((row) => [row.type, row]));
+  const vbg = byType.get('VBG');
+  const eas = byType.get('EAS');
+  const hs = byType.get('HS');
+  const totalTraitees = [vbg, eas, hs].reduce((sum, row) => sum + Number(row?.traitees ?? 0), 0);
+  const delaiValues = [vbg, eas, hs].map((row) => Number(row?.delai_moyen ?? 0)).filter((value) => value > 0);
+
+  const formationsByType = new Map(formationRows.map((row) => [row.type, Number(row.total ?? 0)]));
+
+  const envN = indicateursByCode.get('ENV-01-N');
+  const env = indicateursByCode.get('ENV-01');
+  const eies = indicateursByCode.get('ENV-02');
+  const codeN = indicateursByCode.get('CODE-01-N');
+
+  return {
+    entreprises_conformes: Number(envN?.valeur_actuelle ?? 0),
+    total_entreprises: Number(envN?.valeur_cible ?? 0),
+    taux_conformite: Number(env?.valeur_actuelle ?? 0),
+    eies_realisees: Number(eies?.valeur_actuelle ?? 0),
+    eies_prevues: Number(eies?.valeur_cible ?? 0),
+    personnes_formees: formationsByType.get('formation') ?? 0,
+    personnes_sensibilisees: formationsByType.get('sensibilisation') ?? 0,
+    plaintes_vbg: Number(vbg?.total ?? 0),
+    plaintes_eas: Number(eas?.total ?? 0),
+    plaintes_hs: Number(hs?.total ?? 0),
+    plaintes_traitees: totalTraitees,
+    delai_moyen_traitement: delaiValues.length > 0 ? Math.round(delaiValues.reduce((sum, value) => sum + value, 0) / delaiValues.length) : 0,
+    code_conduite_signes: Number(codeN?.valeur_actuelle ?? 0),
+    total_personnel: Number(codeN?.valeur_cible ?? 0),
+  };
+};
+
+// ==================== AIDE / DOCUMENTATION ====================
+
+export interface SqlArticleAide {
+  id: number;
+  titre: string;
+  contenu: string;
+  categorie: 'guide' | 'faq' | 'tutoriel' | 'support';
+  tags: string[];
+  date_creation: string;
+  date_modification: string;
+  auteur: string;
+}
+
+export interface SqlFAQ {
+  id: number;
+  question: string;
+  reponse: string;
+  categorie: string;
+  popularite: number;
+}
+
+export interface SqlTutoriel {
+  id: number;
+  titre: string;
+  description: string;
+  duree: string;
+  niveau: 'debutant' | 'intermediaire' | 'avance';
+  video_url?: string;
+  etapes: Array<{ titre: string; description: string }>;
+}
+
+export interface SqlContactSupport {
+  email: string;
+  telephone: string;
+  horaires: string;
+  urgence: string;
+}
+
+const AIDE_ARTICLE_SEED = [
+  { titre: "Manuel d'utilisation du système PNDA S&E", contenu: 'Guide complet pour prendre en main le système...', categorie: 'guide', tags: ['débutant', 'général'], auteur: 'UNCP' },
+  { titre: 'Guide de collecte de données terrain', contenu: 'Procédures pour la collecte des données...', categorie: 'guide', tags: ['collecte', 'terrain'], auteur: 'UNCP' },
+  { titre: "Guide d'utilisation du calculateur d'indicateurs", contenu: "Comment utiliser le calculateur d'indicateurs...", categorie: 'guide', tags: ['indicateurs', 'calcul'], auteur: 'UNCP' },
+];
+
+const AIDE_FAQ_SEED = [
+  { question: 'Comment créer un compte utilisateur ?', reponse: 'La création de compte se fait par l\'administrateur...', categorie: 'compte', popularite: 45 },
+  { question: 'Comment synchroniser les données hors ligne ?', reponse: 'Cliquez sur le bouton "Synchroniser" en haut à droite...', categorie: 'collecte', popularite: 38 },
+  { question: 'Comment exporter un rapport ?', reponse: 'Dans la section Rapports, utilisez le bouton Exporter...', categorie: 'rapports', popularite: 32 },
+  { question: 'Comment traiter une plainte VBG ?', reponse: 'Les plaintes VBG sont confidentielles et traitées...', categorie: 'grm', popularite: 28 },
+  { question: 'Comment modifier un bénéficiaire ?', reponse: 'Dans la base de données bénéficiaires, cliquez sur Modifier...', categorie: 'beneficiaires', popularite: 25 },
+  { question: "Que faire en cas d'erreur technique ?", reponse: 'Contactez le support technique via le formulaire...', categorie: 'support', popularite: 20 },
+];
+
+const AIDE_TUTORIEL_SEED = [
+  { titre: 'Premiers pas avec le système', description: 'Découvrez les fonctionnalités principales du PNDA S&E', duree: '10 min', niveau: 'debutant', video_url: '', etapes: [
+    { titre: 'Connexion', description: "Utilisez vos identifiants fournis par l'administrateur" },
+    { titre: 'Navigation', description: 'Explorez les différents menus et tableaux de bord' },
+    { titre: 'Première collecte', description: 'Apprenez à enregistrer vos premières données' },
+  ] },
+  { titre: 'Collecte de données hors ligne', description: "Utilisez l'application mobile sans connexion internet", duree: '15 min', niveau: 'intermediaire', video_url: '', etapes: [
+    { titre: 'Téléchargement', description: "Installez l'application PWA sur votre appareil" },
+    { titre: 'Formulaires', description: 'Sélectionnez le formulaire approprié' },
+    { titre: 'Synchronisation', description: 'Synchronisez vos données quand la connexion revient' },
+  ] },
+  { titre: 'Analyse des indicateurs', description: "Maîtrisez le calculateur d'indicateurs et les tableaux de bord", duree: '20 min', niveau: 'avance', video_url: '', etapes: [
+    { titre: 'Indicateurs IODP', description: 'Comprenez les objectifs de développement' },
+    { titre: 'Calcul automatique', description: 'Utilisez le calculateur avec les formules' },
+    { titre: 'Visualisation', description: 'Interprétez les graphiques et tendances' },
+  ] },
+];
+
+const ensureAideTables = async (): Promise<void> => {
+  if (!aideTablesReady) {
+    aideTablesReady = (async () => {
+      // (schéma créé par supabase/migrations/0002_agent_environnement_aide_configuration.sql)
+
+      const [articleCount] = await getDbPool().query<CountRow[]>('SELECT COUNT(*) AS total FROM aide_article');
+      if (Number(articleCount[0]?.total ?? 0) === 0) {
+        const placeholders = AIDE_ARTICLE_SEED.map(() => '(?, ?, ?, ?, ?)').join(', ');
+        const values = AIDE_ARTICLE_SEED.flatMap((item) => [item.titre, item.contenu, item.categorie, JSON.stringify(item.tags), item.auteur]);
+        await getDbPool().query(`INSERT INTO aide_article (titre, contenu, categorie, tags, auteur) VALUES ${placeholders}`, values);
+      }
+
+      const [faqCount] = await getDbPool().query<CountRow[]>('SELECT COUNT(*) AS total FROM aide_faq');
+      if (Number(faqCount[0]?.total ?? 0) === 0) {
+        const placeholders = AIDE_FAQ_SEED.map(() => '(?, ?, ?, ?)').join(', ');
+        const values = AIDE_FAQ_SEED.flatMap((item) => [item.question, item.reponse, item.categorie, item.popularite]);
+        await getDbPool().query(`INSERT INTO aide_faq (question, reponse, categorie, popularite) VALUES ${placeholders}`, values);
+      }
+
+      const [tutorielCount] = await getDbPool().query<CountRow[]>('SELECT COUNT(*) AS total FROM aide_tutoriel');
+      if (Number(tutorielCount[0]?.total ?? 0) === 0) {
+        const placeholders = AIDE_TUTORIEL_SEED.map(() => '(?, ?, ?, ?, ?, ?)').join(', ');
+        const values = AIDE_TUTORIEL_SEED.flatMap((item) => [item.titre, item.description, item.duree, item.niveau, item.video_url, JSON.stringify(item.etapes)]);
+        await getDbPool().query(`INSERT INTO aide_tutoriel (titre, description, duree, niveau, video_url, etapes) VALUES ${placeholders}`, values);
+      }
+    })().catch((error) => {
+      aideTablesReady = null;
+      throw error;
+    });
+  }
+
+  await aideTablesReady;
+};
+
+export const getAideGuides = async (): Promise<SqlArticleAide[]> => {
+  await ensureAideTables();
+
+  const [rows] = await getDbPool().query<Array<RowDataPacket & {
+    id: number; titre: string; contenu: string; categorie: string; tags: string[] | string;
+    auteur: string | null; created_at: string; updated_at: string;
+  }>>('SELECT id, titre, contenu, categorie, tags, auteur, created_at, updated_at FROM aide_article ORDER BY created_at DESC');
+
+  return rows.map((row) => ({
+    id: row.id,
+    titre: row.titre,
+    contenu: row.contenu,
+    categorie: row.categorie as SqlArticleAide['categorie'],
+    tags: Array.isArray(row.tags) ? row.tags : JSON.parse(row.tags || '[]'),
+    date_creation: toDateOnly(row.created_at),
+    date_modification: toDateOnly(row.updated_at),
+    auteur: row.auteur ?? '',
+  }));
+};
+
+export const getAideGuideById = async (id: number): Promise<SqlArticleAide | null> => {
+  const guides = await getAideGuides();
+  return guides.find((guide) => guide.id === id) ?? null;
+};
+
+export const getAideFAQ = async (categorie?: string): Promise<SqlFAQ[]> => {
+  await ensureAideTables();
+
+  const whereClause = categorie ? 'WHERE categorie = ?' : '';
+  const values = categorie ? [categorie] : [];
+
+  const [rows] = await getDbPool().query<Array<RowDataPacket & { id: number; question: string; reponse: string; categorie: string; popularite: number }>>(
+    `SELECT id, question, reponse, categorie, popularite FROM aide_faq ${whereClause} ORDER BY popularite DESC`,
+    values,
+  );
+
+  return rows.map((row) => ({ id: row.id, question: row.question, reponse: row.reponse, categorie: row.categorie, popularite: Number(row.popularite) }));
+};
+
+export const getAideTutoriels = async (): Promise<SqlTutoriel[]> => {
+  await ensureAideTables();
+
+  const [rows] = await getDbPool().query<Array<RowDataPacket & {
+    id: number; titre: string; description: string | null; duree: string | null; niveau: string;
+    video_url: string | null; etapes: Array<{ titre: string; description: string }> | string;
+  }>>('SELECT id, titre, description, duree, niveau, video_url, etapes FROM aide_tutoriel ORDER BY id ASC');
+
+  return rows.map((row) => ({
+    id: row.id,
+    titre: row.titre,
+    description: row.description ?? '',
+    duree: row.duree ?? '',
+    niveau: row.niveau as SqlTutoriel['niveau'],
+    video_url: row.video_url ?? undefined,
+    etapes: Array.isArray(row.etapes) ? row.etapes : JSON.parse(row.etapes || '[]'),
+  }));
+};
+
+export const getAideTutorielById = async (id: number): Promise<SqlTutoriel | null> => {
+  const tutoriels = await getAideTutoriels();
+  return tutoriels.find((tutoriel) => tutoriel.id === id) ?? null;
+};
+
+export const getAideContactSupport = (): SqlContactSupport => ({
+  email: process.env.SUPPORT_EMAIL || 'support@pnda.cd',
+  telephone: process.env.SUPPORT_TELEPHONE || '+243 123 456 789',
+  horaires: 'Lundi - Vendredi, 8h00 - 17h00',
+  urgence: process.env.SUPPORT_URGENCE || '+243 999 888 777 (24h/24)',
+});
+
+export const createAideDemande = async (input: { sujet: string; message: string; email: string }): Promise<void> => {
+  await ensureAideTables();
+
+  await getDbPool().execute(
+    'INSERT INTO aide_demande (sujet, message, email) VALUES (?, ?, ?)',
+    [input.sujet.trim(), input.message.trim(), input.email.trim().toLowerCase()],
+  );
+};
+
+export const searchAide = async (query: string): Promise<Array<{ type: 'guide' | 'faq' | 'tutoriel'; titre: string; extrait: string }>> => {
+  await ensureAideTables();
+
+  const like = `%${query}%`;
+  const pool = getDbPool();
+
+  const [[guideRows], [faqRows], [tutorielRows]] = await Promise.all([
+    pool.query<Array<RowDataPacket & { titre: string; contenu: string }>>(
+      'SELECT titre, contenu FROM aide_article WHERE titre ILIKE ? OR contenu ILIKE ? LIMIT 5',
+      [like, like],
+    ),
+    pool.query<Array<RowDataPacket & { question: string; reponse: string }>>(
+      'SELECT question, reponse FROM aide_faq WHERE question ILIKE ? OR reponse ILIKE ? LIMIT 5',
+      [like, like],
+    ),
+    pool.query<Array<RowDataPacket & { titre: string; description: string | null }>>(
+      'SELECT titre, description FROM aide_tutoriel WHERE titre ILIKE ? OR description ILIKE ? LIMIT 5',
+      [like, like],
+    ),
+  ]);
+
+  return [
+    ...guideRows.map((row) => ({ type: 'guide' as const, titre: row.titre, extrait: row.contenu.slice(0, 120) })),
+    ...faqRows.map((row) => ({ type: 'faq' as const, titre: row.question, extrait: row.reponse.slice(0, 120) })),
+    ...tutorielRows.map((row) => ({ type: 'tutoriel' as const, titre: row.titre, extrait: (row.description ?? '').slice(0, 120) })),
+  ];
+};
+
+// ==================== CONFIGURATION ====================
+
+export interface SqlConfigurationGenerale {
+  nomProjet: string;
+  sigle: string;
+  anneeDebut: string;
+  anneeFin: string;
+  devise: string;
+  langueInterface: string;
+  fuseau: string;
+  budgetTotal: number;
+  tauxChangeUSD: number;
+}
+
+export interface SqlConfigurationAlertes {
+  seuilRisqueFaible: number;
+  seuilRisqueMoyen: number;
+  seuilRisqueEleve: number;
+  emailNotifications: boolean;
+  seuilTauxRealisation: number;
+  alertesBudget: boolean;
+  alertesEcheances: boolean;
+  delaiRappelJours: number;
+}
+
+export interface SqlConfigurationIntegration {
+  apiBackendUrl: string;
+  timeoutRequetes: number;
+  modehorsLigne: boolean;
+  syncAutoActivee: boolean;
+  intervalSyncMinutes: number;
+  powerbiWorkspaceId: string;
+  powerbiReportId: string;
+}
+
+export interface SqlConfiguration {
+  generale: SqlConfigurationGenerale;
+  alertes: SqlConfigurationAlertes;
+  integration: SqlConfigurationIntegration;
+  provincesActives: string[];
+}
+
+const CONFIGURATION_SEED: Record<string, unknown> = {
+  generale: {
+    nomProjet: 'Programme National de Développement Agricole',
+    sigle: 'PNDA-SE',
+    anneeDebut: '2023',
+    anneeFin: '2028',
+    devise: 'USD',
+    langueInterface: 'fr',
+    fuseau: 'Africa/Kinshasa',
+    budgetTotal: 500000000,
+    tauxChangeUSD: 2800,
+  },
+  alertes: {
+    seuilRisqueFaible: 25,
+    seuilRisqueMoyen: 50,
+    seuilRisqueEleve: 75,
+    emailNotifications: true,
+    seuilTauxRealisation: 70,
+    alertesBudget: true,
+    alertesEcheances: true,
+    delaiRappelJours: 7,
+  },
+  integration: {
+    apiBackendUrl: 'http://localhost:3000/api',
+    timeoutRequetes: 30,
+    modehorsLigne: true,
+    syncAutoActivee: true,
+    intervalSyncMinutes: 60,
+    powerbiWorkspaceId: '',
+    powerbiReportId: '',
+  },
+  provincesActives: ['Kwilu', 'Kongo Central', 'Kasaï', 'Haut-Lomami', 'Tanganyika', 'Maniema'],
+};
+
+const ensureConfigurationTables = async (): Promise<void> => {
+  if (!configurationTablesReady) {
+    configurationTablesReady = (async () => {
+      // (schéma créé par supabase/migrations/0002_agent_environnement_aide_configuration.sql — table "configuration")
+
+      const [countRows] = await getDbPool().query<CountRow[]>('SELECT COUNT(*) AS total FROM configuration');
+      if (Number(countRows[0]?.total ?? 0) === 0) {
+        const entries = Object.entries(CONFIGURATION_SEED);
+        const placeholders = entries.map(() => '(?, ?)').join(', ');
+        const values = entries.flatMap(([cle, valeur]) => [cle, JSON.stringify(valeur)]);
+        await getDbPool().query(`INSERT INTO configuration (cle, valeur) VALUES ${placeholders}`, values);
+      }
+    })().catch((error) => {
+      configurationTablesReady = null;
+      throw error;
+    });
+  }
+
+  await configurationTablesReady;
+};
+
+export const getConfiguration = async (): Promise<SqlConfiguration> => {
+  await ensureConfigurationTables();
+
+  const [rows] = await getDbPool().query<Array<RowDataPacket & { cle: string; valeur: unknown }>>(
+    'SELECT cle, valeur FROM configuration',
+  );
+
+  const parsed = Object.fromEntries(
+    rows.map((row) => [row.cle, typeof row.valeur === 'string' ? JSON.parse(row.valeur) : row.valeur]),
+  );
+
+  return {
+    generale: parsed.generale ?? CONFIGURATION_SEED.generale,
+    alertes: parsed.alertes ?? CONFIGURATION_SEED.alertes,
+    integration: parsed.integration ?? CONFIGURATION_SEED.integration,
+    provincesActives: parsed.provincesActives ?? CONFIGURATION_SEED.provincesActives,
+  } as SqlConfiguration;
+};
+
+export const updateConfigurationSection = async (cle: string, valeur: unknown): Promise<void> => {
+  await ensureConfigurationTables();
+
+  await getDbPool().query(
+    `INSERT INTO configuration (cle, valeur, updated_at) VALUES (?, ?, NOW())
+     ON CONFLICT (cle) DO UPDATE SET valeur = EXCLUDED.valeur, updated_at = NOW()`,
+    [cle, JSON.stringify(valeur)],
+  );
+};
+
+// ==================== SUIVI DU PTBA ====================
+// Table ptba_activites créée/chargée par supabase/migrations/0004_cadre_v6_reel_ptba_2026.sql
+// (classeur « SUIVI DU PTBA 2026 »). Taux et écarts sont calculés, pas stockés.
+
+export interface SqlPtbaActivite {
+  id: number;
+  code: string | null;
+  activite: string;
+  indicateur_realisation: string | null;
+  prevu: number | null;
+  realise: number | null;
+  taux: number | null;
+  ecart: number | null;
+  commentaire: string | null;
+}
+
+export interface SqlPtbaSousComposante {
+  sous_composante: string;
+  taux_moyen: number | null;
+  activites: SqlPtbaActivite[];
+}
+
+export interface SqlPtbaComposante {
+  composante: string;
+  taux_moyen: number | null;
+  sous_composantes: SqlPtbaSousComposante[];
+}
+
+export interface SqlPtbaSuivi {
+  annee: number;
+  taux_global: number | null;
+  total_activites: number;
+  realisees: number;
+  en_cours: number;
+  non_demarrees: number;
+  composantes: SqlPtbaComposante[];
+}
+
+const calcPtbaTaux = (prevu: number | null, realise: number | null): number | null => {
+  if (prevu === null || prevu <= 0 || realise === null) {
+    return null;
+  }
+  return Math.round((realise / prevu) * 10000) / 100;
+};
+
+const moyenneTaux = (activites: SqlPtbaActivite[]): number | null => {
+  const taux = activites
+    .map((activite) => activite.taux)
+    .filter((valeur): valeur is number => valeur !== null);
+  if (taux.length === 0) {
+    return null;
+  }
+  return Math.round((taux.reduce((total, valeur) => total + valeur, 0) / taux.length) * 100) / 100;
+};
+
+export const getPtbaSuivi = async (annee = 2026): Promise<SqlPtbaSuivi> => {
+  const [rows] = await getDbPool().query<Array<RowDataPacket & {
+    id: number;
+    composante: string;
+    sous_composante: string;
+    code: string | null;
+    activite: string;
+    indicateur_realisation: string | null;
+    prevu: number | string | null;
+    realise: number | string | null;
+    commentaire: string | null;
+  }>>(
+    `SELECT id, composante, sous_composante, code, activite, indicateur_realisation,
+            prevu, realise, commentaire
+       FROM ptba_activites
+      WHERE annee = ?
+      ORDER BY ordre ASC`,
+    [annee],
+  );
+
+  const composantes: SqlPtbaComposante[] = [];
+  for (const row of rows) {
+    const prevu = parseNullableNumber(row.prevu);
+    const realise = parseNullableNumber(row.realise);
+    const activite: SqlPtbaActivite = {
+      id: row.id,
+      code: row.code,
+      activite: row.activite,
+      indicateur_realisation: row.indicateur_realisation,
+      prevu,
+      realise,
+      taux: calcPtbaTaux(prevu, realise),
+      ecart: prevu !== null && realise !== null ? realise - prevu : null,
+      commentaire: row.commentaire,
+    };
+
+    let composante = composantes[composantes.length - 1];
+    if (!composante || composante.composante !== row.composante) {
+      composante = { composante: row.composante, taux_moyen: null, sous_composantes: [] };
+      composantes.push(composante);
+    }
+    let sousComposante = composante.sous_composantes[composante.sous_composantes.length - 1];
+    if (!sousComposante || sousComposante.sous_composante !== row.sous_composante) {
+      sousComposante = { sous_composante: row.sous_composante, taux_moyen: null, activites: [] };
+      composante.sous_composantes.push(sousComposante);
+    }
+    sousComposante.activites.push(activite);
+  }
+
+  const toutes: SqlPtbaActivite[] = [];
+  for (const composante of composantes) {
+    const activitesComposante: SqlPtbaActivite[] = [];
+    for (const sousComposante of composante.sous_composantes) {
+      sousComposante.taux_moyen = moyenneTaux(sousComposante.activites);
+      activitesComposante.push(...sousComposante.activites);
+    }
+    composante.taux_moyen = moyenneTaux(activitesComposante);
+    toutes.push(...activitesComposante);
+  }
+
+  const avecTaux = toutes.filter((activite) => activite.taux !== null);
+  return {
+    annee,
+    taux_global: moyenneTaux(toutes),
+    total_activites: toutes.length,
+    realisees: avecTaux.filter((activite) => (activite.taux ?? 0) >= 100).length,
+    en_cours: avecTaux.filter((activite) => (activite.taux ?? 0) > 0 && (activite.taux ?? 0) < 100).length,
+    non_demarrees: avecTaux.filter((activite) => (activite.taux ?? 0) === 0).length,
+    composantes,
+  };
+};
+
+export interface PtbaActiviteUpdateInput {
+  prevu?: number | null;
+  realise?: number | null;
+  commentaire?: string | null;
+}
+
+export const updatePtbaActivite = async (id: number, input: PtbaActiviteUpdateInput): Promise<boolean> => {
+  const updates: string[] = [];
+  const values: Array<number | string | null> = [];
+
+  if ('prevu' in input) {
+    updates.push('prevu = ?');
+    values.push(input.prevu ?? null);
+  }
+  if ('realise' in input) {
+    updates.push('realise = ?');
+    values.push(input.realise ?? null);
+  }
+  if ('commentaire' in input) {
+    updates.push('commentaire = ?');
+    values.push(input.commentaire ?? null);
+  }
+
+  if (updates.length === 0) {
+    return false;
+  }
+
+  values.push(id);
+  const [result] = await getDbPool().query<ResultSetHeader>(
+    `UPDATE ptba_activites SET ${updates.join(', ')} WHERE id = ?`,
+    values,
+  );
+  return (result.affectedRows ?? 0) > 0;
 };

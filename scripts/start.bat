@@ -20,20 +20,16 @@ if errorlevel 1 (
     exit /b 1
 )
 
-:: Créer les dossiers si besoin
-if not exist backend mkdir backend
-if not exist frontend mkdir frontend
-
-:: Lancer le backend (dans une nouvelle fenêtre)
-echo 🚀 Lancement du backend...
-start cmd /k "cd /d "%CD%\backend" && set PORT=3000 && echo 🔧 Backend PNDA sur http://localhost:3000 && npm run dev"
+:: Lancer l'API connectee a Supabase (dans une nouvelle fenêtre)
+echo 🚀 Lancement de l'API Supabase...
+start "PNDA API" cmd /k "cd /d ""%CD%\server"" && set PORT=4000 && echo API PNDA sur http://localhost:4000 && npm run dev"
 
 :: Attendre
 timeout /t 3 /nobreak >nul
 
-:: Lancer le frontend (dans une nouvelle fenêtre)
+:: Lancer l'interface (dans une nouvelle fenêtre)
 echo 🚀 Lancement du frontend...
-start cmd /k "cd /d "%CD%\frontend" && echo 🎨 Frontend PNDA && npm run dev"
+start "PNDA Web" cmd /k "cd /d ""%CD%\web"" && echo Frontend PNDA && npm run dev"
 
 :: Attendre et ouvrir le navigateur
 timeout /t 5 /nobreak >nul
@@ -43,11 +39,10 @@ echo.
 echo ✅ Application lancee !
 echo.
 echo 📍 Frontend: http://localhost:5173
-echo 📍 Backend:  http://localhost:3000
+echo 📍 API Supabase: http://localhost:4000
 echo.
 echo 💡 Si les serveurs ne demarrent pas, 
 echo    installez d'abord les dependances:
-echo    cd backend ^&^& npm install
-echo    cd frontend ^&^& npm install
+echo    npm install
 echo.
 pause

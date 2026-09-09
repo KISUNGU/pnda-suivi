@@ -19,7 +19,7 @@ export const moduleGridStyles = {
   } satisfies SxProps<Theme>,
   elevatedPanel: {
     p: 2.5,
-    borderRadius: 3,
+    borderRadius: 2.1,
     minHeight: 168,
     height: '100%',
     display: 'flex',

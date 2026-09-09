@@ -32,7 +32,7 @@ import { GradientWidget } from '../../components/common/Widget/GradientWidget';
 import { IndicatorChart } from '../../components/common/Charts/IndicatorChart';
 import { ProvinceMap } from '../../components/common/Map/ProvinceMap';
 import provincialService from '../../services/provincial.service';
-import type { ProvinceData, PerformanceEvolution, ClassementProvincial } from '../../services/provincial.service';
+import type { ProvinceData, PerformanceEvolution } from '../../services/provincial.service';
 import { useNavigate } from 'react-router-dom';
 
 interface TabPanelProps {
@@ -66,7 +66,6 @@ export function ProvincialDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tabValue, setTabValue] = useState(0);
-  const [classement, setClassement] = useState<ClassementProvincial[]>([]);
   const [evolution, setEvolution] = useState<PerformanceEvolution[]>([]);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [exporting, setExporting] = useState(false);
@@ -75,16 +74,10 @@ export function ProvincialDashboard() {
     setLoading(true);
     setError(null);
     try {
-      const [provincesRes, classementRes] = await Promise.all([
-        provincialService.getAllProvinces(),
-        provincialService.getClassement(),
-      ]);
-
+      const provincesRes = await provincialService.getAllProvinces();
       const loadedProvinces = provincesRes.data ?? [];
-      const loadedClassement = classementRes.data ?? [];
 
       setProvinces(loadedProvinces);
-      setClassement(loadedClassement);
       setSelectedProvince((currentSelection) => {
         if (!loadedProvinces.length) {
           return null;
@@ -99,7 +92,6 @@ export function ProvincialDashboard() {
     } catch (err) {
       setError(getApiErrorMessage(err, 'Erreur lors du chargement des données provinciales'));
       setProvinces([]);
-      setClassement([]);
       setEvolution([]);
     } finally {
       setLoading(false);
@@ -175,7 +167,33 @@ export function ProvincialDashboard() {
     name: mois,
     ...rest,
   }));
-  const selectedClassement = classement.find(c => c.province === selectedProvince?.name);
+  const comparaison = provinces.map((province) => {
+    const total = province.beneficiaires.total;
+    const femmes = province.beneficiaires.femmes;
+    const jeunes = province.beneficiaires.jeunes;
+    return {
+      id: province.id,
+      name: province.name,
+      total,
+      femmes,
+      jeunes,
+      femmesPct: total > 0 ? Math.round((femmes / total) * 100) : 0,
+      jeunesPct: total > 0 ? Math.round((jeunes / total) * 100) : 0,
+    };
+  });
+  const comparaisonTaux = comparaison.map((ligne) => ({
+    name: ligne.name,
+    femmes: ligne.femmesPct,
+    jeunes: ligne.jeunesPct,
+  }));
+  const comparaisonVolumes = comparaison.map((ligne) => ({
+    name: ligne.name,
+    beneficiaires: ligne.total,
+  }));
+  const classementRna = [...comparaison]
+    .sort((a, b) => b.femmesPct - a.femmesPct || b.total - a.total)
+    .map((ligne, index) => ({ ...ligne, rang: index + 1 }));
+  const selectedRang = classementRna.find((ligne) => ligne.id === selectedProvince?.id);
 
   return (
     <Box>
@@ -183,7 +201,8 @@ export function ProvincialDashboard() {
         Tableau de bord provincial
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>
-        Vue provinciale issue du registre RNA des agriculteurs
+        Comparaison RNA province par province (bénéficiaires, part des femmes, part des jeunes).
+        Les taux d’exécution PTBA et cadre ne sont pas disponibles à cette échelle.
       </Typography>
 
       {/* Sélecteur de province et export */}
@@ -243,10 +262,111 @@ export function ProvincialDashboard() {
         </Grid>
       </Paper>
 
+      {comparaison.length > 0 && (
+        <Paper sx={{ p: 2.25, mb: 3, borderRadius: 2.1 }}>
+          <Typography variant="h6" sx={{ mb: 0.5, fontWeight: 600 }}>
+            Comparaison par province
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Taux calculés sur le registre RNA réel. Cliquez une ligne pour ouvrir le détail.
+          </Typography>
+          <TableContainer sx={{ mb: 3 }}>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Province</TableCell>
+                  <TableCell align="right">Bénéficiaires</TableCell>
+                  <TableCell align="right">Femmes</TableCell>
+                  <TableCell align="right">Part femmes</TableCell>
+                  <TableCell align="right">Jeunes</TableCell>
+                  <TableCell align="right">Part jeunes</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {comparaison.map((ligne) => {
+                  const selectionnee = selectedProvince?.id === ligne.id;
+                  return (
+                    <TableRow
+                      key={ligne.id}
+                      hover
+                      onClick={() => {
+                        const found = provinces.find((p) => p.id === ligne.id);
+                        if (found) setSelectedProvince(found);
+                      }}
+                      sx={{
+                        cursor: 'pointer',
+                        bgcolor: selectionnee ? 'action.selected' : undefined,
+                      }}
+                    >
+                      <TableCell>
+                        <Typography variant="body2" fontWeight={selectionnee ? 700 : 500}>
+                          {ligne.name}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                        {ligne.total.toLocaleString('fr-FR')}
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                        {ligne.femmes.toLocaleString('fr-FR')}
+                      </TableCell>
+                      <TableCell align="right">
+                        <Chip
+                          size="small"
+                          label={`${ligne.femmesPct}%`}
+                          color={ligne.femmesPct >= 50 ? 'success' : 'warning'}
+                          sx={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}
+                        />
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                        {ligne.jeunes.toLocaleString('fr-FR')}
+                      </TableCell>
+                      <TableCell align="right">
+                        <Chip
+                          size="small"
+                          label={`${ligne.jeunesPct}%`}
+                          color={ligne.jeunesPct >= 30 ? 'success' : 'warning'}
+                          sx={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          <Grid container spacing={2}>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <IndicatorChart
+                title="Part des femmes et des jeunes"
+                data={comparaisonTaux}
+                lines={[
+                  { key: 'femmes', name: 'Femmes', color: '#2E7D32' },
+                  { key: 'jeunes', name: 'Jeunes', color: '#3987E5' },
+                ]}
+                type="bar"
+                unit="%"
+                height={280}
+                showToggle={false}
+              />
+            </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <IndicatorChart
+                title="Bénéficiaires RNA"
+                data={comparaisonVolumes}
+                lines={[{ key: 'beneficiaires', name: 'Bénéficiaires', color: '#F5A623' }]}
+                type="bar"
+                unit=""
+                height={280}
+                showToggle={false}
+              />
+            </Grid>
+          </Grid>
+        </Paper>
+      )}
+
       {selectedProvince && (
         <>
-          {/* En-tête de la province */}
-          <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: '#F1F8E9' }}>
+          <Paper sx={{ p: 2.25, mb: 3, borderRadius: 2.1 }}>
             <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={2}>
               <Box>
                 <Typography variant="h5" fontWeight={700} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -257,10 +377,10 @@ export function ProvincialDashboard() {
                   Dernier suivi: {new Date(selectedProvince.dernier_suivi).toLocaleDateString()}
                 </Typography>
               </Box>
-              <Chip 
-                label={`Score de performance: ${classement.find(c => c.province === selectedProvince.name)?.score || 0}%`}
-                sx={{ 
-                  bgcolor: '#2E7D32', 
+              <Chip
+                label={`Part des femmes: ${selectedProvince.beneficiaires.total > 0 ? Math.round((selectedProvince.beneficiaires.femmes / selectedProvince.beneficiaires.total) * 100) : 0}%`}
+                sx={{
+                  bgcolor: '#2E7D32',
                   color: 'white',
                   fontWeight: 500,
                   fontSize: '1rem',
@@ -275,9 +395,9 @@ export function ProvincialDashboard() {
             <Grid size={{ xs: 12, sm: 6, md: 3 }}>
               <GradientWidget
                 title="Bénéficiaires"
-                value={selectedProvince.beneficiaires.total.toLocaleString()}
+                value={selectedProvince.beneficiaires.total.toLocaleString('fr-FR')}
                 icon={<GoogleIcon name="groups" size={32} />}
-                trend={{ value: selectedProvince.beneficiaires.cible > 0 ? Math.round((selectedProvince.beneficiaires.total / selectedProvince.beneficiaires.cible) * 100) : 0, direction: 'up', period: 'vs cible' }}
+                detail="Effectif RNA de la province"
                 color="primary"
                 onClick={() => navigate('/beneficiaires/rna')}
               />
@@ -285,7 +405,7 @@ export function ProvincialDashboard() {
             <Grid size={{ xs: 12, sm: 6, md: 3 }}>
               <GradientWidget
                 title="Femmes bénéficiaires"
-                value={selectedProvince.beneficiaires.femmes.toLocaleString()}
+                value={selectedProvince.beneficiaires.femmes.toLocaleString('fr-FR')}
                 icon={<GoogleIcon name="female" size={32} />}
                 trend={{ value: selectedProvince.beneficiaires.total > 0 ? Math.round((selectedProvince.beneficiaires.femmes / selectedProvince.beneficiaires.total) * 100) : 0, direction: 'up', period: '% du total' }}
                 color="success"
@@ -297,18 +417,19 @@ export function ProvincialDashboard() {
                 title="Territoires couverts"
                 value={selectedProvince.infrastructures.routes.rehabilitees}
                 icon={<GoogleIcon name="road" size={32} />}
-                trend={{ value: selectedProvince.infrastructures.routes.prevues > 0 ? Math.round((selectedProvince.infrastructures.routes.rehabilitees / selectedProvince.infrastructures.routes.prevues) * 100) : 0, direction: 'up', period: 'de la cible' }}
+                detail="Territoires avec au moins un enregistrement RNA"
                 color="info"
                 onClick={() => { setTabValue(1); }}
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 3 }}>
               <GradientWidget
-                title="Taux de couverture RNA"
-                value={`${selectedProvince.beneficiaires.cible > 0 ? Math.round((selectedProvince.beneficiaires.total / selectedProvince.beneficiaires.cible) * 100) : 0}%`}
-                icon={<GoogleIcon name="target" size={32} />}
+                title="Part des jeunes"
+                value={`${selectedProvince.beneficiaires.total > 0 ? Math.round((selectedProvince.beneficiaires.jeunes / selectedProvince.beneficiaires.total) * 100) : 0}%`}
+                icon={<GoogleIcon name="groups" size={32} />}
+                detail={`${selectedProvince.beneficiaires.jeunes.toLocaleString('fr-FR')} jeunes RNA`}
                 color="warning"
-                onClick={() => navigate('/indicateurs/ir')}
+                onClick={() => navigate('/beneficiaires/rna')}
               />
             </Grid>
           </Grid>
@@ -336,20 +457,6 @@ export function ProvincialDashboard() {
                   Indicateurs RNA
                 </Typography>
                 <Stack spacing={2}>
-                  <Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                      <Typography variant="caption">Taux d'atteinte de la cible RNA</Typography>
-                      <Typography variant="caption" fontWeight={500}>{selectedProvince.indicateurs.iodp1.actuel}% / {selectedProvince.indicateurs.iodp1.cible}%</Typography>
-                    </Box>
-                    <LinearProgress 
-                      variant="determinate" 
-                      value={(selectedProvince.indicateurs.iodp1.actuel / selectedProvince.indicateurs.iodp1.cible) * 100}
-                      sx={{ height: 8, borderRadius: 2 }}
-                    />
-                    <Typography variant="caption" color="success.main" sx={{ mt: 0.5, display: 'block' }}>
-                      ▲ {selectedProvince.indicateurs.iodp1.trend}% vs période précédente
-                    </Typography>
-                  </Box>
                   <Box>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
                       <Typography variant="caption">Part des femmes</Typography>
@@ -399,7 +506,7 @@ export function ProvincialDashboard() {
                   <Typography variant="subtitle1" fontWeight={600} gutterBottom>Profils culturaux déclarés</Typography>
                   <TableContainer component={Paper} variant="outlined">
                     <Table>
-                      <TableHead sx={{ bgcolor: '#F1F8E9' }}>
+                      <TableHead sx={{ bgcolor: 'action.hover' }}>
                         <TableRow>
                           <TableCell>Culture</TableCell>
                           <TableCell align="right">Actuel</TableCell>
@@ -494,25 +601,25 @@ export function ProvincialDashboard() {
                   <Typography variant="subtitle1" fontWeight={600} gutterBottom>Répartition des bénéficiaires</Typography>
                   <Grid container spacing={1}>
                     <Grid size={{ xs: 3 }}>
-                      <Card sx={{ textAlign: 'center', p: 2, bgcolor: '#FFEBEE' }}>
+                      <Card sx={{ textAlign: 'center', p: 2, bgcolor: 'rgba(208, 59, 59, 0.14)' }}>
                         <Typography variant="h5" fontWeight={700} color="error.main">{selectedProvince.beneficiaires.total}</Typography>
                         <Typography variant="caption">Total</Typography>
                       </Card>
                     </Grid>
                     <Grid size={{ xs: 3 }}>
-                      <Card sx={{ textAlign: 'center', p: 2, bgcolor: '#FFF3E0' }}>
+                      <Card sx={{ textAlign: 'center', p: 2, bgcolor: 'rgba(250, 178, 25, 0.14)' }}>
                         <Typography variant="h5" fontWeight={700} color="warning.main">{selectedProvince.beneficiaires.femmes}</Typography>
                         <Typography variant="caption">Femmes</Typography>
                       </Card>
                     </Grid>
                     <Grid size={{ xs: 3 }}>
-                      <Card sx={{ textAlign: 'center', p: 2, bgcolor: '#FFF8E1' }}>
+                      <Card sx={{ textAlign: 'center', p: 2, bgcolor: 'rgba(250, 178, 25, 0.14)' }}>
                         <Typography variant="h5" fontWeight={700} color="#F9A825">{selectedProvince.beneficiaires.hommes}</Typography>
                         <Typography variant="caption">Hommes</Typography>
                       </Card>
                     </Grid>
                     <Grid size={{ xs: 3 }}>
-                      <Card sx={{ textAlign: 'center', p: 2, bgcolor: '#E8F5E9' }}>
+                      <Card sx={{ textAlign: 'center', p: 2, bgcolor: 'action.hover' }}>
                         <Typography variant="h5" fontWeight={700} color="success.main">{selectedProvince.beneficiaires.jeunes}</Typography>
                         <Typography variant="caption">Jeunes</Typography>
                       </Card>
@@ -551,20 +658,20 @@ export function ProvincialDashboard() {
             <TabPanel value={tabValue} index={3}>
               <Grid container spacing={3} sx={{ p: 3 }}>
                 <Grid size={{ xs: 12, md: 8 }}>
-                  <Typography variant="subtitle1" fontWeight={600} gutterBottom>Classement des provinces</Typography>
+                  <Typography variant="subtitle1" fontWeight={600} gutterBottom>Classement RNA — part des femmes</Typography>
                   <TableContainer component={Paper} variant="outlined">
                     <Table>
-                      <TableHead sx={{ bgcolor: '#F1F8E9' }}>
+                      <TableHead sx={{ bgcolor: 'action.hover' }}>
                         <TableRow>
                           <TableCell>Rang</TableCell>
                           <TableCell>Province</TableCell>
-                          <TableCell align="right">Score</TableCell>
-                          <TableCell align="right">Progression</TableCell>
+                          <TableCell align="right">Part femmes</TableCell>
+                          <TableCell align="right">Bénéficiaires</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {classement.map((item) => (
-                          <TableRow key={item.province} sx={{ bgcolor: selectedProvince.name === item.province ? '#F1F8E9' : 'inherit' }}>
+                        {classementRna.map((item) => (
+                          <TableRow key={item.id} sx={{ bgcolor: selectedProvince.name === item.name ? 'action.selected' : 'inherit' }}>
                             <TableCell>
                               {item.rang === 1 && <GoogleIcon name="emoji_events" size={20} sx={{ color: '#FFD700' }} />}
                               {item.rang === 2 && <GoogleIcon name="emoji_events" size={20} sx={{ color: '#C0C0C0' }} />}
@@ -573,20 +680,15 @@ export function ProvincialDashboard() {
                             </TableCell>
                             <TableCell>
                               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                {item.province}
-                                {selectedProvince.name === item.province && <Chip label="Sélectionné" size="small" sx={{ bgcolor: '#2E7D32', color: 'white', height: 20 }} />}
+                                {item.name}
+                                {selectedProvince.name === item.name && <Chip label="Sélectionné" size="small" sx={{ bgcolor: '#2E7D32', color: 'white', height: 20 }} />}
                               </Box>
                             </TableCell>
                             <TableCell align="right">
-                              <strong>{item.score}%</strong>
+                              <strong>{item.femmesPct}%</strong>
                             </TableCell>
-                            <TableCell align="right">
-                              <Chip 
-                                icon={(item.progression ?? 0) >= 0 ? <GoogleIcon name="trending_up" size={14} /> : <GoogleIcon name="trending_down" size={14} />}
-                                label={`${(item.progression ?? 0) >= 0 ? '+' : ''}${item.progression ?? 0}%`}
-                                size="small"
-                                sx={{ bgcolor: (item.progression ?? 0) >= 0 ? '#E8F5E9' : '#FFEBEE', color: (item.progression ?? 0) >= 0 ? '#2E7D32' : '#D32F2F' }}
-                              />
+                            <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                              {item.total.toLocaleString('fr-FR')}
                             </TableCell>
                           </TableRow>
                         ))}
@@ -598,22 +700,21 @@ export function ProvincialDashboard() {
                   <Card sx={{ p: 2, textAlign: 'center' }}>
                     <Typography variant="subtitle1" fontWeight={600} gutterBottom>Position de {selectedProvince.name}</Typography>
                     <Typography variant="h2" fontWeight={700} color="primary.main">
-                      #{selectedClassement?.rang || 0}
+                      #{selectedRang?.rang || 0}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      sur {classement.length} provinces
+                      sur {classementRna.length} provinces (part des femmes)
                     </Typography>
                     <Divider sx={{ my: 2 }} />
                     <Stack direction="row" justifyContent="space-around">
                       <Box>
-                        <Typography variant="caption" color="text.secondary">Score</Typography>
-                        <Typography variant="h6">{selectedClassement?.score ?? 0}%</Typography>
+                        <Typography variant="caption" color="text.secondary">Femmes</Typography>
+                        <Typography variant="h6">{selectedRang?.femmesPct ?? 0}%</Typography>
                       </Box>
                       <Box>
-                        <Typography variant="caption" color="text.secondary">Progression</Typography>
-                        <Typography variant="h6" color={(selectedClassement?.progression ?? 0) >= 0 ? 'success.main' : 'error.main'}>
-                          {(selectedClassement?.progression ?? 0) >= 0 ? '+' : ''}
-                          {selectedClassement?.progression ?? 0}%
+                        <Typography variant="caption" color="text.secondary">Jeunes</Typography>
+                        <Typography variant="h6">
+                          {selectedRang?.jeunesPct ?? 0}%
                         </Typography>
                       </Box>
                     </Stack>

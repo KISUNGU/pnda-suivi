@@ -283,7 +283,7 @@ export const FournisseurList: React.FC = () => {
 
         <TableContainer>
           <Table>
-            <TableHead sx={{ bgcolor: '#F1F8E9' }}>
+            <TableHead sx={{ bgcolor: 'action.hover' }}>
               <TableRow>
                 <TableCell>Fournisseur</TableCell>
                 <TableCell>Type</TableCell>

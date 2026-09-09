@@ -2,15 +2,15 @@ const { spawn } = require('child_process');
 const path = require('path');
 
 const rootDir = path.resolve(__dirname, '..');
-const backendDir = path.join(rootDir, 'backend');
-const frontendDir = path.join(rootDir, 'frontend');
+const serverDir = path.join(rootDir, 'server');
+const webDir = path.join(rootDir, 'web');
 
-const backendEnv = {
+const serverEnv = {
 	...process.env,
-	PORT: '3000',
+	PORT: process.env.PORT || '4000',
 };
 
-const frontendEnv = {
+const webEnv = {
 	...process.env,
 };
 
@@ -33,14 +33,14 @@ const run = (command, args, cwd, env, label) => {
 
 console.log('PNDA start script');
 console.log('Frontend: http://localhost:5173');
-console.log('Backend:  http://localhost:3000');
+console.log('API Supabase: http://localhost:4000');
 
-const backend = run('npm', ['run', 'dev'], backendDir, backendEnv, 'backend');
-const frontend = run('npm', ['run', 'dev'], frontendDir, frontendEnv, 'frontend');
+const server = run('npm', ['run', 'dev'], serverDir, serverEnv, 'server');
+const web = run('npm', ['run', 'dev'], webDir, webEnv, 'web');
 
 const shutdown = () => {
-	backend.kill();
-	frontend.kill();
+	server.kill();
+	web.kill();
 	process.exit(0);
 };
 

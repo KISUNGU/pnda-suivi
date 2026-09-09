@@ -1,4 +1,5 @@
 // backend/src/app.ts
+import path from 'path';
 import express, { NextFunction, Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -31,8 +32,23 @@ import {
   getActiviteById,
   getActivites,
   getActivitesStats,
+  getAgentBeneficiaires,
+  getAgentCollectes,
+  getAgentFormulaires,
+  getAgentProfil,
+  getAgentStats,
+  createAgentCollecte,
+  syncAgentCollectes,
   getAgriculteursDashboardOverview,
   getAgriculteursSummary,
+  getAideContactSupport,
+  getAideFAQ,
+  getAideGuideById,
+  getAideGuides,
+  getAideTutorielById,
+  getAideTutoriels,
+  createAideDemande,
+  searchAide,
   getBeneficiaireById,
   getCartesAgriculteurs,
   getCartesAgriculteursStats,
@@ -41,6 +57,23 @@ import {
   getBeneficiaires,
   getCadreResultats,
   getCadreResultatsStats,
+  getCadreCiblesProvinciales,
+  getPtbaSuivi,
+  updatePtbaActivite,
+  getProvincesContours,
+  setProvinceContour,
+  getSigSites,
+  createSigSite,
+  deleteSigSite,
+  getSigTerritoiresDensite,
+  getSigOverview,
+  getConfiguration,
+  updateConfigurationSection,
+  getEnvironnementFormations,
+  getEnvironnementIndicateurs,
+  getEnvironnementPlaintes,
+  getEnvironnementStats,
+  addEnvironnementFormation,
   getFournisseurById,
   getFournisseurs,
   getFournisseursStats,
@@ -111,11 +144,32 @@ import {
   getDbPool,
 } from './db';
 
+// .env.local surcharge .env pour le dev local (ignoré si les variables sont déjà définies, ex. Docker)
+dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const JWT_SECRET = process.env.JWT_SECRET || 'pnda_secret_key_2026';
+
+/**
+ * Clé de signature des jetons. Aucune valeur de repli : une clé codée en dur
+ * dans le dépôt permettrait de forger un jeton administrateur. Le serveur
+ * refuse de démarrer si la variable est absente ou trop courte.
+ */
+const JWT_SECRET = (() => {
+  const secret = process.env.JWT_SECRET;
+
+  if (!secret || secret.length < 32) {
+    console.error(
+      "[config] JWT_SECRET manquant ou trop court (32 caracteres minimum).\n" +
+      "         Generer une cle : node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"\n" +
+      "         puis la renseigner dans backend/.env"
+    );
+    process.exit(1);
+  }
+
+  return secret;
+})();
 const DEFAULT_ALLOWED_ORIGINS = [
   'http://localhost',
   'http://localhost:5173',
@@ -128,6 +182,19 @@ const allowedOrigins = (process.env.CORS_ORIGIN || '')
   .map((origin) => origin.trim())
   .filter(Boolean);
 const corsAllowedOrigins = allowedOrigins.length > 0 ? allowedOrigins : DEFAULT_ALLOWED_ORIGINS;
+
+/**
+ * Roles applicatifs, alignes sur la table DEFAULT_HOME de frontend/src/App.tsx.
+ * 'invite' est le repli quand mapDbRoleToAppRole ne reconnait pas le profil.
+ */
+type AppRole = 'super_admin' | 'admin' | 'uncp' | 'upep' | 'ot' | 'partenaire' | 'invite';
+
+interface TokenUser {
+  id: number;
+  email: string;
+  role: AppRole;
+  province: string | null;
+}
 
 interface AuthenticatedRequest extends Request {
   user?: unknown;
@@ -182,7 +249,7 @@ app.use(cors({
   optionsSuccessStatus: 204,
 }));
 app.use(compression());
-app.use(express.json());
+app.use(express.json({ limit: '4mb' })); // les contours GeoJSON des provinces depassent la limite par defaut (100 ko)
 app.use(express.urlencoded({ extended: true }));
 
 // Logger middleware
@@ -210,6 +277,83 @@ const authenticateToken = (req: AuthenticatedRequest, res: Response, next: NextF
   } catch (error) {
     return res.status(403).json({ message: 'Token invalide ou expiré' });
   }
+};
+
+// ==================== AUTORISATION ====================
+
+const KNOWN_ROLES: readonly AppRole[] = ['super_admin', 'admin', 'uncp', 'upep', 'ot', 'partenaire', 'invite'];
+
+/** Lit l'utilisateur du jeton verifie. Retourne null si la forme est inattendue. */
+const getTokenUser = (req: Request): TokenUser | null => {
+  const decoded = (req as AuthenticatedRequest).user as Record<string, unknown> | undefined;
+
+  if (!decoded || typeof decoded !== 'object') {
+    return null;
+  }
+
+  const role = typeof decoded.role === 'string' && (KNOWN_ROLES as readonly string[]).includes(decoded.role)
+    ? (decoded.role as AppRole)
+    : 'invite';
+
+  return {
+    id: Number(decoded.id ?? 0),
+    email: typeof decoded.email === 'string' ? decoded.email : '',
+    role,
+    province: typeof decoded.province === 'string' && decoded.province.trim() ? decoded.province.trim() : null,
+  };
+};
+
+/**
+ * Restreint une route a une liste de roles. A monter APRES authenticateToken :
+ *   app.delete('/api/utilisateurs/:id', authenticateToken, requireRole('super_admin'), handler)
+ */
+const requireRole = (...roles: AppRole[]) => (req: Request, res: Response, next: NextFunction) => {
+  const user = getTokenUser(req);
+
+  if (!user) {
+    return res.status(401).json({ message: 'Authentification requise' });
+  }
+
+  if (!roles.includes(user.role)) {
+    return res.status(403).json({ message: 'Accès refusé : rôle insuffisant pour cette opération' });
+  }
+
+  return next();
+};
+
+/** Roles autorises a consulter toutes les provinces. */
+const ROLES_NATIONAUX: readonly AppRole[] = ['super_admin', 'admin', 'uncp'];
+
+/**
+ * Cloisonnement provincial. Un UPEP ou un OT ne voit que sa propre province :
+ * la valeur du jeton ecrase le parametre ?province= de la requete.
+ * Retourne undefined pour les roles nationaux (= toutes provinces).
+ */
+const scopeProvince = (req: Request): string | undefined => {
+  const user = getTokenUser(req);
+  const demandee = req.query.province ? String(req.query.province) : undefined;
+
+  if (!user || ROLES_NATIONAUX.includes(user.role)) {
+    return demandee;
+  }
+
+  return user.province ?? demandee;
+};
+
+/**
+ * Verifie qu'un role provincial n'ecrit pas hors de sa province.
+ * Retourne un message d'erreur, ou null si l'ecriture est permise.
+ */
+const refuseHorsProvince = (req: Request, provinceCible: string | null | undefined): string | null => {
+  const user = getTokenUser(req);
+
+  if (!user || ROLES_NATIONAUX.includes(user.role) || !user.province || !provinceCible) {
+    return null;
+  }
+
+  return provinceCible.trim().toLowerCase() === user.province.toLowerCase()
+    ? null
+    : `Accès refusé : opération limitée à la province ${user.province}`;
 };
 
 const splitBeneficiaireName = (nomComplet: string) => {
@@ -359,13 +503,6 @@ app.get('/api/dashboard/rna-overview', authenticateToken, async (_req: Request, 
 
 // ==================== AUTH ROUTES ====================
 
-// Utilisateurs fictifs de secours (utilisés quand la DB est indisponible)
-const FALLBACK_USERS = [
-  { id: 1, nom: 'MUKENDI', prenom: 'Jean', email: 'admin@pnda.cd', password: bcrypt.hashSync('admin123', 10), role: 'admin', province: null },
-  { id: 2, nom: 'KABEYA', prenom: 'Marie', email: 'uncp@pnda.cd', password: bcrypt.hashSync('uncp123', 10), role: 'uncp', province: null },
-  { id: 3, nom: 'TSHIBOLA', prenom: 'Pierre', email: 'upep@pnda.cd', password: bcrypt.hashSync('upep123', 10), role: 'upep', province: 'Kwilu' },
-];
-
 app.post('/api/auth/login', async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
@@ -374,12 +511,37 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'Email et mot de passe requis' });
     }
 
-    const user = await authenticateUtilisateur(String(email).trim().toLowerCase(), String(password));
+    // Auth via MySQL (bcrypt + migration auto)
+    const user = await authenticateUtilisateur(
+      String(email).trim().toLowerCase(),
+      String(password)
+    );
 
     if (!user) {
       return res.status(401).json({ message: 'Email ou mot de passe incorrect' });
     }
 
+    // Profil complet
+    const profile = await getUtilisateurProfile(user.id);
+
+    // Les controles de role s'appuient sur le champ `role` du jeton. Un compte
+    // sans profil retombe sur 'invite' et se verra refuser la plupart des
+    // routes : on le signale au lieu de laisser diagnostiquer des 403 opaques.
+    if (user.role === 'invite') {
+      console.warn(
+        `[auth] ${user.email} se connecte avec le role 'invite' : profil absent ou non reconnu en base. ` +
+        `Acces refuse sur la plupart des routes. Verifier utilisateur.id_profil.`
+      );
+    }
+
+    if ((user.role === 'upep' || user.role === 'ot') && !user.province) {
+      console.warn(
+        `[auth] ${user.email} a le role '${user.role}' sans province : le cloisonnement provincial ` +
+        `ne s'applique pas a ce compte. Verifier utilisateur.id_localisation.`
+      );
+    }
+
+    // Token JWT
     const token = jwt.sign(
       {
         id: user.id,
@@ -391,29 +553,18 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
       { expiresIn: '24h' }
     );
 
-    return res.json({ token, user });
+    return res.json({
+      token,
+      user: profile,
+    });
+
   } catch (error) {
     console.error(error);
 
+    // Plus de fallback → message propre
     if (isDatabaseConnectivityError(error)) {
-      // DB indisponible : authentification via utilisateurs fictifs
-      const { email: emailBody, password: passwordBody } = req.body as { email: string; password: string };
-      const normalizedEmail = String(emailBody ?? '').trim().toLowerCase();
-      const fallbackUser = FALLBACK_USERS.find(u => u.email === normalizedEmail);
-
-      if (!fallbackUser || !bcrypt.compareSync(String(passwordBody ?? ''), fallbackUser.password)) {
-        return res.status(401).json({ message: 'Email ou mot de passe incorrect' });
-      }
-
-      const token = jwt.sign(
-        { id: fallbackUser.id, email: fallbackUser.email, role: fallbackUser.role, province: fallbackUser.province },
-        JWT_SECRET,
-        { expiresIn: '24h' }
-      );
-
-      return res.json({
-        token,
-        user: { id: fallbackUser.id, nom: fallbackUser.nom, prenom: fallbackUser.prenom, email: fallbackUser.email, role: fallbackUser.role, province: fallbackUser.province },
+      return res.status(503).json({
+        message: 'Base de données indisponible. Impossible de vérifier les identifiants.',
       });
     }
 
@@ -421,13 +572,14 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
   }
 });
 
+
 // ==================== BÉNÉFICIAIRES ROUTES ====================
 
 app.get('/api/beneficiaires', authenticateToken, async (req, res) => {
   try {
     const payload = await getBeneficiaires({
       search: req.query.search ? String(req.query.search) : undefined,
-      province: req.query.province ? String(req.query.province) : undefined,
+      province: scopeProvince(req),
       sexe: req.query.sexe ? String(req.query.sexe) : undefined,
       page: req.query.page ? Number(req.query.page) : 0,
       limit: req.query.limit ? Number(req.query.limit) : 10,
@@ -464,7 +616,7 @@ app.get('/api/beneficiaires/cartes', authenticateToken, async (req, res) => {
   try {
     const payload = await getCartesAgriculteurs({
       search: req.query.search ? String(req.query.search) : undefined,
-      province: req.query.province ? String(req.query.province) : undefined,
+      province: scopeProvince(req),
       statut: req.query.statut ? String(req.query.statut) as SqlCarteAgriculteur['statut_carte'] : undefined,
       page: req.query.page ? Number(req.query.page) : 0,
       limit: req.query.limit ? Number(req.query.limit) : 10,
@@ -486,7 +638,7 @@ app.get('/api/beneficiaires/cartes/stats', authenticateToken, async (req, res) =
   try {
     const stats = await getCartesAgriculteursStats({
       search: req.query.search ? String(req.query.search) : undefined,
-      province: req.query.province ? String(req.query.province) : undefined,
+      province: scopeProvince(req),
       statut: req.query.statut ? String(req.query.statut) as SqlCarteAgriculteur['statut_carte'] : undefined,
     });
 
@@ -506,7 +658,7 @@ app.get('/api/beneficiaires/ventes-semences', authenticateToken, async (req, res
   try {
     const payload = await getVentesSemences({
       search: req.query.search ? String(req.query.search) : undefined,
-      province: req.query.province ? String(req.query.province) : undefined,
+      province: scopeProvince(req),
     });
 
     res.json(payload);
@@ -525,7 +677,7 @@ app.get('/api/beneficiaires/ventes-semences/stats', authenticateToken, async (re
   try {
     const stats = await getVentesSemencesStats({
       search: req.query.search ? String(req.query.search) : undefined,
-      province: req.query.province ? String(req.query.province) : undefined,
+      province: scopeProvince(req),
     });
 
     res.json(stats);
@@ -565,15 +717,15 @@ app.get('/api/beneficiaires/:id(\\d+)', authenticateToken, async (req, res) => {
   }
 });
 
-app.post('/api/beneficiaires', authenticateToken, (_req, res) => {
+app.post('/api/beneficiaires', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep', 'ot'), (_req, res) => {
   res.status(405).json({ message: 'Le registre RNA est accessible en lecture seule depuis cette application' });
 });
 
-app.put('/api/beneficiaires/:id(\\d+)', authenticateToken, (_req, res) => {
+app.put('/api/beneficiaires/:id(\\d+)', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep'), (_req, res) => {
   res.status(405).json({ message: 'Le registre RNA est accessible en lecture seule depuis cette application' });
 });
 
-app.delete('/api/beneficiaires/:id(\\d+)', authenticateToken, (_req, res) => {
+app.delete('/api/beneficiaires/:id(\\d+)', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep'), (_req, res) => {
   res.status(405).json({ message: 'Le registre RNA est accessible en lecture seule depuis cette application' });
 });
 
@@ -650,7 +802,7 @@ app.get('/api/indicateurs/:indicateurId(\\d+)', authenticateToken, async (req, r
   }
 });
 
-app.post('/api/indicateurs/:indicateurId(\\d+)/calculer', authenticateToken, async (req, res) => {
+app.post('/api/indicateurs/:indicateurId(\\d+)/calculer', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep'), async (req, res) => {
   try {
     const indicateurId = Number.parseInt(req.params.indicateurId, 10);
     const { valeur } = req.body;
@@ -675,7 +827,7 @@ app.post('/api/indicateurs/:indicateurId(\\d+)/calculer', authenticateToken, asy
   }
 });
 
-app.put('/api/indicateurs/:indicateurId(\\d+)/valeur', authenticateToken, async (req, res) => {
+app.put('/api/indicateurs/:indicateurId(\\d+)/valeur', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep'), async (req, res) => {
   try {
     const indicateurId = Number.parseInt(req.params.indicateurId, 10);
     const { valeur, periode } = req.body;
@@ -733,7 +885,7 @@ app.get('/api/grm/plaintes', authenticateToken, async (req, res) => {
     const payload = await getPlaintes({
       search: req.query.search ? String(req.query.search) : undefined,
       type: req.query.type ? String(req.query.type) : undefined,
-      province: req.query.province ? String(req.query.province) : undefined,
+      province: scopeProvince(req),
       statut: req.query.statut ? String(req.query.statut) : undefined,
       date_debut: req.query.date_debut ? String(req.query.date_debut) : undefined,
       date_fin: req.query.date_fin ? String(req.query.date_fin) : undefined,
@@ -809,7 +961,7 @@ app.get('/api/risques', authenticateToken, async (req, res) => {
     const search = req.query.search ? String(req.query.search).toLowerCase() : '';
     const categorie = req.query.categorie ? String(req.query.categorie) : undefined;
     const statut = req.query.statut ? String(req.query.statut) : undefined;
-    const province = req.query.province ? String(req.query.province) : undefined;
+    const province = scopeProvince(req);
     const niveau = req.query.niveau ? String(req.query.niveau) : undefined;
 
     const risques = (await getRisques()).filter((risque) => {
@@ -876,7 +1028,7 @@ app.get('/api/risques/alertes', authenticateToken, async (_req, res) => {
   }
 });
 
-app.put('/api/risques/alertes/:id(\\d+)/lue', authenticateToken, async (req, res) => {
+app.put('/api/risques/alertes/:id(\\d+)/lue', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep'), async (req, res) => {
   try {
     const alerte = await markRisqueAlerteAsRead(Number(req.params.id));
     if (!alerte) {
@@ -914,7 +1066,7 @@ app.get('/api/risques/:id(\\d+)/actions', authenticateToken, async (req, res) =>
   }
 });
 
-app.post('/api/risques/:id(\\d+)/actions', authenticateToken, async (req, res) => {
+app.post('/api/risques/:id(\\d+)/actions', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep'), async (req, res) => {
   try {
     const action = await createRisqueAction(Number(req.params.id), {
       action: req.body.action ? String(req.body.action) : undefined,
@@ -941,7 +1093,7 @@ app.post('/api/risques/:id(\\d+)/actions', authenticateToken, async (req, res) =
   }
 });
 
-app.put('/api/risques/:risqueId(\\d+)/actions/:actionId(\\d+)', authenticateToken, async (req, res) => {
+app.put('/api/risques/:risqueId(\\d+)/actions/:actionId(\\d+)', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep'), async (req, res) => {
   try {
     const action = await updateRisqueAction(Number(req.params.risqueId), Number(req.params.actionId), {
       action: req.body.action !== undefined ? String(req.body.action) : undefined,
@@ -987,8 +1139,13 @@ app.get('/api/risques/:id(\\d+)', authenticateToken, async (req, res) => {
   }
 });
 
-app.post('/api/risques', authenticateToken, async (req, res) => {
+app.post('/api/risques', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep'), async (req, res) => {
   try {
+    const horsProvince = refuseHorsProvince(req, req.body?.province ? String(req.body.province) : null);
+    if (horsProvince) {
+      return res.status(403).json({ message: horsProvince });
+    }
+
     const risque = await createRisque({
       code: req.body.code ? String(req.body.code) : undefined,
       nom: req.body.nom ? String(req.body.nom) : undefined,
@@ -1020,7 +1177,7 @@ app.post('/api/risques', authenticateToken, async (req, res) => {
   }
 });
 
-app.put('/api/risques/:id(\\d+)', authenticateToken, async (req, res) => {
+app.put('/api/risques/:id(\\d+)', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep'), async (req, res) => {
   try {
     const risque = await updateRisque(Number(req.params.id), {
       code: req.body.code !== undefined ? String(req.body.code) : undefined,
@@ -1057,7 +1214,7 @@ app.put('/api/risques/:id(\\d+)', authenticateToken, async (req, res) => {
   }
 });
 
-app.delete('/api/risques/:id(\\d+)', authenticateToken, async (req, res) => {
+app.delete('/api/risques/:id(\\d+)', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep'), async (req, res) => {
   try {
     const deleted = await deleteRisque(Number(req.params.id));
     if (!deleted) {
@@ -1112,6 +1269,24 @@ app.get('/api/cadre-resultats/stats', authenticateToken, async (_req, res) => {
     }
 
     return res.status(500).json({ message: 'Impossible de calculer les statistiques du cadre des resultats' });
+  }
+});
+
+/**
+ * Cibles annuelles par province (fiches d'operationnalisation du Cadre v6).
+ * Reponse : { "ODP-1": [{ province, annee, cible }, ...], ... }
+ */
+app.get('/api/cadre-resultats/cibles-provinciales', authenticateToken, async (_req, res) => {
+  try {
+    return res.json(await getCadreCiblesProvinciales());
+  } catch (error) {
+    console.error('GET /api/cadre-resultats/cibles-provinciales failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Impossible de recuperer les cibles provinciales' });
   }
 });
 
@@ -1229,7 +1404,7 @@ app.get('/api/powerbi/embed/:reportId', authenticateToken, async (req: Request, 
   }
 });
 
-app.post('/api/powerbi/token/:reportId', authenticateToken, async (req, res) => {
+app.post('/api/powerbi/token/:reportId', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep', 'partenaire'), async (req, res) => {
   try {
     const requestedReportId = String(req.params.reportId ?? '').trim();
 
@@ -1258,7 +1433,7 @@ app.post('/api/powerbi/token/:reportId', authenticateToken, async (req, res) => 
   }
 });
 
-app.post('/api/powerbi/refresh/:datasetId', authenticateToken, async (req, res) => {
+app.post('/api/powerbi/refresh/:datasetId', authenticateToken, requireRole('super_admin', 'admin', 'uncp'), async (req, res) => {
   try {
     const report = await getPowerBIReportById(req.params.datasetId);
     const datasetId = report?.datasetId ?? req.params.datasetId;
@@ -1278,7 +1453,7 @@ app.post('/api/powerbi/refresh/:datasetId', authenticateToken, async (req, res) 
   }
 });
 
-app.post('/api/powerbi/export/:reportId', authenticateToken, async (req, res) => {
+app.post('/api/powerbi/export/:reportId', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep', 'partenaire'), async (req, res) => {
   try {
     const report = await getPowerBIReportById(req.params.reportId);
 
@@ -1328,7 +1503,7 @@ startxref
   }
 });
 
-app.post('/api/powerbi/export/:reportId/ppt', authenticateToken, async (req, res) => {
+app.post('/api/powerbi/export/:reportId/ppt', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep', 'partenaire'), async (req, res) => {
   try {
     const report = await getPowerBIReportById(req.params.reportId);
 
@@ -1440,9 +1615,154 @@ app.get('/api/provinces/comparaison', authenticateToken, async (_req, res) => {
   }
 });
 
-app.get('/api/provinces/:id', authenticateToken, async (req, res) => {
+/**
+ * Contours GeoJSON des provinces pour la cartographie (SIG).
+ */
+app.get('/api/provinces/contours', authenticateToken, async (_req, res) => {
   try {
-    const province = await getProvinceById(req.params.id);
+    return res.json(await getProvincesContours());
+  } catch (error) {
+    console.error('GET /api/provinces/contours failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors du chargement des contours' });
+  }
+});
+
+/**
+ * Import du contour officiel d'une province (GeoJSON Polygon/MultiPolygon, WGS84).
+ */
+app.put('/api/provinces/:id/contour', authenticateToken, requireRole('super_admin', 'admin', 'uncp'), async (req, res) => {
+  try {
+    const geometry = req.body?.geometry;
+    if (!geometry || typeof geometry !== 'object' || !['Polygon', 'MultiPolygon'].includes((geometry as { type?: string }).type ?? '')) {
+      return res.status(400).json({ message: 'GeoJSON attendu : geometrie Polygon ou MultiPolygon (WGS84)' });
+    }
+
+    const ok = await setProvinceContour(String(req.params.id), geometry);
+    if (!ok) {
+      return res.status(404).json({ message: 'Province introuvable' });
+    }
+
+    return res.json({ ok: true });
+  } catch (error) {
+    console.error('PUT /api/provinces/:id/contour failed', error);
+
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+
+    return res.status(500).json({ message: 'Erreur lors de l\'enregistrement du contour' });
+  }
+});
+
+// ==================== SIG / GÉOSPATIAL ROUTES ====================
+
+/** Synthèse SIG : sites du projet et couverture géographique du RNA. */
+app.get('/api/sig/overview', authenticateToken, async (_req, res) => {
+  try {
+    return res.json(await getSigOverview());
+  } catch (error) {
+    console.error('GET /api/sig/overview failed', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+    return res.status(500).json({ message: 'Erreur lors du chargement de la synthèse SIG' });
+  }
+});
+
+/** Sites géolocalisés du projet (bureaux, périmètres, routes, marchés, CLER…). */
+app.get('/api/sig/sites', authenticateToken, async (req, res) => {
+  try {
+    const province = scopeProvince(req);
+    const type = req.query.type ? String(req.query.type) : undefined;
+    return res.json(await getSigSites({ province, type }));
+  } catch (error) {
+    console.error('GET /api/sig/sites failed', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+    return res.status(500).json({ message: 'Erreur lors du chargement des sites' });
+  }
+});
+
+app.post('/api/sig/sites', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep'), async (req, res) => {
+  try {
+    const { nom, type, province, territoire, lat, lng, statut, details } = req.body ?? {};
+    const latNum = Number(lat);
+    const lngNum = Number(lng);
+
+    if (!nom || !province || !Number.isFinite(latNum) || !Number.isFinite(lngNum)) {
+      return res.status(400).json({ message: 'Champs requis : nom, province, lat, lng' });
+    }
+    if (latNum < -90 || latNum > 90 || lngNum < -180 || lngNum > 180) {
+      return res.status(400).json({ message: 'Coordonnées WGS84 invalides' });
+    }
+
+    const horsProvince = refuseHorsProvince(req, String(province));
+    if (horsProvince) {
+      return res.status(403).json({ message: horsProvince });
+    }
+
+    const site = await createSigSite({
+      nom: String(nom),
+      type: String(type ?? 'autre'),
+      province: String(province),
+      territoire: territoire ? String(territoire) : '',
+      lat: latNum,
+      lng: lngNum,
+      statut: statut ? String(statut) : undefined,
+      details: details && typeof details === 'object' ? details : undefined,
+    });
+    return res.status(201).json(site);
+  } catch (error) {
+    console.error('POST /api/sig/sites failed', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+    return res.status(500).json({ message: 'Erreur lors de la création du site' });
+  }
+});
+
+app.delete('/api/sig/sites/:id', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep'), async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({ message: 'Identifiant invalide' });
+    }
+    const ok = await deleteSigSite(id);
+    if (!ok) {
+      return res.status(404).json({ message: 'Site introuvable' });
+    }
+    return res.json({ ok: true });
+  } catch (error) {
+    console.error('DELETE /api/sig/sites/:id failed', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+    return res.status(500).json({ message: 'Erreur lors de la suppression du site' });
+  }
+});
+
+/** Densité de bénéficiaires RNA par territoire (choroplèthe/classement). */
+app.get('/api/sig/territoires', authenticateToken, async (req, res) => {
+  try {
+    const province = scopeProvince(req);
+    return res.json(await getSigTerritoiresDensite(province));
+  } catch (error) {
+    console.error('GET /api/sig/territoires failed', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+    return res.status(500).json({ message: 'Erreur lors du chargement des territoires' });
+  }
+});
+
+app.get('/api/provinces/:id', authenticateToken, async (req, res) => {
+  try {    const province = await getProvinceById(req.params.id);
     if (!province) {
       return res.status(404).json({ message: 'Province non trouvée' });
     }
@@ -1537,7 +1857,7 @@ app.get('/api/fournisseurs', authenticateToken, async (req, res) => {
     const payload = await getFournisseurs({
       search: req.query.search ? String(req.query.search) : undefined,
       type: req.query.type ? String(req.query.type) : undefined,
-      province: req.query.province ? String(req.query.province) : undefined,
+      province: scopeProvince(req),
       statut: req.query.statut ? String(req.query.statut) : undefined,
       page: req.query.page ? Number(req.query.page) : 0,
       limit: req.query.limit ? Number(req.query.limit) : 10,
@@ -1588,7 +1908,7 @@ app.get('/api/fournisseurs/:id(\\d+)', authenticateToken, async (req, res) => {
   }
 });
 
-app.post('/api/fournisseurs', authenticateToken, async (req, res) => {
+app.post('/api/fournisseurs', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep'), async (req, res) => {
   try {
     const fournisseur = await createFournisseur({
       nom: req.body.nom ? String(req.body.nom) : undefined,
@@ -1621,7 +1941,7 @@ app.post('/api/fournisseurs', authenticateToken, async (req, res) => {
   }
 });
 
-app.put('/api/fournisseurs/:id(\\d+)', authenticateToken, async (req, res) => {
+app.put('/api/fournisseurs/:id(\\d+)', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep'), async (req, res) => {
   try {
     const fournisseur = await updateFournisseur(Number(req.params.id), {
       nom: req.body.nom !== undefined ? String(req.body.nom) : undefined,
@@ -1660,7 +1980,7 @@ app.put('/api/fournisseurs/:id(\\d+)', authenticateToken, async (req, res) => {
   }
 });
 
-app.delete('/api/fournisseurs/:id(\\d+)', authenticateToken, async (req, res) => {
+app.delete('/api/fournisseurs/:id(\\d+)', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep'), async (req, res) => {
   try {
     const deleted = await deleteFournisseur(Number(req.params.id));
     if (!deleted) {
@@ -1686,7 +2006,7 @@ app.get('/api/organisations', authenticateToken, async (req, res) => {
     const payload = await getOrganisations({
       search: req.query.search ? String(req.query.search) : undefined,
       type: req.query.type ? String(req.query.type) : undefined,
-      province: req.query.province ? String(req.query.province) : undefined,
+      province: scopeProvince(req),
       statut: req.query.statut ? String(req.query.statut) : undefined,
       page: req.query.page ? Number(req.query.page) : 0,
       limit: req.query.limit ? Number(req.query.limit) : 10,
@@ -1737,7 +2057,7 @@ app.get('/api/organisations/:id(\\d+)', authenticateToken, async (req, res) => {
   }
 });
 
-app.post('/api/organisations', authenticateToken, async (req, res) => {
+app.post('/api/organisations', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep'), async (req, res) => {
   try {
     const organisation = await createOrganisation({
       code: req.body.code ? String(req.body.code) : undefined,
@@ -1783,7 +2103,7 @@ app.post('/api/organisations', authenticateToken, async (req, res) => {
   }
 });
 
-app.put('/api/organisations/:id(\\d+)', authenticateToken, async (req, res) => {
+app.put('/api/organisations/:id(\\d+)', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep'), async (req, res) => {
   try {
     const organisation = await updateOrganisation(Number(req.params.id), {
       code: req.body.code !== undefined ? String(req.body.code) : undefined,
@@ -1835,7 +2155,7 @@ app.put('/api/organisations/:id(\\d+)', authenticateToken, async (req, res) => {
   }
 });
 
-app.delete('/api/organisations/:id(\\d+)', authenticateToken, async (req, res) => {
+app.delete('/api/organisations/:id(\\d+)', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep'), async (req, res) => {
   try {
     const deleted = await deleteOrganisation(Number(req.params.id));
     if (!deleted) {
@@ -1862,7 +2182,7 @@ app.get('/api/activites', authenticateToken, async (req, res) => {
       search: req.query.search ? String(req.query.search) : undefined,
       type: req.query.type ? String(req.query.type) : undefined,
       composante: req.query.composante ? String(req.query.composante) : undefined,
-      province: req.query.province ? String(req.query.province) : undefined,
+      province: scopeProvince(req),
       statut: req.query.statut ? String(req.query.statut) : undefined,
       responsable: req.query.responsable ? String(req.query.responsable) : undefined,
       date_debut: req.query.date_debut ? String(req.query.date_debut) : undefined,
@@ -1916,7 +2236,7 @@ app.get('/api/activites/:id(\\d+)', authenticateToken, async (req, res) => {
   }
 });
 
-app.post('/api/activites', authenticateToken, async (req, res) => {
+app.post('/api/activites', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep'), async (req, res) => {
   try {
     const activite = await createActivite({
       code: req.body.code ? String(req.body.code) : undefined,
@@ -1965,7 +2285,7 @@ app.post('/api/activites', authenticateToken, async (req, res) => {
   }
 });
 
-app.put('/api/activites/:id(\\d+)', authenticateToken, async (req, res) => {
+app.put('/api/activites/:id(\\d+)', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep'), async (req, res) => {
   try {
     const activite = await updateActivite(Number(req.params.id), {
       code: req.body.code !== undefined ? String(req.body.code) : undefined,
@@ -2018,7 +2338,7 @@ app.put('/api/activites/:id(\\d+)', authenticateToken, async (req, res) => {
   }
 });
 
-app.delete('/api/activites/:id(\\d+)', authenticateToken, async (req, res) => {
+app.delete('/api/activites/:id(\\d+)', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep'), async (req, res) => {
   try {
     const deleted = await deleteActivite(Number(req.params.id));
     if (!deleted) {
@@ -2039,12 +2359,12 @@ app.delete('/api/activites/:id(\\d+)', authenticateToken, async (req, res) => {
 
 // ==================== UTILISATEURS ROUTES ====================
 
-app.get('/api/utilisateurs', authenticateToken, async (req, res) => {
+app.get('/api/utilisateurs', authenticateToken, requireRole('super_admin'), async (req, res) => {
   try {
     const payload = await getUtilisateurs({
       search: req.query.search ? String(req.query.search) : undefined,
       role: req.query.role ? String(req.query.role) : undefined,
-      province: req.query.province ? String(req.query.province) : undefined,
+      province: scopeProvince(req),
       statut: req.query.statut ? String(req.query.statut) : undefined,
       page: req.query.page ? Number(req.query.page) : 0,
       limit: req.query.limit ? Number(req.query.limit) : 10,
@@ -2062,7 +2382,7 @@ app.get('/api/utilisateurs', authenticateToken, async (req, res) => {
   }
 });
 
-app.get('/api/utilisateurs/:id(\\d+)', authenticateToken, async (req, res) => {
+app.get('/api/utilisateurs/:id(\\d+)', authenticateToken, requireRole('super_admin'), async (req, res) => {
   try {
     const utilisateurId = Number(req.params.id);
 
@@ -2088,7 +2408,7 @@ app.get('/api/utilisateurs/:id(\\d+)', authenticateToken, async (req, res) => {
   }
 });
 
-app.get('/api/utilisateurs/stats', authenticateToken, async (_req, res) => {
+app.get('/api/utilisateurs/stats', authenticateToken, requireRole('super_admin'), async (_req, res) => {
   try {
     const stats = await getUtilisateursStats();
     return res.json(stats);
@@ -2126,7 +2446,7 @@ app.get('/api/utilisateurs/permissions', authenticateToken, (_req, res) => {
   ]);
 });
 
-app.post('/api/utilisateurs', authenticateToken, async (req, res) => {
+app.post('/api/utilisateurs', authenticateToken, requireRole('super_admin'), async (req, res) => {
   try {
     const created = await createUtilisateur({
       nom: req.body.nom,
@@ -2154,7 +2474,7 @@ app.post('/api/utilisateurs', authenticateToken, async (req, res) => {
   }
 });
 
-app.post('/api/utilisateurs/:id(\\d+)/reset-password', authenticateToken, async (req, res) => {
+app.post('/api/utilisateurs/:id(\\d+)/reset-password', authenticateToken, requireRole('super_admin'), async (req, res) => {
   try {
     const utilisateurId = Number(req.params.id);
 
@@ -2180,7 +2500,7 @@ app.post('/api/utilisateurs/:id(\\d+)/reset-password', authenticateToken, async 
   }
 });
 
-app.patch('/api/utilisateurs/:id(\\d+)/statut', authenticateToken, async (req, res) => {
+app.patch('/api/utilisateurs/:id(\\d+)/statut', authenticateToken, requireRole('super_admin'), async (req, res) => {
   try {
     const utilisateurId = Number(req.params.id);
 
@@ -2206,7 +2526,7 @@ app.patch('/api/utilisateurs/:id(\\d+)/statut', authenticateToken, async (req, r
   }
 });
 
-app.put('/api/utilisateurs/:id(\\d+)', authenticateToken, async (req, res) => {
+app.put('/api/utilisateurs/:id(\\d+)', authenticateToken, requireRole('super_admin'), async (req, res) => {
   try {
     const utilisateurId = Number(req.params.id);
 
@@ -2243,7 +2563,7 @@ app.put('/api/utilisateurs/:id(\\d+)', authenticateToken, async (req, res) => {
   }
 });
 
-app.delete('/api/utilisateurs/:id(\\d+)', authenticateToken, async (req, res) => {
+app.delete('/api/utilisateurs/:id(\\d+)', authenticateToken, requireRole('super_admin'), async (req, res) => {
   try {
     const utilisateurId = Number(req.params.id);
 
@@ -2666,7 +2986,7 @@ app.put('/api/notifications/:id(\\d+)/read', authenticateToken, async (req, res)
 
 // ==================== GRM PLAINTES ROUTES (CRUD complet) ====================
 
-app.post('/api/grm/plaintes', authenticateToken, async (req, res) => {
+app.post('/api/grm/plaintes', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep', 'ot'), async (req, res) => {
   try {
     const plainte = await createPlainte({
       type: req.body.type ? String(req.body.type) : undefined,
@@ -2693,7 +3013,7 @@ app.post('/api/grm/plaintes', authenticateToken, async (req, res) => {
   }
 });
 
-app.put('/api/grm/plaintes/:id(\\d+)', authenticateToken, async (req, res) => {
+app.put('/api/grm/plaintes/:id(\\d+)', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep', 'ot'), async (req, res) => {
   try {
     const plainte = await updatePlainte(Number(req.params.id), {
       type: req.body.type !== undefined ? String(req.body.type) : undefined,
@@ -2727,7 +3047,7 @@ app.put('/api/grm/plaintes/:id(\\d+)', authenticateToken, async (req, res) => {
   }
 });
 
-app.delete('/api/grm/plaintes/:id(\\d+)', authenticateToken, async (req, res) => {
+app.delete('/api/grm/plaintes/:id(\\d+)', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep'), async (req, res) => {
   try {
     const deleted = await deletePlainte(Number(req.params.id));
     if (!deleted) {
@@ -2748,36 +3068,60 @@ app.delete('/api/grm/plaintes/:id(\\d+)', authenticateToken, async (req, res) =>
 
 // ==================== CALCULATEUR ROUTES ====================
 
+// Anciens codes (internes « ODP-x / IR-x » et alias historiques) -> codes réels du
+// classeur v6 reformulé (21/08/2026), désormais stockés tels quels dans cadre_resultats.
+// Seuls les anciens codes qui ne sont PAS des codes réels actuels figurent ici.
 const CALCULATEUR_CODE_ALIASES: Record<string, string> = {
   'ODP-1': 'IODP1.1',
-  'ODP-2': 'IODP2.1',
-  'ODP-2F': 'IODP2.2',
+  'ODP-2': 'IODP2.1.1',
+  'ODP-2F': 'IODP2.1.2',
   'ODP-3': 'IODP2.3',
   'ODP-4': 'IODP2.4',
-  'ODP-5': 'IODP2.6',
-  'ODP-6': 'IODP3.2',
-  'ODP-7': 'IODP3.3',
-  'ODP-7F': 'IODP3.4',
-  'IR-1.1.1': 'IR1.1.1',
-  'IR-1.1.1F': 'IR1.1.2',
-  'IR-1.1.2': 'IR1.1.3',
-  'IR-1.1.3': 'IR1.1.4',
-  'IR-1.1.3F': 'IR1.1.5',
-  'IR-1.1.4': 'IR1.1.6',
+  'ODP-5': 'IODP2.5',
+  'ODP-6': 'IR2.1.3',
+  'ODP-7': 'IR1.1.6.1',
+  'ODP-7F': 'IR1.1.6.2',
+  'IODP2.1': 'IODP2.1.1',
+  'IODP2.2': 'IODP2.1.2',
+  'IODP2.6': 'IODP2.5',
+  'IODP3.2': 'IR2.1.3',
+  'IODP3.3': 'IR1.1.6.1',
+  'IODP3.4': 'IR1.1.6.2',
+  'IR-1.1.1': 'IR1.1.1.1',
+  'IR-1.1.1F': 'IR1.1.1.2',
+  'IR-1.1.2': 'IR1.1.2',
+  'IR-1.1.3': 'IR1.1.3.1',
+  'IR-1.1.3F': 'IR1.1.3.2',
+  'IR-1.1.4': 'IR1.1.4',
+  'IR-1.1.5': 'IR1.1.5',
+  'IR1.1.1': 'IR1.1.1.1',
   'IR-2.1.1': 'IR2.1.1',
-  'IR-2.1.2': 'IR2.1.4',
-  'IR-2.1.3': 'IR2.1.5',
-  'IR-2.1.4': 'IR2.1.6',
-  'IR-2.2.1': 'IR2.2.1',
-  'IR-2.2.1F': 'IR2.2.2',
-  'IR-2.2.2': 'IR2.2.7',
-  'IR-2.2.2F': 'IR2.2.8',
-  'IR-2.2.3': 'IR2.2.3',
-  'IR-2.2.4': 'IR2.2.4',
-  'IR-3.1.1': 'IR3.1.1',
-  'IR-3.1.2': 'IR3.1.4',
+  'IR-2.1.2': 'IR2.1.2',
+  'IR-2.1.3': 'IR2.1.3',
+  'IR-2.1.4': 'IR2.1.4',
+  'IR2.1.5': 'IR2.1.3',
+  'IR2.1.6': 'IR2.1.4',
+  'IR-2.2.1': 'IR2.2.4',
+  'IR-2.2.1F': 'IR2.2.4',
+  'IR-2.2.2': 'IR2.2.5',
+  'IR-2.2.2F': 'IR2.2.5',
+  'IR-2.2.3': 'IR2.2.7',
+  'IR-2.2.4': 'IR2.2.3',
+  'IR-2.2.6': 'IR2.2.6',
+  'IR2.2.8': 'IR2.2.5',
+  'IR2.2.4.1': 'IR2.2.4',
+  'IR2.2.4.2': 'IR2.2.4',
+  'IR2.2.5.1': 'IR2.2.5',
+  'IR2.2.5.2': 'IR2.2.5',
+  'IR-3.1.1': 'IR3.1.2',
+  'IR-3.1.2': 'IR3.1.1',
   'IR-3.1.3': 'IR3.1.5',
-  'IR-4.1': 'IR4.1',
+  'IR-3.1.4': 'IR3.1.3',
+  'IR-3.1.5': 'IR3.1.4',
+  'IR-3.1.6': 'IR3.1.6',
+  'IR3.1.7': 'IR3.1.6',
+  'IR-4.1': 'IODP3.1',
+  'IR4.1': 'IODP3.1',
 };
 
 const CALCULATEUR_CODE_REVERSE_ALIASES = Object.fromEntries(
@@ -2833,7 +3177,7 @@ app.get('/api/calculateur/indicateurs', authenticateToken, async (_req: Request,
       formule: getFormuleForCode(code),
       unite: row.unite,
       frequence: row.frequence || 'annuelle',
-      type: row.type === 1 ? 'iodp' : 'ir',
+      type: row.type === true || row.type === 1 ? 'iodp' : 'ir',
       composante: row.composante,
       cible: row.cible !== null ? Number(row.cible) : null,
       champs: getChampsForIndicateur(code),
@@ -2871,7 +3215,7 @@ app.get('/api/calculateur/indicateurs/:code', authenticateToken, async (req: Req
       formule: getFormuleForCode(code),
       unite: row.unite,
       frequence: row.frequence || 'annuelle',
-      type: row.type === 1 ? 'iodp' : 'ir',
+      type: row.type === true || row.type === 1 ? 'iodp' : 'ir',
       composante: row.composante,
       cible: row.cible !== null ? Number(row.cible) : null,
       champs: getChampsForIndicateur(code),
@@ -2911,7 +3255,7 @@ app.post('/api/calculateur/calculer/:code', authenticateToken, async (req: Reque
         valeur = ((donnees.surplus_t / donnees.surplus_t0) - 1) * 100;
         interpretation = valeur > 0 ? `Hausse de ${valeur.toFixed(1)}% des ventes` : `Baisse de ${Math.abs(valeur).toFixed(1)}% des ventes`;
         break;
-      case 'IODP2.1':
+      case 'IODP2.1.1':
         valeur = (donnees.nouveaux || 0) + (donnees.cumul_anterieur || 0);
         interpretation = `Total cumulé de ${valeur.toLocaleString()} exploitants ayant adopté les technologies`;
         break;
@@ -2919,12 +3263,12 @@ app.post('/api/calculateur/calculer/:code', authenticateToken, async (req: Reque
         valeur = ((donnees.rendement_t - donnees.rendement_t0) / donnees.rendement_t0) * 100;
         interpretation = valeur > 0 ? `Augmentation de ${valeur.toFixed(1)}% du rendement` : `Baisse de ${Math.abs(valeur).toFixed(1)}% du rendement`;
         break;
-      case 'IODP2.6':
+      case 'IODP2.5':
         valeur = (1 - (donnees.taux_t / donnees.taux_t0)) * 100;
         interpretation = valeur > 0 ? `Réduction de ${valeur.toFixed(1)}% de la mortalité` : 'Augmentation de la mortalité';
         if (valeur < 20) recommandations.push("Renforcer les campagnes de vaccination", "Améliorer la formation des éleveurs");
         break;
-      case 'IR1.1.1':
+      case 'IR1.1.1.1':
         valeur = (donnees.nouveaux || 0) + (donnees.cumul_anterieur || 0);
         interpretation = `${valeur.toLocaleString()} agriculteurs atteints au total`;
         break;
@@ -2932,12 +3276,12 @@ app.post('/api/calculateur/calculer/:code', authenticateToken, async (req: Reque
         valeur = (donnees.routes_nationales || 0) + (donnees.routes_provinciales || 0) + (donnees.routes_desserte || 0);
         interpretation = `${valeur.toLocaleString()} km de routes réhabilitées`;
         break;
-      case 'IR3.1.4':
+      case 'IR3.1.1':
         valeur = (donnees.traitees_delai / donnees.recues) * 100;
         interpretation = `${valeur.toFixed(1)}% des plaintes traitées dans les délais`;
         if (valeur < 80) recommandations.push("Renforcer l'équipe GRM", 'Améliorer les procédures de traitement');
         break;
-      case 'IR3.1.7':
+      case 'IR3.1.6':
         valeur = (donnees.satisfaits / donnees.total_adoptants) * 100;
         interpretation = `${valeur.toFixed(1)}% des fermiers sont satisfaits`;
         break;
@@ -2991,7 +3335,7 @@ app.get('/api/calculateur/historique', authenticateToken, async (req: Request, r
 });
 
 // Sauvegarder un calcul
-app.post('/api/calculateur/sauvegarder', authenticateToken, async (req: Request, res: Response) => {
+app.post('/api/calculateur/sauvegarder', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep'), async (req: Request, res: Response) => {
   try {
     const { code, donnees, resultat } = req.body;
     const [rows] = await getDbPool().query(
@@ -3056,16 +3400,15 @@ function getFormuleForCode(code: string): string {
   const normalizedCode = toCalculateurCode(code);
   const formules: Record<string, string> = {
     'IODP1.1': '((Surplus vendu année t / Surplus vendu année référence) − 1) × 100',
-    'IODP2.1': 'Nouveaux adoptants + Cumul années précédentes',
-    'IODP2.2': 'Nouvelles femmes adoptantes + Cumul périodes précédentes',
+    'IODP2.1.1': 'Nouveaux adoptants + Cumul années précédentes',
+    'IODP2.1.2': 'Nouvelles femmes adoptantes + Cumul périodes précédentes',
     'IODP2.3': '((Rendement t − Rendement t0) / Rendement t0) × 100',
     'IODP2.4': '((Rendement t − Rendement t0) / Rendement t0) × 100',
-    'IODP2.5': '((Rendement t − Rendement t0) / Rendement t0) × 100',
-    'IODP2.6': '(1 − (Taux mortalité t / Taux mortalité t0)) × 100',
-    'IR1.1.1': 'Nouveaux bénéficiaires + Cumul périodes précédentes',
+    'IODP2.5': '(1 − (Taux mortalité t / Taux mortalité t0)) × 100',
+    'IR1.1.1.1': 'Nouveaux bénéficiaires + Cumul périodes précédentes',
     'IR2.1.1': 'Routes nationales + Routes provinciales + Routes de desserte',
-    'IR3.1.4': '(Plaintes traitées dans délai / Plaintes reçues) × 100',
-    'IR3.1.7': '(Fermiers satisfaits / Total fermiers ayant adopté) × 100',
+    'IR3.1.1': '(Plaintes traitées dans délai / Plaintes reçues) × 100',
+    'IR3.1.6': '(Fermiers satisfaits / Total fermiers ayant adopté) × 100',
   };
   return formules[normalizedCode] || 'Valeur saisie';
 }
@@ -3077,11 +3420,11 @@ function getChampsForIndicateur(code: string): Array<{ id: string; label: string
       { id: 'surplus_t', label: 'Surplus vendu année t (kg)', type: 'number', required: true },
       { id: 'surplus_t0', label: 'Surplus vendu année référence (kg)', type: 'number', required: true },
     ],
-    'IODP2.1': [
+    'IODP2.1.1': [
       { id: 'nouveaux', label: 'Nouveaux adoptants cette année', type: 'number', required: true },
       { id: 'cumul_anterieur', label: 'Cumul des années précédentes', type: 'number', required: true },
     ],
-    'IODP2.2': [
+    'IODP2.1.2': [
       { id: 'femmes_t', label: 'Nouvelles femmes adoptantes', type: 'number', required: true },
       { id: 'cumul_anterieur', label: 'Cumul périodes précédentes', type: 'number', required: true },
     ],
@@ -3094,14 +3437,10 @@ function getChampsForIndicateur(code: string): Array<{ id: string; label: string
       { id: 'rendement_t0', label: 'Rendement année référence (kg/ha)', type: 'number', required: true },
     ],
     'IODP2.5': [
-      { id: 'rendement_t', label: 'Rendement année t (kg/ha)', type: 'number', required: true },
-      { id: 'rendement_t0', label: 'Rendement année référence (kg/ha)', type: 'number', required: true },
-    ],
-    'IODP2.6': [
       { id: 'taux_t', label: 'Taux mortalité année t (%)', type: 'number', required: true },
       { id: 'taux_t0', label: 'Taux mortalité année référence (%)', type: 'number', required: true },
     ],
-    'IR1.1.1': [
+    'IR1.1.1.1': [
       { id: 'nouveaux', label: 'Nouveaux bénéficiaires cette période', type: 'number', required: true },
       { id: 'cumul_anterieur', label: 'Cumul des périodes précédentes', type: 'number', required: true },
     ],
@@ -3110,11 +3449,11 @@ function getChampsForIndicateur(code: string): Array<{ id: string; label: string
       { id: 'routes_provinciales', label: 'Routes provinciales (km)', type: 'number', required: true },
       { id: 'routes_desserte', label: 'Routes de desserte (km)', type: 'number', required: true },
     ],
-    'IR3.1.4': [
+    'IR3.1.1': [
       { id: 'traitees_delai', label: 'Plaintes traitées dans les délais', type: 'number', required: true },
       { id: 'recues', label: 'Plaintes reçues', type: 'number', required: true },
     ],
-    'IR3.1.7': [
+    'IR3.1.6': [
       { id: 'satisfaits', label: 'Fermiers satisfaits', type: 'number', required: true },
       { id: 'total_adoptants', label: 'Total fermiers ayant adopté', type: 'number', required: true },
     ],
@@ -3125,16 +3464,15 @@ function getChampsForIndicateur(code: string): Array<{ id: string; label: string
 function getChampsPourIndicateur(code: string) {
   const champsMap: Record<string, { id: string; label: string; type: string; required: boolean }[]> = {
     'IODP1.1': [{ id: 'surplus_t', label: 'Surplus vendu année t (kg)', type: 'number', required: true }, { id: 'surplus_t0', label: 'Surplus vendu année référence (kg)', type: 'number', required: true }],
-    'IODP2.1': [{ id: 'nouveaux', label: 'Nouveaux adoptants cette année', type: 'number', required: true }, { id: 'cumul_anterieur', label: 'Cumul des années précédentes', type: 'number', required: true }],
-    'IODP2.2': [{ id: 'femmes_t', label: 'Nouvelles femmes adoptantes', type: 'number', required: true }, { id: 'cumul_anterieur', label: 'Cumul périodes précédentes', type: 'number', required: true }],
+    'IODP2.1.1': [{ id: 'nouveaux', label: 'Nouveaux adoptants cette année', type: 'number', required: true }, { id: 'cumul_anterieur', label: 'Cumul des années précédentes', type: 'number', required: true }],
+    'IODP2.1.2': [{ id: 'femmes_t', label: 'Nouvelles femmes adoptantes', type: 'number', required: true }, { id: 'cumul_anterieur', label: 'Cumul périodes précédentes', type: 'number', required: true }],
     'IODP2.3': [{ id: 'rendement_t', label: 'Rendement maïs année t (kg/ha)', type: 'number', required: true }, { id: 'rendement_t0', label: 'Rendement maïs année référence (kg/ha)', type: 'number', required: true }],
     'IODP2.4': [{ id: 'rendement_t', label: 'Rendement manioc année t (kg/ha)', type: 'number', required: true }, { id: 'rendement_t0', label: 'Rendement manioc année référence (kg/ha)', type: 'number', required: true }],
-    'IODP2.5': [{ id: 'rendement_t', label: "Rendement arachide année t (kg/ha)", type: 'number', required: true }, { id: 'rendement_t0', label: "Rendement arachide année référence (kg/ha)", type: 'number', required: true }],
-    'IODP2.6': [{ id: 'taux_t', label: 'Taux mortalité année t (%)', type: 'number', required: true }, { id: 'taux_t0', label: 'Taux mortalité année référence (%)', type: 'number', required: true }],
-    'IR1.1.1': [{ id: 'nouveaux', label: 'Nouveaux bénéficiaires cette période', type: 'number', required: true }, { id: 'cumul_anterieur', label: 'Cumul des périodes précédentes', type: 'number', required: true }],
+    'IODP2.5': [{ id: 'taux_t', label: 'Taux mortalité année t (%)', type: 'number', required: true }, { id: 'taux_t0', label: 'Taux mortalité année référence (%)', type: 'number', required: true }],
+    'IR1.1.1.1': [{ id: 'nouveaux', label: 'Nouveaux bénéficiaires cette période', type: 'number', required: true }, { id: 'cumul_anterieur', label: 'Cumul des périodes précédentes', type: 'number', required: true }],
     'IR2.1.1': [{ id: 'routes_nationales', label: 'Routes nationales (km)', type: 'number', required: true }, { id: 'routes_provinciales', label: 'Routes provinciales (km)', type: 'number', required: true }, { id: 'routes_desserte', label: 'Routes de desserte (km)', type: 'number', required: true }],
-    'IR3.1.4': [{ id: 'traitees_delai', label: 'Plaintes traitées dans les délais', type: 'number', required: true }, { id: 'recues', label: 'Plaintes reçues', type: 'number', required: true }],
-    'IR3.1.7': [{ id: 'satisfaits', label: 'Fermiers satisfaits', type: 'number', required: true }, { id: 'total_adoptants', label: 'Total fermiers ayant adopté', type: 'number', required: true }],
+    'IR3.1.1': [{ id: 'traitees_delai', label: 'Plaintes traitées dans les délais', type: 'number', required: true }, { id: 'recues', label: 'Plaintes reçues', type: 'number', required: true }],
+    'IR3.1.6': [{ id: 'satisfaits', label: 'Fermiers satisfaits', type: 'number', required: true }, { id: 'total_adoptants', label: 'Total fermiers ayant adopté', type: 'number', required: true }],
   };
   return champsMap[code] || [{ id: 'valeur', label: 'Valeur', type: 'number', required: true }];
 }
@@ -3157,7 +3495,7 @@ app.get('/api/ot/data', authenticateToken, async (_req, res) => {
 app.get('/api/ot/activites', authenticateToken, async (req, res) => {
   try {
     return res.json(await getOTActivites({
-      province: req.query.province ? String(req.query.province) : undefined,
+      province: scopeProvince(req),
       statut: req.query.statut ? String(req.query.statut) : undefined,
       date_debut: req.query.date_debut ? String(req.query.date_debut) : undefined,
       date_fin: req.query.date_fin ? String(req.query.date_fin) : undefined,
@@ -3175,7 +3513,7 @@ app.get('/api/ot/equipiers', authenticateToken, async (req, res) => {
   try {
     return res.json(await getOTEquipiers({
       fonction: req.query.fonction ? String(req.query.fonction) : undefined,
-      province: req.query.province ? String(req.query.province) : undefined,
+      province: scopeProvince(req),
       actif: req.query.actif === undefined ? undefined : String(req.query.actif) === 'true',
     }));
   } catch (error) {
@@ -3199,7 +3537,7 @@ app.get('/api/ot/rapports', authenticateToken, async (_req, res) => {
   }
 });
 
-app.post('/api/ot/rapports', authenticateToken, async (req, res) => {
+app.post('/api/ot/rapports', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep', 'ot'), async (req, res) => {
   try {
     return res.status(201).json(await createOTRapport({
       mois: req.body.mois ? String(req.body.mois) : undefined,
@@ -3220,7 +3558,7 @@ app.post('/api/ot/rapports', authenticateToken, async (req, res) => {
   }
 });
 
-app.put('/api/ot/activites/:id(\\d+)', authenticateToken, async (req, res) => {
+app.put('/api/ot/activites/:id(\\d+)', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep', 'ot'), async (req, res) => {
   try {
     const activite = await updateOTActivite(Number(req.params.id), {
       type: req.body.type !== undefined ? String(req.body.type) : undefined,
@@ -3250,7 +3588,7 @@ app.put('/api/ot/activites/:id(\\d+)', authenticateToken, async (req, res) => {
   }
 });
 
-app.post('/api/ot/activites', authenticateToken, async (req, res) => {
+app.post('/api/ot/activites', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep', 'ot'), async (req, res) => {
   try {
     return res.status(201).json(await createOTActivite({
       type: req.body.type ? String(req.body.type) : undefined,
@@ -3304,11 +3642,11 @@ app.get('/api/ot/export/:format', authenticateToken, async (req, res) => {
 
 // ==================== DATABASE VIEWS ====================
 
-app.get('/api/database/beneficiaires', authenticateToken, async (req, res) => {
+app.get('/api/database/beneficiaires', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep'), async (req, res) => {
   try {
     const payload = await getBeneficiaires({
       search: req.query.search ? String(req.query.search) : undefined,
-      province: req.query.province ? String(req.query.province) : undefined,
+      province: scopeProvince(req),
       sexe: req.query.sexe ? String(req.query.sexe) : undefined,
       type: req.query.type_exploitant ? String(req.query.type_exploitant) : req.query.type ? String(req.query.type) : undefined,
       page: req.query.page ? Number(req.query.page) : 0,
@@ -3330,7 +3668,7 @@ app.get('/api/database/beneficiaires', authenticateToken, async (req, res) => {
   }
 });
 
-app.get('/api/database/beneficiaires/stats', authenticateToken, async (_req, res) => {
+app.get('/api/database/beneficiaires/stats', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep'), async (_req, res) => {
   try {
     const [baseStats, databaseStats] = await Promise.all([
       getBeneficiaireStats(),
@@ -3358,7 +3696,7 @@ app.get('/api/database/beneficiaires/stats', authenticateToken, async (_req, res
   }
 });
 
-app.get('/api/indicateurs-database', authenticateToken, async (req, res) => {
+app.get('/api/indicateurs-database', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep'), async (req, res) => {
   try {
     res.json(await getIndicateursDatabase({
       search: typeof req.query.search === 'string' ? req.query.search : undefined,
@@ -3379,7 +3717,7 @@ app.get('/api/indicateurs-database', authenticateToken, async (req, res) => {
   }
 });
 
-app.get('/api/indicateurs-database/stats', authenticateToken, async (_req, res) => {
+app.get('/api/indicateurs-database/stats', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep'), async (_req, res) => {
   try {
     res.json(await getIndicateursDatabaseStats());
   } catch (error) {
@@ -3409,7 +3747,7 @@ app.get('/api/indicateurs-database/:id(\\d+)', authenticateToken, async (req, re
   }
 });
 
-app.put('/api/indicateurs-database/:id(\\d+)', authenticateToken, async (req, res) => {
+app.put('/api/indicateurs-database/:id(\\d+)', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep'), async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (req.body?.valeurs?.actuelle !== undefined) {
@@ -3430,7 +3768,7 @@ app.put('/api/indicateurs-database/:id(\\d+)', authenticateToken, async (req, re
   }
 });
 
-app.put('/api/indicateurs-database/:id(\\d+)/valeur', authenticateToken, async (req, res) => {
+app.put('/api/indicateurs-database/:id(\\d+)/valeur', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep'), async (req, res) => {
   try {
     const id = Number(req.params.id);
     const { valeur, periode } = req.body;
@@ -3451,7 +3789,7 @@ app.put('/api/indicateurs-database/:id(\\d+)/valeur', authenticateToken, async (
 
 app.get('/api/suivi/missions', authenticateToken, async (req: express.Request, res: express.Response) => {
   try {
-    const province = typeof req.query.province === 'string' ? req.query.province : undefined;
+    const province = scopeProvince(req);
     return res.json(await getSuiviMissions(province));
   } catch (error) {
     console.error('GET /api/suivi/missions failed', error);
@@ -3517,8 +3855,8 @@ app.get('/api/beneficiaires/advanced-stats', authenticateToken, async (req: Requ
         COUNT(*) AS total_producteurs,
         SUM(CASE WHEN a.sexe = 'F' THEN 1 ELSE 0 END) AS total_femmes,
         AVG(CASE WHEN a.age IS NOT NULL AND a.age > 0 THEN a.age END) AS age_moyen,
-        SUM(CASE WHEN a.est_chef_menage = 1 THEN 1 ELSE 0 END) AS chefs_menage,
-        SUM(CASE WHEN a.membre_deja_enregistre = 1 THEN 1 ELSE 0 END) AS membres_deja_enregistres
+        SUM(CASE WHEN a.est_chef_menage = true THEN 1 ELSE 0 END) AS chefs_menage,
+        SUM(CASE WHEN a.membre_deja_enregistre = true THEN 1 ELSE 0 END) AS membres_deja_enregistres
       FROM agriculteurs a
       ${whereClause}
     `, params);
@@ -3732,7 +4070,7 @@ app.get('/api/beneficiaires/cartes-ventes-stats', authenticateToken, async (req:
         SUM(CASE WHEN COALESCE(dc.statut_carte, 'a_imprimer') = 'en_attente' THEN 1 ELSE 0 END) AS cartes_attente,
         SUM(CASE WHEN COALESCE(dc.statut_carte, 'a_imprimer') = 'a_imprimer' THEN 1 ELSE 0 END) AS cartes_imprimer
       FROM agriculteurs a
-      LEFT JOIN cartes_agriculteurs dc ON dc.rna_id = CAST(a.farmer_id AS CHAR)
+      LEFT JOIN cartes_agriculteurs dc ON dc.rna_id = CAST(a.farmer_id AS TEXT)
       ${whereClause}
       GROUP BY a.province
       ORDER BY a.province
@@ -3747,7 +4085,7 @@ app.get('/api/beneficiaires/cartes-ventes-stats', authenticateToken, async (req:
         COALESCE(SUM(vs.montant_usd), 0) AS total_usd,
         0 AS total_cdf
       FROM ventes_semences vs
-      JOIN agriculteurs a ON a.farmer_id = CAST(vs.rna_id AS UNSIGNED)
+      JOIN agriculteurs a ON a.farmer_id = CAST(vs.rna_id AS BIGINT)
       ${whereClause}
       GROUP BY vs.province
       ORDER BY vs.province
@@ -3761,8 +4099,8 @@ app.get('/api/beneficiaires/cartes-ventes-stats', authenticateToken, async (req:
         SUM(CASE WHEN COALESCE(dc.statut_carte, 'a_imprimer') = 'distribuee' THEN 1 ELSE 0 END) AS ont_recu_carte,
         COUNT(DISTINCT vs.rna_id) AS ont_achete_semences
       FROM agriculteurs a
-      LEFT JOIN cartes_agriculteurs dc ON dc.rna_id = CAST(a.farmer_id AS CHAR)
-      LEFT JOIN ventes_semences vs ON vs.rna_id = CAST(a.farmer_id AS CHAR)
+      LEFT JOIN cartes_agriculteurs dc ON dc.rna_id = CAST(a.farmer_id AS TEXT)
+      LEFT JOIN ventes_semences vs ON vs.rna_id = CAST(a.farmer_id AS TEXT)
       ${whereClause}
       GROUP BY a.village
       ORDER BY a.village
@@ -3779,8 +4117,8 @@ app.get('/api/beneficiaires/cartes-ventes-stats', authenticateToken, async (req:
         0 AS fournisseurs_actifs,
         COALESCE(SUM(vs.quantite_kg), 0) AS kg_semences_vendues
       FROM agriculteurs a
-      LEFT JOIN cartes_agriculteurs dc ON dc.rna_id = CAST(a.farmer_id AS CHAR)
-      LEFT JOIN ventes_semences vs ON vs.rna_id = CAST(a.farmer_id AS CHAR)
+      LEFT JOIN cartes_agriculteurs dc ON dc.rna_id = CAST(a.farmer_id AS TEXT)
+      LEFT JOIN ventes_semences vs ON vs.rna_id = CAST(a.farmer_id AS TEXT)
       ${whereClause}
     `, params);
     
@@ -3867,8 +4205,8 @@ app.get('/api/beneficiaires/export/:format', authenticateToken, async (req: Requ
         COUNT(*) AS total_producteurs,
         SUM(CASE WHEN a.sexe = 'F' THEN 1 ELSE 0 END) AS total_femmes,
         AVG(CASE WHEN a.age IS NOT NULL AND a.age > 0 THEN a.age END) AS age_moyen,
-        SUM(CASE WHEN a.est_chef_menage = 1 THEN 1 ELSE 0 END) AS chefs_menage,
-        SUM(CASE WHEN a.membre_deja_enregistre = 1 THEN 1 ELSE 0 END) AS membres_deja_enregistres
+        SUM(CASE WHEN a.est_chef_menage = true THEN 1 ELSE 0 END) AS chefs_menage,
+        SUM(CASE WHEN a.membre_deja_enregistre = true THEN 1 ELSE 0 END) AS membres_deja_enregistres
       FROM agriculteurs a
       ${whereClause}
     `, params);
@@ -3974,12 +4312,12 @@ app.get('/api/beneficiaires/export-beneficiaires/:format', authenticateToken, as
         COALESCE(dc.statut, 'non_distribuee') AS statut_carte,
         COALESCE(vs.total_kg, 0) AS semences_achetees_kg
       FROM agriculteurs a
-      LEFT JOIN distribution_cartes dc ON dc.rna_id = CAST(a.farmer_id AS CHAR)
+      LEFT JOIN distribution_cartes dc ON dc.rna_id = CAST(a.farmer_id AS TEXT)
       LEFT JOIN (
         SELECT rna_id, SUM(quantite_kg) AS total_kg
         FROM ventes_semences
         GROUP BY rna_id
-      ) vs ON vs.rna_id = CAST(a.farmer_id AS CHAR)
+      ) vs ON vs.rna_id = CAST(a.farmer_id AS TEXT)
       ${whereClause}
       ORDER BY a.province, a.territoire, a.village, a.nom_complet
     `, params);
@@ -4033,7 +4371,7 @@ app.get('/api/plans-attenuation', authenticateToken, async (_req: Request, res: 
       FROM risques
       WHERE plan_attenuation IS NOT NULL AND plan_attenuation != ''
       ORDER BY 
-        FIELD(niveau, 'Critique', 'Élevé', 'Modéré', 'Faible'),
+        array_position(ARRAY['Critique', 'Élevé', 'Modéré', 'Faible'], niveau),
         date_identification DESC
     `);
 
@@ -4092,7 +4430,7 @@ app.get('/api/plans-attenuation/stats', authenticateToken, async (_req: Request,
 });
 
 // Mettre à jour le plan d'atténuation d'un risque
-app.put('/api/plans-attenuation/:id(\\d+)', authenticateToken, async (req: Request, res: Response) => {
+app.put('/api/plans-attenuation/:id(\\d+)', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep'), async (req: Request, res: Response) => {
   try {
     const id = Number(req.params.id);
     const { plan_attenuation, actions_prevues, indicateurs_surveillance } = req.body;
@@ -4120,7 +4458,7 @@ app.put('/api/plans-attenuation/:id(\\d+)', authenticateToken, async (req: Reque
 });
 
 // Ajouter une action à un risque
-app.post('/api/plans-attenuation/:id(\\d+)/actions', authenticateToken, async (req: Request, res: Response) => {
+app.post('/api/plans-attenuation/:id(\\d+)/actions', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep'), async (req: Request, res: Response) => {
   try {
     const idRisque = Number(req.params.id);
     const { action, responsable, date_debut, date_fin, statut, resultat } = req.body;
@@ -4144,7 +4482,7 @@ app.post('/api/plans-attenuation/:id(\\d+)/actions', authenticateToken, async (r
 });
 
 // Mettre à jour une action
-app.put('/api/plans-attenuation/actions/:id(\\d+)', authenticateToken, async (req: Request, res: Response) => {
+app.put('/api/plans-attenuation/actions/:id(\\d+)', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep'), async (req: Request, res: Response) => {
   try {
     const id = Number(req.params.id);
     const { action, responsable, date_debut, date_fin, statut, resultat } = req.body;
@@ -4169,7 +4507,7 @@ app.put('/api/plans-attenuation/actions/:id(\\d+)', authenticateToken, async (re
 });
 
 // Supprimer une action
-app.delete('/api/plans-attenuation/actions/:id(\\d+)', authenticateToken, async (req: Request, res: Response) => {
+app.delete('/api/plans-attenuation/actions/:id(\\d+)', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep'), async (req: Request, res: Response) => {
   try {
     const id = Number(req.params.id);
     await getDbPool().query('DELETE FROM risque_actions WHERE id = ?', [id]);
@@ -4186,7 +4524,7 @@ app.delete('/api/plans-attenuation/actions/:id(\\d+)', authenticateToken, async 
 app.get('/api/cartes-agriculteurs', authenticateToken, async (req: Request, res: Response) => {
   try {
     const search = req.query.search ? String(req.query.search) : '';
-    const province = req.query.province ? String(req.query.province) : '';
+    const province = scopeProvince(req) ?? '';
     const statut = req.query.statut ? String(req.query.statut) : '';
     const page = Math.max(Number(req.query.page ?? 0), 0);
     const limit = Math.max(Number(req.query.limit ?? 10), 1);
@@ -4196,7 +4534,7 @@ app.get('/api/cartes-agriculteurs', authenticateToken, async (req: Request, res:
     const params: any[] = [];
 
     if (search) {
-      whereClause += ' AND (a.nom_complet LIKE ? OR CAST(a.farmer_id AS CHAR) LIKE ? OR dc.numero_carte LIKE ?)';
+      whereClause += ' AND (a.nom_complet LIKE ? OR CAST(a.farmer_id AS TEXT) LIKE ? OR dc.numero_carte LIKE ?)';
       const searchParam = `%${search}%`;
       params.push(searchParam, searchParam, searchParam);
     }
@@ -4215,7 +4553,7 @@ app.get('/api/cartes-agriculteurs', authenticateToken, async (req: Request, res:
     const [countRows] = await getDbPool().query<CountRow[]>(
       `SELECT COUNT(*) AS total
        FROM agriculteurs a
-       LEFT JOIN distribution_cartes dc ON dc.rna_id = CAST(a.farmer_id AS CHAR)
+       LEFT JOIN distribution_cartes dc ON dc.rna_id = CAST(a.farmer_id AS TEXT)
        ${whereClause}`,
       params
     );
@@ -4225,7 +4563,7 @@ app.get('/api/cartes-agriculteurs', authenticateToken, async (req: Request, res:
     const [rows] = await getDbPool().query<any[]>(
       `SELECT 
          a.id,
-         CAST(a.farmer_id AS CHAR) AS rna_id,
+         CAST(a.farmer_id AS TEXT) AS rna_id,
          a.nom_complet,
          a.sexe,
          a.province,
@@ -4240,7 +4578,7 @@ app.get('/api/cartes-agriculteurs', authenticateToken, async (req: Request, res:
          dc.agent_distribution,
          dc.observations
        FROM agriculteurs a
-       LEFT JOIN distribution_cartes dc ON dc.rna_id = CAST(a.farmer_id AS CHAR)
+       LEFT JOIN distribution_cartes dc ON dc.rna_id = CAST(a.farmer_id AS TEXT)
        ${whereClause}
        ORDER BY a.id DESC
        LIMIT ? OFFSET ?`,
@@ -4276,14 +4614,14 @@ app.get('/api/cartes-agriculteurs', authenticateToken, async (req: Request, res:
 app.get('/api/cartes-agriculteurs/stats', authenticateToken, async (req: Request, res: Response) => {
   try {
     const search = req.query.search ? String(req.query.search) : '';
-    const province = req.query.province ? String(req.query.province) : '';
+    const province = scopeProvince(req) ?? '';
     const statut = req.query.statut ? String(req.query.statut) : '';
 
     let whereClause = 'WHERE 1=1';
     const params: any[] = [];
 
     if (search) {
-      whereClause += ' AND (a.nom_complet LIKE ? OR CAST(a.farmer_id AS CHAR) LIKE ? OR dc.numero_carte LIKE ?)';
+      whereClause += ' AND (a.nom_complet LIKE ? OR CAST(a.farmer_id AS TEXT) LIKE ? OR dc.numero_carte LIKE ?)';
       const searchParam = `%${search}%`;
       params.push(searchParam, searchParam, searchParam);
     }
@@ -4307,7 +4645,7 @@ app.get('/api/cartes-agriculteurs/stats', authenticateToken, async (req: Request
          SUM(CASE WHEN COALESCE(dc.statut, 'a_imprimer') = 'a_imprimer' THEN 1 ELSE 0 END) AS a_imprimer,
          COUNT(DISTINCT NULLIF(TRIM(a.province), '')) AS provinces
        FROM agriculteurs a
-       LEFT JOIN distribution_cartes dc ON dc.rna_id = CAST(a.farmer_id AS CHAR)
+       LEFT JOIN distribution_cartes dc ON dc.rna_id = CAST(a.farmer_id AS TEXT)
        ${whereClause}`,
       params
     );
@@ -4328,21 +4666,21 @@ app.get('/api/cartes-agriculteurs/stats', authenticateToken, async (req: Request
 });
 
 // Mettre à jour le statut d'une carte
-app.put('/api/cartes-agriculteurs/:id(\\d+)', authenticateToken, async (req: Request, res: Response) => {
+app.put('/api/cartes-agriculteurs/:id(\\d+)', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep'), async (req: Request, res: Response) => {
   try {
     const id = Number(req.params.id);
     const { numero_carte, date_distribution, agent_distribution, statut, observations } = req.body;
 
     // Vérifier si l'enregistrement existe
     const [existing] = await getDbPool().query<any[]>(
-      'SELECT * FROM distribution_cartes WHERE rna_id = (SELECT CAST(farmer_id AS CHAR) FROM agriculteurs WHERE id = ?)',
+      'SELECT * FROM distribution_cartes WHERE rna_id = (SELECT CAST(farmer_id AS TEXT) FROM agriculteurs WHERE id = ?)',
       [id]
     );
 
     if (existing.length === 0) {
       // Créer un nouvel enregistrement
       const [agriculteur] = await getDbPool().query<any[]>(
-        'SELECT CAST(farmer_id AS CHAR) AS rna_id FROM agriculteurs WHERE id = ?',
+        'SELECT CAST(farmer_id AS TEXT) AS rna_id FROM agriculteurs WHERE id = ?',
         [id]
       );
       
@@ -4364,7 +4702,7 @@ app.put('/api/cartes-agriculteurs/:id(\\d+)', authenticateToken, async (req: Req
              agent_distribution = COALESCE(?, agent_distribution),
              statut = COALESCE(?, statut),
              observations = COALESCE(?, observations)
-         WHERE rna_id = (SELECT CAST(farmer_id AS CHAR) FROM agriculteurs WHERE id = ?)`,
+         WHERE rna_id = (SELECT CAST(farmer_id AS TEXT) FROM agriculteurs WHERE id = ?)`,
         [numero_carte, date_distribution, agent_distribution, statut, observations, id]
       );
     }
@@ -4381,14 +4719,14 @@ app.get('/api/cartes-agriculteurs/export/:format', authenticateToken, async (req
   try {
     const format = req.params.format;
     const search = req.query.search ? String(req.query.search) : '';
-    const province = req.query.province ? String(req.query.province) : '';
+    const province = scopeProvince(req) ?? '';
     const statut = req.query.statut ? String(req.query.statut) : '';
 
     let whereClause = 'WHERE 1=1';
     const params: any[] = [];
 
     if (search) {
-      whereClause += ' AND (a.nom_complet LIKE ? OR CAST(a.farmer_id AS CHAR) LIKE ? OR dc.numero_carte LIKE ?)';
+      whereClause += ' AND (a.nom_complet LIKE ? OR CAST(a.farmer_id AS TEXT) LIKE ? OR dc.numero_carte LIKE ?)';
       const searchParam = `%${search}%`;
       params.push(searchParam, searchParam, searchParam);
     }
@@ -4405,7 +4743,7 @@ app.get('/api/cartes-agriculteurs/export/:format', authenticateToken, async (req
 
     const [rows] = await getDbPool().query<any[]>(
       `SELECT 
-         CAST(a.farmer_id AS CHAR) AS rna_id,
+         CAST(a.farmer_id AS TEXT) AS rna_id,
          a.nom_complet,
          a.sexe,
          a.province,
@@ -4418,7 +4756,7 @@ app.get('/api/cartes-agriculteurs/export/:format', authenticateToken, async (req
          dc.date_distribution,
          dc.agent_distribution
        FROM agriculteurs a
-       LEFT JOIN distribution_cartes dc ON dc.rna_id = CAST(a.farmer_id AS CHAR)
+       LEFT JOIN distribution_cartes dc ON dc.rna_id = CAST(a.farmer_id AS TEXT)
        ${whereClause}
        ORDER BY a.province, a.territoire, a.village, a.nom_complet`,
       params
@@ -4459,12 +4797,12 @@ app.get('/api/cartes-agriculteurs/export/:format', authenticateToken, async (req
 // ==================== ACTIVITÉS DATABASE ROUTES ====================
 
 // Obtenir toutes les activités avec pagination et filtres
-app.get('/api/activites-database', authenticateToken, async (req: Request, res: Response) => {
+app.get('/api/activites-database', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep'), async (req: Request, res: Response) => {
   try {
     const search = req.query.search ? String(req.query.search) : '';
     const type = req.query.type ? String(req.query.type) : '';
     const statut = req.query.statut ? String(req.query.statut) : '';
-    const province = req.query.province ? String(req.query.province) : '';
+    const province = scopeProvince(req) ?? '';
     const page = Math.max(Number(req.query.page ?? 0), 0);
     const limit = Math.max(Number(req.query.limit ?? 10), 1);
     const offset = page * limit;
@@ -4534,7 +4872,7 @@ app.get('/api/activites-database', authenticateToken, async (req: Request, res: 
 });
 
 // Obtenir les statistiques des activités
-app.get('/api/activites-database/stats', authenticateToken, async (_req: Request, res: Response) => {
+app.get('/api/activites-database/stats', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep'), async (_req: Request, res: Response) => {
   try {
     const [typeRows] = await getDbPool().query(
       `SELECT type, COUNT(*) AS total FROM activites GROUP BY type`
@@ -4549,10 +4887,10 @@ app.get('/api/activites-database/stats', authenticateToken, async (_req: Request
     );
     
     const [monthRows] = await getDbPool().query(
-      `SELECT DATE_FORMAT(date_debut, '%Y-%m') AS mois, COUNT(*) AS total
+      `SELECT to_char(date_debut, 'YYYY-MM') AS mois, COUNT(*) AS total
        FROM activites
        WHERE date_debut IS NOT NULL
-       GROUP BY DATE_FORMAT(date_debut, '%Y-%m')
+       GROUP BY to_char(date_debut, 'YYYY-MM')
        ORDER BY mois DESC
        LIMIT 6`
     );
@@ -4627,7 +4965,7 @@ app.get('/api/activites-database/:id(\\d+)', authenticateToken, async (req: Requ
 });
 
 // Créer une activité
-app.post('/api/activites-database', authenticateToken, async (req: Request, res: Response) => {
+app.post('/api/activites-database', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep'), async (req: Request, res: Response) => {
   try {
     const {
       code, titre, description, type, composante, statut, priorite,
@@ -4689,7 +5027,7 @@ app.post('/api/activites-database', authenticateToken, async (req: Request, res:
 });
 
 // Mettre à jour une activité
-app.put('/api/activites-database/:id(\\d+)', authenticateToken, async (req: Request, res: Response) => {
+app.put('/api/activites-database/:id(\\d+)', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep'), async (req: Request, res: Response) => {
   try {
     const id = Number(req.params.id);
     const updates = req.body;
@@ -4751,7 +5089,7 @@ app.put('/api/activites-database/:id(\\d+)', authenticateToken, async (req: Requ
 });
 
 // Supprimer une activité
-app.delete('/api/activites-database/:id(\\d+)', authenticateToken, async (req: Request, res: Response) => {
+app.delete('/api/activites-database/:id(\\d+)', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep'), async (req: Request, res: Response) => {
   try {
     const [result] = await getDbPool().query('DELETE FROM activites WHERE id = ?', [req.params.id]);
     if ((result as any).affectedRows === 0) {
@@ -4763,6 +5101,404 @@ app.delete('/api/activites-database/:id(\\d+)', authenticateToken, async (req: R
     res.status(500).json({ message: 'Erreur lors de la suppression' });
   }
 });
+// ==================== AGENT COLLECTEUR ROUTES ====================
+
+app.get('/api/agent/profil', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const user = getRequestUser(req);
+    if (!user) {
+      return res.status(401).json({ message: 'Utilisateur non authentifié' });
+    }
+    const profil = await getAgentProfil(user.id);
+    if (!profil) {
+      return res.status(404).json({ message: 'Profil agent introuvable' });
+    }
+    return res.json(profil);
+  } catch (error) {
+    console.error('GET /api/agent/profil failed', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+    return res.status(500).json({ message: 'Erreur lors du chargement du profil agent' });
+  }
+});
+
+app.get('/api/agent/formulaires', authenticateToken, async (_req: Request, res: Response) => {
+  try {
+    return res.json(await getAgentFormulaires());
+  } catch (error) {
+    console.error('GET /api/agent/formulaires failed', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+    return res.status(500).json({ message: 'Erreur lors du chargement des formulaires' });
+  }
+});
+
+app.get('/api/agent/collectes', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const user = getRequestUser(req);
+    if (!user) {
+      return res.status(401).json({ message: 'Utilisateur non authentifié' });
+    }
+    const synced = typeof req.query.synced === 'string' ? req.query.synced === 'true' : undefined;
+    return res.json(await getAgentCollectes(user.id, {
+      page: req.query.page ? Number(req.query.page) : 0,
+      limit: req.query.limit ? Number(req.query.limit) : 10,
+      synced,
+    }));
+  } catch (error) {
+    console.error('GET /api/agent/collectes failed', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+    return res.status(500).json({ message: 'Erreur lors du chargement des collectes' });
+  }
+});
+
+app.post('/api/agent/collectes', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep', 'ot'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const user = getRequestUser(req);
+    if (!user) {
+      return res.status(401).json({ message: 'Utilisateur non authentifié' });
+    }
+    const collecte = await createAgentCollecte(user.id, req.body);
+    return res.status(201).json(collecte);
+  } catch (error) {
+    console.error('POST /api/agent/collectes failed', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+    return res.status(500).json({ message: 'Erreur lors de l\'enregistrement de la collecte' });
+  }
+});
+
+app.get('/api/agent/beneficiaires', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    return res.json(await getAgentBeneficiaires({
+      search: typeof req.query.search === 'string' ? req.query.search : undefined,
+      page: req.query.page ? Number(req.query.page) : 0,
+      limit: req.query.limit ? Number(req.query.limit) : 10,
+    }));
+  } catch (error) {
+    console.error('GET /api/agent/beneficiaires failed', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+    return res.status(500).json({ message: 'Erreur lors du chargement des bénéficiaires' });
+  }
+});
+
+app.get('/api/agent/stats', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const user = getRequestUser(req);
+    if (!user) {
+      return res.status(401).json({ message: 'Utilisateur non authentifié' });
+    }
+    return res.json(await getAgentStats(user.id));
+  } catch (error) {
+    console.error('GET /api/agent/stats failed', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+    return res.status(500).json({ message: 'Erreur lors du chargement des statistiques agent' });
+  }
+});
+
+app.post('/api/agent/sync', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep', 'ot'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const user = getRequestUser(req);
+    if (!user) {
+      return res.status(401).json({ message: 'Utilisateur non authentifié' });
+    }
+    const synced = await syncAgentCollectes(user.id);
+    return res.json({ synced });
+  } catch (error) {
+    console.error('POST /api/agent/sync failed', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+    return res.status(500).json({ message: 'Erreur lors de la synchronisation' });
+  }
+});
+
+// ==================== ENVIRONNEMENT / VBG ROUTES ====================
+
+app.get('/api/environnement/indicateurs', authenticateToken, async (_req: Request, res: Response) => {
+  try {
+    return res.json(await getEnvironnementIndicateurs());
+  } catch (error) {
+    console.error('GET /api/environnement/indicateurs failed', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+    return res.status(500).json({ message: 'Erreur lors du chargement des indicateurs environnementaux' });
+  }
+});
+
+app.get('/api/environnement/plaintes', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    return res.json(await getEnvironnementPlaintes({
+      type: typeof req.query.type === 'string' ? req.query.type : undefined,
+      statut: typeof req.query.statut === 'string' ? req.query.statut : undefined,
+      province: scopeProvince(req),
+    }));
+  } catch (error) {
+    console.error('GET /api/environnement/plaintes failed', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+    return res.status(500).json({ message: 'Erreur lors du chargement des plaintes' });
+  }
+});
+
+app.put('/api/environnement/plaintes/:id(\\d+)', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep'), async (req: Request, res: Response) => {
+  try {
+    const plainte = await updatePlainte(Number(req.params.id), req.body);
+    if (!plainte) {
+      return res.status(404).json({ message: 'Plainte non trouvée' });
+    }
+    return res.json(plainte);
+  } catch (error) {
+    console.error('PUT /api/environnement/plaintes/:id failed', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+    return res.status(500).json({ message: 'Erreur lors de la mise à jour de la plainte' });
+  }
+});
+
+app.get('/api/environnement/formations', authenticateToken, async (_req: Request, res: Response) => {
+  try {
+    return res.json(await getEnvironnementFormations());
+  } catch (error) {
+    console.error('GET /api/environnement/formations failed', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+    return res.status(500).json({ message: 'Erreur lors du chargement des formations' });
+  }
+});
+
+app.post('/api/environnement/formations', authenticateToken, requireRole('super_admin', 'admin', 'uncp', 'upep'), async (req: Request, res: Response) => {
+  try {
+    const formation = await addEnvironnementFormation(req.body);
+    return res.status(201).json(formation);
+  } catch (error) {
+    console.error('POST /api/environnement/formations failed', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+    return res.status(500).json({ message: 'Erreur lors de la création de la formation' });
+  }
+});
+
+app.get('/api/environnement/stats', authenticateToken, async (_req: Request, res: Response) => {
+  try {
+    return res.json(await getEnvironnementStats());
+  } catch (error) {
+    console.error('GET /api/environnement/stats failed', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+    return res.status(500).json({ message: 'Erreur lors du chargement des statistiques environnement' });
+  }
+});
+
+// ==================== AIDE / DOCUMENTATION ROUTES ====================
+
+app.get('/api/aide/guides', authenticateToken, async (_req: Request, res: Response) => {
+  try {
+    return res.json(await getAideGuides());
+  } catch (error) {
+    console.error('GET /api/aide/guides failed', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+    return res.status(500).json({ message: 'Erreur lors du chargement des guides' });
+  }
+});
+
+app.get('/api/aide/guides/:id(\\d+)', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const guide = await getAideGuideById(Number(req.params.id));
+    if (!guide) {
+      return res.status(404).json({ message: 'Guide non trouvé' });
+    }
+    return res.json(guide);
+  } catch (error) {
+    console.error('GET /api/aide/guides/:id failed', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+    return res.status(500).json({ message: 'Erreur lors du chargement du guide' });
+  }
+});
+
+app.get('/api/aide/faq', authenticateToken, async (_req: Request, res: Response) => {
+  try {
+    return res.json(await getAideFAQ());
+  } catch (error) {
+    console.error('GET /api/aide/faq failed', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+    return res.status(500).json({ message: 'Erreur lors du chargement de la FAQ' });
+  }
+});
+
+app.get('/api/aide/faq/:categorie', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    return res.json(await getAideFAQ(req.params.categorie));
+  } catch (error) {
+    console.error('GET /api/aide/faq/:categorie failed', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+    return res.status(500).json({ message: 'Erreur lors du chargement de la FAQ' });
+  }
+});
+
+app.get('/api/aide/tutoriels', authenticateToken, async (_req: Request, res: Response) => {
+  try {
+    return res.json(await getAideTutoriels());
+  } catch (error) {
+    console.error('GET /api/aide/tutoriels failed', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+    return res.status(500).json({ message: 'Erreur lors du chargement des tutoriels' });
+  }
+});
+
+app.get('/api/aide/tutoriels/:id(\\d+)', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const tutoriel = await getAideTutorielById(Number(req.params.id));
+    if (!tutoriel) {
+      return res.status(404).json({ message: 'Tutoriel non trouvé' });
+    }
+    return res.json(tutoriel);
+  } catch (error) {
+    console.error('GET /api/aide/tutoriels/:id failed', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+    return res.status(500).json({ message: 'Erreur lors du chargement du tutoriel' });
+  }
+});
+
+app.get('/api/aide/support', authenticateToken, (_req: Request, res: Response) => {
+  return res.json(getAideContactSupport());
+});
+
+app.post('/api/aide/demande', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { sujet, message, email } = req.body ?? {};
+    if (!sujet || !message || !email) {
+      return res.status(400).json({ message: 'Sujet, message et email requis' });
+    }
+    await createAideDemande({ sujet, message, email });
+    return res.status(201).json({ message: 'Demande envoyée avec succès' });
+  } catch (error) {
+    console.error('POST /api/aide/demande failed', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+    return res.status(500).json({ message: 'Erreur lors de l\'envoi de la demande' });
+  }
+});
+
+app.get('/api/aide/recherche', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const query = typeof req.query.q === 'string' ? req.query.q : '';
+    if (!query.trim()) {
+      return res.json([]);
+    }
+    return res.json(await searchAide(query));
+  } catch (error) {
+    console.error('GET /api/aide/recherche failed', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+    return res.status(500).json({ message: 'Erreur lors de la recherche' });
+  }
+});
+
+// ==================== CONFIGURATION ROUTES ====================
+
+app.get('/api/configuration', authenticateToken, requireRole('super_admin'), async (_req: Request, res: Response) => {
+  try {
+    return res.json(await getConfiguration());
+  } catch (error) {
+    console.error('GET /api/configuration failed', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+    return res.status(500).json({ message: 'Erreur lors du chargement de la configuration' });
+  }
+});
+
+app.put('/api/configuration/:section', authenticateToken, requireRole('super_admin'), async (req: Request, res: Response) => {
+  try {
+    const section = req.params.section;
+    if (!['generale', 'alertes', 'integration', 'provincesActives'].includes(section)) {
+      return res.status(400).json({ message: 'Section de configuration invalide' });
+    }
+    await updateConfigurationSection(section, req.body);
+    return res.json({ message: 'Configuration mise à jour avec succès' });
+  } catch (error) {
+    console.error('PUT /api/configuration/:section failed', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+    return res.status(500).json({ message: 'Erreur lors de la mise à jour de la configuration' });
+  }
+});
+
+// ==================== SUIVI DU PTBA ====================
+
+app.get('/api/ptba/suivi', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const annee = req.query.annee ? Number.parseInt(String(req.query.annee), 10) : 2026;
+    if (!Number.isFinite(annee)) {
+      return res.status(400).json({ message: 'Année invalide' });
+    }
+    return res.json(await getPtbaSuivi(annee));
+  } catch (error) {
+    console.error('GET /api/ptba/suivi failed', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+    return res.status(500).json({ message: 'Erreur lors du chargement du suivi du PTBA' });
+  }
+});
+
+app.put('/api/ptba/activites/:id', authenticateToken, requireRole('super_admin', 'admin', 'uncp'), async (req: Request, res: Response) => {
+  try {
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({ message: 'Identifiant invalide' });
+    }
+    const input: Record<string, unknown> = {};
+    for (const champ of ['prevu', 'realise', 'commentaire'] as const) {
+      if (champ in req.body) {
+        input[champ] = req.body[champ];
+      }
+    }
+    const updated = await updatePtbaActivite(id, input);
+    if (!updated) {
+      return res.status(404).json({ message: 'Activité PTBA introuvable' });
+    }
+    return res.json({ message: 'Activité PTBA mise à jour' });
+  } catch (error) {
+    console.error('PUT /api/ptba/activites/:id failed', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(503).json({ message: 'Connexion à la base de données indisponible' });
+    }
+    return res.status(500).json({ message: 'Erreur lors de la mise à jour de l\'activité PTBA' });
+  }
+});
+
 // ==================== DÉMARRAGE DU SERVEUR ====================
 
 app.listen(PORT, () => {

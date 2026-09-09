@@ -207,6 +207,7 @@ export const PlanAttenuation: React.FC = () => {
             icon={<GoogleIcon name="task" size={36} />}
             trend={{ value: stats?.risques_avec_plan || 0, direction: 'up', period: 'risques suivis' }}
             color="primary"
+            onClick={() => risques[0] && handleOpenActionDialog(risques[0])}
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
@@ -216,6 +217,7 @@ export const PlanAttenuation: React.FC = () => {
             icon={<GoogleIcon name="check_circle" size={36} />}
             trend={{ value: totalActions > 0 ? Math.round((realisees / totalActions) * 100) : 0, direction: 'up', period: 'des actions' }}
             color="success"
+            onClick={() => risques[0] && handleOpenActionDialog(risques[0])}
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
@@ -224,6 +226,7 @@ export const PlanAttenuation: React.FC = () => {
             value={enCours.toLocaleString('fr-FR')}
             icon={<GoogleIcon name="pending" size={36} />}
             trend={{ value: totalActions > 0 ? Math.round((enCours / totalActions) * 100) : 0, direction: 'up', period: 'des actions' }}
+            onClick={() => risques[0] && handleOpenActionDialog(risques[0])}
             color="warning"
           />
         </Grid>
@@ -233,6 +236,7 @@ export const PlanAttenuation: React.FC = () => {
             value={prevues.toLocaleString('fr-FR')}
             icon={<GoogleIcon name="schedule" size={36} />}
             trend={{ value: totalActions > 0 ? Math.round((prevues / totalActions) * 100) : 0, direction: 'up', period: 'des actions' }}
+            onClick={() => risques[0] && handleOpenActionDialog(risques[0])}
             color="info"
           />
         </Grid>
@@ -250,7 +254,7 @@ export const PlanAttenuation: React.FC = () => {
           <LinearProgress
             variant="determinate"
             value={(realisees / totalActions) * 100}
-            sx={{ height: 10, borderRadius: 2, bgcolor: '#E8F5E9', '& .MuiLinearProgress-bar': { bgcolor: '#2E7D32' } }}
+            sx={{ height: 10, borderRadius: 2, bgcolor: 'action.hover', '& .MuiLinearProgress-bar': { bgcolor: '#2E7D32' } }}
           />
           <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
             {realisees} actions réalisées sur {totalActions}
@@ -313,7 +317,7 @@ export const PlanAttenuation: React.FC = () => {
                       <LinearProgress
                         variant="determinate"
                         value={pct}
-                        sx={{ flex: 1, height: 6, borderRadius: 2, bgcolor: '#E8F5E9', '& .MuiLinearProgress-bar': { bgcolor: '#2E7D32' } }}
+                        sx={{ flex: 1, height: 6, borderRadius: 2, bgcolor: 'action.hover', '& .MuiLinearProgress-bar': { bgcolor: '#2E7D32' } }}
                       />
                       <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
                         {done}/{risqueActions.length} actions
@@ -327,7 +331,7 @@ export const PlanAttenuation: React.FC = () => {
                       <Typography variant="subtitle2" color="text.secondary" gutterBottom>
                         Plan d'atténuation
                       </Typography>
-                      <Paper sx={{ p: 2, bgcolor: '#F1F8F1', borderRadius: 2, mb: 3, borderLeft: '3px solid #2E7D32' }}>
+                      <Paper sx={{ p: 2, bgcolor: 'action.hover', borderRadius: 2, mb: 3, borderLeft: '3px solid #2E7D32' }}>
                         <Typography variant="body2">{risque.plan_attenuation || 'Aucun plan défini'}</Typography>
                       </Paper>
 
@@ -352,7 +356,7 @@ export const PlanAttenuation: React.FC = () => {
                       ) : (
                         <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
                           <Table size="small">
-                            <TableHead sx={{ bgcolor: '#FAFAFA' }}>
+                            <TableHead sx={{ bgcolor: 'action.hover' }}>
                               <TableRow>
                                 <TableCell sx={{ fontWeight: 600 }}>Action</TableCell>
                                 <TableCell sx={{ fontWeight: 600 }}>Responsable</TableCell>
@@ -366,7 +370,7 @@ export const PlanAttenuation: React.FC = () => {
                               {risqueActions.map((action) => {
                                 const sCfg = statutActionConfig[action.statut] || statutActionConfig['prevue'];
                                 return (
-                                  <TableRow key={action.id} sx={{ '&:hover': { bgcolor: '#F9FBF9' } }}>
+                                  <TableRow key={action.id} sx={{ '&:hover': { bgcolor: 'action.hover' } }}>
                                     <TableCell sx={{ maxWidth: 200 }}>
                                       <Typography variant="body2">{action.action}</Typography>
                                     </TableCell>
@@ -411,7 +415,7 @@ export const PlanAttenuation: React.FC = () => {
                       )}
                     </Grid>
                     <Grid size={{ xs: 12, md: 5 }}>
-                      <Paper sx={{ p: 2, bgcolor: '#FAFAFA', borderRadius: 2 }}>
+                      <Paper sx={{ p: 2, bgcolor: 'action.hover', borderRadius: 2 }}>
                         <Typography variant="subtitle2" gutterBottom>Informations</Typography>
                         <Divider sx={{ mb: 2 }} />
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.5 }}>
@@ -451,7 +455,7 @@ export const PlanAttenuation: React.FC = () => {
                       </Paper>
 
                       {(risque.indicateurs_surveillance || []).length > 0 && (
-                        <Paper sx={{ p: 2, bgcolor: '#FAFAFA', borderRadius: 2, mt: 2 }}>
+                        <Paper sx={{ p: 2, bgcolor: 'action.hover', borderRadius: 2, mt: 2 }}>
                           <Typography variant="subtitle2" gutterBottom>Indicateurs de surveillance</Typography>
                           <Stack spacing={0.5}>
                             {(risque.indicateurs_surveillance || []).map((ind, i) => (

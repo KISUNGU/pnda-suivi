@@ -40,8 +40,9 @@ import {
   Sync,
   Refresh,
   Visibility,
-} from '@mui/icons-material';
+} from '../../components/common/PageIcons';
 import GoogleIcon from '../../components/common/GoogleIcon';
+import otService, { type OTData, type ActiviteTerrain } from '../../services/ot.service';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -58,56 +59,67 @@ function TabPanel(props: TabPanelProps) {
   );
 }
 
-// Données mockées - Collectes en attente de validation
-const mockCollectesAttente = [
-  { id: 1, type: 'Enquête production', date: '2026-04-01', enqueteur: 'Joseph MUKENDI', village: 'Masi-Manimba', statut: 'en_attente', qualite: 85 },
-  { id: 2, type: 'Adoption technologie', date: '2026-04-01', enqueteur: 'Marie KABEYA', village: 'Kikwit', statut: 'en_attente', qualite: 72 },
-  { id: 3, type: 'Plainte GRM', date: '2026-03-31', enqueteur: 'Albert TSHIBOLA', village: 'Kananga', statut: 'en_attente', qualite: 90 },
-  { id: 4, type: 'Suivi subvention', date: '2026-03-30', enqueteur: 'Pauline LUBALA', village: 'Boma', statut: 'en_attente', qualite: 68 },
-];
-
-// Données mockées - Collectes validées récemment
-const mockCollectesValidees = [
-  { id: 5, type: 'Enquête production', date: '2026-03-30', enqueteur: 'David KALONJI', village: 'Tshikapa', valide_le: '2026-03-31', valide_par: 'OT' },
-  { id: 6, type: 'Formation AIC', date: '2026-03-28', enqueteur: 'Béatrice NGOMA', village: 'Matadi', valide_le: '2026-03-29', valide_par: 'OT' },
-];
-
-// Données mockées - Statistiques
-const mockStats = {
-  total_collectes: 156,
-  collectes_attente: 12,
-  collectes_validees: 144,
-  taux_validation: 92.3,
-  plaintes_recues: 8,
-  plaintes_traitees: 6,
-  beneficiaires_couverts: 1245,
-  enqueteurs_actifs: 8,
-  qualite_moyenne: 82.5,
+const getTypeLabel = (type: string) => {
+  switch (type) {
+    case 'enquete': return 'Enquête';
+    case 'formation': return 'Formation';
+    case 'suivi': return 'Suivi';
+    case 'plainte': return 'Plainte';
+    default: return type;
+  }
 };
-
-// Données mockées - Alertes qualité
-const mockAlertesQualite = [
-  { id: 1, message: 'Taux de complétude faible (68%) - Enquête #1234', niveau: 'warning' },
-  { id: 2, message: 'Données GPS manquantes - Collecte #5678', niveau: 'error' },
-  { id: 3, message: 'Incohérence superficie/production - Bénéficiaire RNA-00123', niveau: 'warning' },
-];
 
 export const OTDashboard: React.FC = () => {
   const [tabValue, setTabValue] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [otData, setOtData] = useState<OTData | null>(null);
+  const [activites, setActivites] = useState<ActiviteTerrain[]>([]);
 
-  useEffect(() => {
-    setTimeout(() => setLoading(false), 500);
-  }, []);
-
-  const handleValidate = (id: number) => {
-    console.log('Valider collecte:', id);
-    // Logique de validation
+  const loadData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [otRes, activitesRes] = await Promise.all([
+        otService.getOTData(),
+        otService.getActivites(),
+      ]);
+      setOtData(otRes.data);
+      setActivites(activitesRes.data);
+    } catch (err) {
+      console.error('Erreur chargement tableau de bord OT:', err);
+      setError('Impossible de charger les données du tableau de bord OT');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleReject = (id: number) => {
-    console.log('Rejeter collecte:', id);
-    // Logique de rejet
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const collectesAttente = activites.filter((a) => a.statut === 'planifiee' || a.statut === 'en_cours');
+  const collectesValidees = activites.filter((a) => a.statut === 'terminee');
+  const activitesEnRetard = activites.filter(
+    (a) => a.statut !== 'terminee' && a.statut !== 'annulee' && new Date(a.date) < new Date()
+  );
+
+  const handleValidate = async (id: number) => {
+    try {
+      await otService.updateActivite(id, { statut: 'terminee' });
+      loadData();
+    } catch (err) {
+      console.error('Erreur validation activité:', err);
+    }
+  };
+
+  const handleReject = async (id: number) => {
+    try {
+      await otService.updateActivite(id, { statut: 'annulee' });
+      loadData();
+    } catch (err) {
+      console.error('Erreur rejet activité:', err);
+    }
   };
 
   const handleSync = () => {
@@ -134,17 +146,19 @@ export const OTDashboard: React.FC = () => {
         </Typography>
       </Box>
 
-      {/* Alertes qualité */}
-      {mockAlertesQualite.length > 0 && (
+      {error && <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>{error}</Alert>}
+
+      {/* Alertes retard */}
+      {activitesEnRetard.length > 0 && (
         <Alert severity="warning" sx={{ mb: 3, borderRadius: 2 }}>
           <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap">
             <Stack direction="row" spacing={1} alignItems="center">
               <Warning />
               <Typography variant="body2">
-                <strong>{mockAlertesQualite.length} alerte(s) qualité</strong> nécessitent votre attention
+                <strong>{activitesEnRetard.length} activité(s) en retard</strong> nécessitent votre attention
               </Typography>
             </Stack>
-            <Button size="small" variant="outlined" sx={{ borderRadius: 2 }}>
+            <Button size="small" variant="outlined" sx={{ borderRadius: 2 }} onClick={() => setTabValue(2)}>
               Voir les alertes
             </Button>
           </Stack>
@@ -158,13 +172,13 @@ export const OTDashboard: React.FC = () => {
             <CardContent>
               <Stack direction="row" justifyContent="space-between" alignItems="center">
                 <Box>
-                  <Typography variant="caption" color="text.secondary">Collectes en attente</Typography>
-                  <Typography variant="h3" fontWeight={700} color="warning.main">{mockStats.collectes_attente}</Typography>
+                  <Typography variant="caption" color="text.secondary">Activités en attente</Typography>
+                  <Typography variant="h3" fontWeight={700} color="warning.main">{collectesAttente.length}</Typography>
                 </Box>
-                <Avatar sx={{ bgcolor: '#FFF3E0' }}><Pending sx={{ color: '#FF8F00' }} /></Avatar>
+                <Avatar sx={{ bgcolor: 'rgba(250, 178, 25, 0.14)' }}><Pending sx={{ color: '#FF8F00' }} /></Avatar>
               </Stack>
-              <LinearProgress variant="determinate" value={mockStats.taux_validation} sx={{ mt: 2, height: 6, borderRadius: 2 }} />
-              <Typography variant="caption" color="text.secondary">Taux validation: {mockStats.taux_validation}%</Typography>
+              <LinearProgress variant="determinate" value={otData?.performances.taux_realisation ?? 0} sx={{ mt: 2, height: 6, borderRadius: 2 }} />
+              <Typography variant="caption" color="text.secondary">Taux de réalisation: {otData?.performances.taux_realisation ?? 0}%</Typography>
             </CardContent>
           </Card>
         </Grid>
@@ -173,13 +187,13 @@ export const OTDashboard: React.FC = () => {
             <CardContent>
               <Stack direction="row" justifyContent="space-between" alignItems="center">
                 <Box>
-                  <Typography variant="caption" color="text.secondary">Total collectes</Typography>
-                  <Typography variant="h3" fontWeight={700}>{mockStats.total_collectes}</Typography>
+                  <Typography variant="caption" color="text.secondary">Total activités</Typography>
+                  <Typography variant="h3" fontWeight={700}>{activites.length}</Typography>
                 </Box>
-                <Avatar sx={{ bgcolor: '#E3F2FD' }}><Assignment sx={{ color: '#1976D2' }} /></Avatar>
+                <Avatar sx={{ bgcolor: 'rgba(57, 135, 229, 0.14)' }}><Assignment sx={{ color: '#1976D2' }} /></Avatar>
               </Stack>
               <Typography variant="caption" color="text.secondary">
-                {mockStats.collectes_validees} validées • {mockStats.collectes_attente} en attente
+                {collectesValidees.length} terminées • {collectesAttente.length} en attente
               </Typography>
             </CardContent>
           </Card>
@@ -189,13 +203,13 @@ export const OTDashboard: React.FC = () => {
             <CardContent>
               <Stack direction="row" justifyContent="space-between" alignItems="center">
                 <Box>
-                  <Typography variant="caption" color="text.secondary">Plaintes GRM</Typography>
-                  <Typography variant="h3" fontWeight={700}>{mockStats.plaintes_recues}</Typography>
+                  <Typography variant="caption" color="text.secondary">Plaintes traitées</Typography>
+                  <Typography variant="h3" fontWeight={700}>{otData?.activites.plaintes_traitees ?? 0}</Typography>
                 </Box>
-                <Avatar sx={{ bgcolor: '#FFF3E0' }}><ReportProblem sx={{ color: '#FF8F00' }} /></Avatar>
+                <Avatar sx={{ bgcolor: 'rgba(250, 178, 25, 0.14)' }}><ReportProblem sx={{ color: '#FF8F00' }} /></Avatar>
               </Stack>
               <Typography variant="caption" color="text.secondary">
-                {mockStats.plaintes_traitees} traitées • {mockStats.plaintes_recues - mockStats.plaintes_traitees} en cours
+                {otData?.activites.enquetes_realisees ?? 0} enquêtes réalisées
               </Typography>
             </CardContent>
           </Card>
@@ -206,12 +220,12 @@ export const OTDashboard: React.FC = () => {
               <Stack direction="row" justifyContent="space-between" alignItems="center">
                 <Box>
                   <Typography variant="caption" color="text.secondary">Qualité des données</Typography>
-                  <Typography variant="h3" fontWeight={700}>{mockStats.qualite_moyenne}%</Typography>
+                  <Typography variant="h3" fontWeight={700}>{otData?.performances.qualite_donnees ?? 0}%</Typography>
                 </Box>
-                <Avatar sx={{ bgcolor: '#F3E5F5' }}><VerifiedUser sx={{ color: '#9C27B0' }} /></Avatar>
+                <Avatar sx={{ bgcolor: 'rgba(146, 39, 143, 0.16)' }}><VerifiedUser sx={{ color: '#9C27B0' }} /></Avatar>
               </Stack>
               <Typography variant="caption" color="text.secondary">
-                {mockStats.enqueteurs_actifs} enquêteurs actifs
+                {otData?.equipes.enqueteurs ?? 0} enquêteurs actifs
               </Typography>
             </CardContent>
           </Card>
@@ -223,48 +237,45 @@ export const OTDashboard: React.FC = () => {
         <Tabs value={tabValue} onChange={(_, v) => setTabValue(v)} sx={{ borderBottom: 1, borderColor: 'divider', px: 2 }}>
           <Tab label="À valider" icon={<Pending />} iconPosition="start" />
           <Tab label="Validées récemment" icon={<CheckCircle />} iconPosition="start" />
-          <Tab label="Alertes qualité" icon={<Warning />} iconPosition="start" />
+          <Tab label="Alertes" icon={<Warning />} iconPosition="start" />
         </Tabs>
 
         {/* Onglet À valider */}
         <TabPanel value={tabValue} index={0}>
           <TableContainer component={Paper} variant="outlined">
             <Table>
-              <TableHead sx={{ bgcolor: '#F1F8E9' }}>
+              <TableHead sx={{ bgcolor: 'action.hover' }}>
                 <TableRow>
                   <TableCell>Date</TableCell>
                   <TableCell>Type</TableCell>
-                  <TableCell>Enquêteur</TableCell>
-                  <TableCell>Village</TableCell>
-                  <TableCell>Qualité</TableCell>
+                  <TableCell>Responsable</TableCell>
+                  <TableCell>Province</TableCell>
+                  <TableCell>Statut</TableCell>
                   <TableCell align="center">Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {mockCollectesAttente.map((collecte) => (
-                  <TableRow key={collecte.id} hover>
-                    <TableCell>{new Date(collecte.date).toLocaleDateString()}</TableCell>
-                    <TableCell>{collecte.type}</TableCell>
-                    <TableCell>{collecte.enqueteur}</TableCell>
-                    <TableCell>{collecte.village}</TableCell>
+                {collectesAttente.map((activite) => (
+                  <TableRow key={activite.id} hover>
+                    <TableCell>{new Date(activite.date).toLocaleDateString()}</TableCell>
+                    <TableCell>{getTypeLabel(activite.type)} - {activite.titre}</TableCell>
+                    <TableCell>{activite.responsable}</TableCell>
+                    <TableCell>{activite.province}</TableCell>
                     <TableCell>
-                      <Chip 
-                        label={`${collecte.qualite}%`} 
+                      <Chip
+                        label={activite.statut === 'en_cours' ? 'En cours' : 'Planifiée'}
                         size="small"
-                        sx={{ 
-                          bgcolor: collecte.qualite >= 80 ? '#E8F5E9' : collecte.qualite >= 60 ? '#FFF3E0' : '#FFEBEE',
-                          color: collecte.qualite >= 80 ? '#2E7D32' : collecte.qualite >= 60 ? '#FF8F00' : '#F44336'
-                        }}
+                        sx={{ bgcolor: activite.statut === 'en_cours' ? '#FFF8E1' : '#E3F2FD', color: activite.statut === 'en_cours' ? '#FF8F00' : '#1976D2' }}
                       />
                     </TableCell>
                     <TableCell align="center">
                       <Tooltip title="Valider">
-                        <IconButton size="small" onClick={() => handleValidate(collecte.id)} sx={{ color: '#4CAF50' }}>
+                        <IconButton size="small" onClick={() => handleValidate(activite.id)} sx={{ color: '#4CAF50' }}>
                           <CheckCircle />
                         </IconButton>
                       </Tooltip>
                       <Tooltip title="Rejeter">
-                        <IconButton size="small" onClick={() => handleReject(collecte.id)} sx={{ color: '#F44336' }}>
+                        <IconButton size="small" onClick={() => handleReject(activite.id)} sx={{ color: '#F44336' }}>
                           <Warning />
                         </IconButton>
                       </Tooltip>
@@ -285,25 +296,21 @@ export const OTDashboard: React.FC = () => {
         <TabPanel value={tabValue} index={1}>
           <TableContainer component={Paper} variant="outlined">
             <Table>
-              <TableHead sx={{ bgcolor: '#F1F8E9' }}>
+              <TableHead sx={{ bgcolor: 'action.hover' }}>
                 <TableRow>
-                  <TableCell>Date collecte</TableCell>
+                  <TableCell>Date</TableCell>
                   <TableCell>Type</TableCell>
-                  <TableCell>Enquêteur</TableCell>
-                  <TableCell>Village</TableCell>
-                  <TableCell>Validée le</TableCell>
+                  <TableCell>Responsable</TableCell>
+                  <TableCell>Province</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {mockCollectesValidees.map((collecte) => (
-                  <TableRow key={collecte.id} hover>
-                    <TableCell>{new Date(collecte.date).toLocaleDateString()}</TableCell>
-                    <TableCell>{collecte.type}</TableCell>
-                    <TableCell>{collecte.enqueteur}</TableCell>
-                    <TableCell>{collecte.village}</TableCell>
-                    <TableCell>
-                      <Chip label={new Date(collecte.valide_le).toLocaleDateString()} size="small" sx={{ bgcolor: '#E8F5E9', color: '#2E7D32' }} />
-                    </TableCell>
+                {collectesValidees.map((activite) => (
+                  <TableRow key={activite.id} hover>
+                    <TableCell>{new Date(activite.date).toLocaleDateString()}</TableCell>
+                    <TableCell>{getTypeLabel(activite.type)} - {activite.titre}</TableCell>
+                    <TableCell>{activite.responsable}</TableCell>
+                    <TableCell>{activite.province}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -311,18 +318,21 @@ export const OTDashboard: React.FC = () => {
           </TableContainer>
         </TabPanel>
 
-        {/* Onglet Alertes qualité */}
+        {/* Onglet Alertes */}
         <TabPanel value={tabValue} index={2}>
           <List>
-            {mockAlertesQualite.map((alerte) => (
-              <ListItem key={alerte.id} sx={{ bgcolor: alerte.niveau === 'error' ? '#FFEBEE' : '#FFF3E0', borderRadius: 2, mb: 1 }}>
+            {activitesEnRetard.length === 0 && (
+              <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>Aucune activité en retard.</Typography>
+            )}
+            {activitesEnRetard.map((activite) => (
+              <ListItem key={activite.id} sx={{ bgcolor: 'rgba(250, 178, 25, 0.14)', borderRadius: 2, mb: 1 }}>
                 <ListItemIcon>
-                  {alerte.niveau === 'error' ? <Warning sx={{ color: '#F44336' }} /> : <Warning sx={{ color: '#FF8F00' }} />}
+                  <Warning sx={{ color: '#FF8F00' }} />
                 </ListItemIcon>
-                <ListItemText primary={alerte.message} />
-                <Button size="small" variant="outlined" sx={{ borderRadius: 2 }}>
-                  Corriger
-                </Button>
+                <ListItemText
+                  primary={`${getTypeLabel(activite.type)} - ${activite.titre}`}
+                  secondary={`En retard depuis le ${new Date(activite.date).toLocaleDateString()} • ${activite.responsable}`}
+                />
               </ListItem>
             ))}
           </List>
@@ -351,7 +361,7 @@ export const OTDashboard: React.FC = () => {
                       border: '1px solid',
                       borderColor: 'divider',
                       cursor: 'pointer',
-                      '&:hover': { borderColor: '#2E7D32', bgcolor: '#F1F8E9' },
+                      '&:hover': { borderColor: '#2E7D32', bgcolor: 'action.hover' },
                     }}
                     onClick={() => window.location.href = '/suivi/activites'}
                   >
@@ -371,7 +381,7 @@ export const OTDashboard: React.FC = () => {
                       border: '1px solid',
                       borderColor: 'divider',
                       cursor: 'pointer',
-                      '&:hover': { borderColor: '#2E7D32', bgcolor: '#F1F8E9' },
+                      '&:hover': { borderColor: '#2E7D32', bgcolor: 'action.hover' },
                     }}
                     onClick={() => window.location.href = '/database/plaintes'}
                   >
@@ -391,7 +401,7 @@ export const OTDashboard: React.FC = () => {
                       border: '1px solid',
                       borderColor: 'divider',
                       cursor: 'pointer',
-                      '&:hover': { borderColor: '#2E7D32', bgcolor: '#F1F8E9' },
+                      '&:hover': { borderColor: '#2E7D32', bgcolor: 'action.hover' },
                     }}
                     onClick={() => window.location.href = '/beneficiaires/rna'}
                   >
@@ -411,7 +421,7 @@ export const OTDashboard: React.FC = () => {
                       border: '1px solid',
                       borderColor: 'divider',
                       cursor: 'pointer',
-                      '&:hover': { borderColor: '#2E7D32', bgcolor: '#F1F8E9' },
+                      '&:hover': { borderColor: '#2E7D32', bgcolor: 'action.hover' },
                     }}
                     onClick={() => window.location.href = '/outils/collecte'}
                   >
@@ -431,7 +441,7 @@ export const OTDashboard: React.FC = () => {
                       border: '1px solid',
                       borderColor: 'divider',
                       cursor: 'pointer',
-                      '&:hover': { borderColor: '#2E7D32', bgcolor: '#F1F8E9' },
+                      '&:hover': { borderColor: '#2E7D32', bgcolor: 'action.hover' },
                     }}
                     onClick={() => window.location.href = '/indicateurs/iodp'}
                   >
@@ -451,7 +461,7 @@ export const OTDashboard: React.FC = () => {
                       border: '1px solid',
                       borderColor: 'divider',
                       cursor: 'pointer',
-                      '&:hover': { borderColor: '#2E7D32', bgcolor: '#F1F8E9' },
+                      '&:hover': { borderColor: '#2E7D32', bgcolor: 'action.hover' },
                     }}
                     onClick={() => window.location.href = '/suivi/missions'}
                   >
@@ -504,7 +514,7 @@ export const OTDashboard: React.FC = () => {
           </Card>
 
           {/* Responsabilités OT */}
-          <Paper sx={{ mt: 3, p: 2, borderRadius: 2, bgcolor: '#F1F8E9' }}>
+          <Paper sx={{ mt: 3, p: 2, borderRadius: 2, bgcolor: 'action.hover' }}>
             <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
               <GoogleIcon name="info" size={20} sx={{ color: '#2E7D32' }} />
               <Typography variant="subtitle2" fontWeight={600}>Vos responsabilités (OT)</Typography>

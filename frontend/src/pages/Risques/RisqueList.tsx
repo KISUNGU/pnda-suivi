@@ -242,6 +242,7 @@ export const RisqueList: React.FC = () => {
               icon={<GoogleIcon name="warning" size={36} />}
               trend={{ value: stats.critiques, direction: 'up', period: 'risques critiques' }}
               color="primary"
+              onClick={() => handleOpenDialog()}
             />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
@@ -251,6 +252,7 @@ export const RisqueList: React.FC = () => {
               icon={<GoogleIcon name="error" size={36} />}
               trend={{ value: stats.total > 0 ? Math.round((stats.critiques / stats.total) * 100) : 0, direction: 'down', period: 'du portefeuille' }}
               color="danger"
+              onClick={() => handleOpenDialog()}
             />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
@@ -260,6 +262,7 @@ export const RisqueList: React.FC = () => {
               icon={<GoogleIcon name="priority_high" size={36} />}
               trend={{ value: stats.total > 0 ? Math.round((stats.eleves / stats.total) * 100) : 0, direction: 'up', period: 'du portefeuille' }}
               color="warning"
+              onClick={() => handleOpenDialog()}
             />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
@@ -268,6 +271,7 @@ export const RisqueList: React.FC = () => {
               value={stats.attenues.toLocaleString('fr-FR')}
               icon={<GoogleIcon name="check_circle" size={36} />}
               trend={{ value: stats.total > 0 ? Math.round((stats.attenues / stats.total) * 100) : 0, direction: 'up', period: 'du portefeuille' }}
+              onClick={() => handleOpenDialog()}
               color="success"
             />
           </Grid>
@@ -286,18 +290,18 @@ export const RisqueList: React.FC = () => {
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'center' }}>
             <thead>
               <tr>
-                <th style={{ padding: 12, backgroundColor: '#F5F5F5', fontWeight: 600 }}>Impact \ Probabilité</th>
-                <th style={{ padding: 12, backgroundColor: '#F5F5F5' }}>1<br/><span style={{ fontSize: 11 }}>Très faible</span></th>
-                <th style={{ padding: 12, backgroundColor: '#F5F5F5' }}>2<br/><span style={{ fontSize: 11 }}>Faible</span></th>
-                <th style={{ padding: 12, backgroundColor: '#F5F5F5' }}>3<br/><span style={{ fontSize: 11 }}>Moyenne</span></th>
-                <th style={{ padding: 12, backgroundColor: '#F5F5F5' }}>4<br/><span style={{ fontSize: 11 }}>Élevée</span></th>
-                <th style={{ padding: 12, backgroundColor: '#F5F5F5' }}>5<br/><span style={{ fontSize: 11 }}>Très élevée</span></th>
+                <th style={{ padding: 12, backgroundColor: 'action.hover', fontWeight: 600 }}>Impact \ Probabilité</th>
+                <th style={{ padding: 12, backgroundColor: 'action.hover' }}>1<br/><span style={{ fontSize: 11 }}>Très faible</span></th>
+                <th style={{ padding: 12, backgroundColor: 'action.hover' }}>2<br/><span style={{ fontSize: 11 }}>Faible</span></th>
+                <th style={{ padding: 12, backgroundColor: 'action.hover' }}>3<br/><span style={{ fontSize: 11 }}>Moyenne</span></th>
+                <th style={{ padding: 12, backgroundColor: 'action.hover' }}>4<br/><span style={{ fontSize: 11 }}>Élevée</span></th>
+                <th style={{ padding: 12, backgroundColor: 'action.hover' }}>5<br/><span style={{ fontSize: 11 }}>Très élevée</span></th>
               </tr>
             </thead>
             <tbody>
               {[1, 2, 3, 4, 5].map((impact) => (
                 <tr key={impact}>
-                  <td style={{ padding: 12, fontWeight: 500, backgroundColor: '#FAFAFA' }}>
+                  <td style={{ padding: 12, fontWeight: 500, backgroundColor: 'action.hover' }}>
                     {impact}<br/><span style={{ fontSize: 11 }}>
                       {impact === 1 ? 'Très faible' : impact === 2 ? 'Faible' : impact === 3 ? 'Moyen' : impact === 4 ? 'Élevé' : 'Très élevé'}
                     </span>
@@ -523,7 +527,7 @@ export const RisqueList: React.FC = () => {
                     </Box>
                   </AccordionSummary>
                   <AccordionDetails>
-                    <Box sx={{ p: 2, bgcolor: '#FAFAFA', borderRadius: 2 }}>
+                    <Box sx={{ p: 2, bgcolor: 'action.hover', borderRadius: 2 }}>
                       <Grid container spacing={2}>
                         <Grid size={{ xs: 12, md: 8 }}>
                           <Typography variant="subtitle2" color="text.secondary" gutterBottom>
@@ -536,7 +540,7 @@ export const RisqueList: React.FC = () => {
                           <Typography variant="subtitle2" color="text.secondary" gutterBottom>
                             Plan d'atténuation
                           </Typography>
-                          <Paper sx={{ p: 2, bgcolor: '#F5F5F5', borderRadius: 2, mb: 2 }}>
+                          <Paper sx={{ p: 2, bgcolor: 'action.hover', borderRadius: 2, mb: 2 }}>
                             <Typography variant="body2">{risque.plan_atténuation}</Typography>
                           </Paper>
                           
@@ -555,7 +559,7 @@ export const RisqueList: React.FC = () => {
                         </Grid>
                         
                         <Grid size={{ xs: 12, md: 4 }}>
-                          <Box sx={{ bgcolor: 'white', p: 2, borderRadius: 2 }}>
+                          <Box sx={{ bgcolor: 'background.paper', p: 2, borderRadius: 2 }}>
                             <Typography variant="subtitle2" gutterBottom>Informations clés</Typography>
                             <Divider sx={{ my: 1 }} />
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
@@ -789,7 +793,7 @@ export const RisqueList: React.FC = () => {
                   <Typography variant="subtitle2" color="text.secondary" gutterBottom>
                     Plan d'atténuation
                   </Typography>
-                  <Paper sx={{ p: 2, bgcolor: '#F5F5F5', borderRadius: 2, mb: 3 }}>
+                  <Paper sx={{ p: 2, bgcolor: 'action.hover', borderRadius: 2, mb: 3 }}>
                     <Typography variant="body2">{selectedRisque.plan_atténuation}</Typography>
                   </Paper>
                   
@@ -798,7 +802,7 @@ export const RisqueList: React.FC = () => {
                   </Typography>
                   <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
                     <Table size="small">
-                      <TableHead sx={{ bgcolor: '#F5F5F5' }}>
+                      <TableHead sx={{ bgcolor: 'action.hover' }}>
                         <TableRow>
                           <TableCell>Action</TableCell>
                           <TableCell>Responsable</TableCell>
@@ -840,7 +844,7 @@ export const RisqueList: React.FC = () => {
                 </Grid>
                 
                 <Grid size={{ xs: 12, md: 4 }}>
-                  <Paper sx={{ p: 2, bgcolor: '#FAFAFA', borderRadius: 2 }}>
+                  <Paper sx={{ p: 2, bgcolor: 'action.hover', borderRadius: 2 }}>
                     <Typography variant="subtitle2" gutterBottom>Informations</Typography>
                     <Divider sx={{ mb: 2 }} />
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.5 }}>

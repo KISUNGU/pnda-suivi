@@ -54,9 +54,9 @@ const statutLabel: Record<StatutCarte, string> = {
 };
 
 const statutColor: Record<StatutCarte, { bgcolor: string; color: string }> = {
-  distribuee: { bgcolor: '#E8F5E9', color: '#2E7D32' },
-  en_attente: { bgcolor: '#FFF3E0', color: '#E65100' },
-  a_imprimer: { bgcolor: '#E3F2FD', color: '#1565C0' },
+  distribuee: { bgcolor: 'action.hover', color: '#2E7D32' },
+  en_attente: { bgcolor: 'rgba(250, 178, 25, 0.14)', color: '#E65100' },
+  a_imprimer: { bgcolor: 'rgba(57, 135, 229, 0.14)', color: '#1565C0' },
 };
 
 export const DistributionCartesPage: React.FC = () => {
@@ -177,7 +177,7 @@ export const DistributionCartesPage: React.FC = () => {
           <GradientWidget
             title="Cartes distribuées"
             value={(stats?.distribuees ?? 0).toLocaleString('fr-FR')}
-            icon={<Box component="span" sx={{ fontSize: 40 }}>🪪</Box>}
+            icon={<GoogleIcon name="badge" size={40} />}
             trend={{ value: (stats?.total ?? 0) > 0 ? Math.round(((stats?.distribuees ?? 0) / (stats?.total ?? 1)) * 100) : 0, direction: 'up', period: 'du total' }}
             color="primary"
           />
@@ -186,7 +186,7 @@ export const DistributionCartesPage: React.FC = () => {
           <GradientWidget
             title="Producteurs enregistrés"
             value={(stats?.producteurs_enregistres ?? 0).toLocaleString('fr-FR')}
-            icon={<Box component="span" sx={{ fontSize: 40 }}>🌾</Box>}
+            icon={<GoogleIcon name="agriculture" size={40} />}
             trend={{ value: stats?.provinces ?? 0, direction: 'up', period: 'provinces couvertes' }}
             color="success"
           />
@@ -195,7 +195,7 @@ export const DistributionCartesPage: React.FC = () => {
           <GradientWidget
             title="En attente"
             value={(stats?.en_attente ?? 0).toLocaleString('fr-FR')}
-            icon={<Box component="span" sx={{ fontSize: 40 }}>⏳</Box>}
+            icon={<GoogleIcon name="hourglass_top" size={40} />}
             trend={{ value: stats?.en_attente ?? 0, direction: (stats?.en_attente ?? 0) > 0 ? 'down' : 'up', period: (stats?.en_attente ?? 0) > 0 ? 'cartes à remettre' : 'aucun retard' }}
             color="warning"
           />
@@ -204,7 +204,7 @@ export const DistributionCartesPage: React.FC = () => {
           <GradientWidget
             title="À imprimer"
             value={(stats?.a_imprimer ?? 0).toLocaleString('fr-FR')}
-            icon={<Box component="span" sx={{ fontSize: 40 }}>🖨️</Box>}
+            icon={<GoogleIcon name="print" size={40} />}
             trend={{ value: stats?.a_imprimer ?? 0, direction: (stats?.a_imprimer ?? 0) > 0 ? 'down' : 'up', period: (stats?.a_imprimer ?? 0) > 0 ? 'cartes à produire' : 'stock prêt' }}
             color="info"
           />
@@ -296,7 +296,7 @@ export const DistributionCartesPage: React.FC = () => {
       {/* Tableau */}
       <TableContainer component={Paper} sx={{ borderRadius: 2, overflow: 'hidden' }}>
         <Table>
-          <TableHead sx={{ bgcolor: '#F1F8E9' }}>
+          <TableHead sx={{ bgcolor: 'action.hover' }}>
             <TableRow>
               <TableCell>Agriculteur</TableCell>
               <TableCell>Localisation</TableCell>

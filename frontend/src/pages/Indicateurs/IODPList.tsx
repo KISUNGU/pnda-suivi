@@ -1,6 +1,7 @@
 // frontend/src/pages/Indicateurs/IODPList.tsx
 
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -25,6 +26,7 @@ import {
 import indicateurService from '../../services/indicateur.service';
 import GoogleIcon from '../../components/common/GoogleIcon';
 import { ExportToolbar } from '../../components/common/ExportToolbar/ExportToolbar';
+import { GradientWidget } from '../../components/common/Widget/GradientWidget';
 
 // Définition du type localement
 interface Indicateur {
@@ -120,146 +122,8 @@ const calculateWidgetData = (indicateurs: Indicateur[]): WidgetData => {
   };
 };
 
-// Données mockées en cas d'erreur API
-const mockIndicateurs: Indicateur[] = [
-  { 
-    id: 1, 
-    code: 'IODP1.1', 
-    nom: 'Hausse des ventes de produits agricoles sur les marchés formels',
-    description: 'Augmentation en pourcentage des ventes des petits exploitants sur les marchés formels',
-    formule: '((Surplus à l\'année t / Surplus à l\'année 0) - 1) x 100',
-    unite: '%',
-    frequence: 'annuelle',
-    cible: 30,
-    valeur_actuelle: 70,
-    valeur_reference: 12,
-    progression: 233,
-    id_composante: 2,
-    est_iodp: true
-  },
-  { 
-    id: 2, 
-    code: 'IODP2.1', 
-    nom: 'Nombre de petits exploitants ayant adopté une technologie agricole améliorée',
-    description: 'Nombre cumulé de petits exploitants bénéficiaires ayant adopté une technologie améliorée',
-    formule: 'Somme cumulée des petits exploitants bénéficiaires jusqu\'à l\'année t',
-    unite: 'nombre',
-    frequence: 'annuelle',
-    cible: 300000,
-    valeur_actuelle: 20000,
-    valeur_reference: 25000,
-    progression: 7,
-    id_composante: 1,
-    est_iodp: true
-  },
-  { 
-    id: 3, 
-    code: 'IODP2.2', 
-    nom: 'Nombre de femmes exploitantes ayant adopté une technologie améliorée',
-    description: 'Nombre cumulé de femmes bénéficiaires ayant adopté une technologie améliorée',
-    formule: 'Somme cumulée des femmes bénéficiaires jusqu\'à l\'année t',
-    unite: 'nombre',
-    frequence: 'annuelle',
-    cible: 150000,
-    valeur_actuelle: 11000,
-    valeur_reference: 11200,
-    progression: 7,
-    id_composante: 1,
-    est_iodp: true
-  },
-  { 
-    id: 4, 
-    code: 'IODP3.1', 
-    nom: 'Hausse du rendement de maïs à travers les pratiques AIC',
-    description: 'Augmentation en pourcentage du rendement de maïs grâce aux technologies intelligentes face au climat',
-    formule: '((Rendement maïs année t - Rendement maïs année 0) / Rendement maïs année 0) x 100',
-    unite: '%',
-    frequence: 'annuelle',
-    cible: 100,
-    valeur_actuelle: 100,
-    valeur_reference: 18,
-    progression: 100,
-    id_composante: 1,
-    est_iodp: true
-  },
-  { 
-    id: 5, 
-    code: 'IODP3.2', 
-    nom: 'Hausse du rendement du manioc à travers les pratiques AIC',
-    description: 'Augmentation en pourcentage du rendement du manioc grâce aux technologies intelligentes face au climat',
-    formule: '((Rendement manioc année t - Rendement manioc année 0) / Rendement manioc année 0) x 100',
-    unite: '%',
-    frequence: 'annuelle',
-    cible: 50,
-    valeur_actuelle: 0,
-    valeur_reference: 0,
-    progression: 0,
-    id_composante: 1,
-    est_iodp: true
-  },
-  { 
-    id: 6, 
-    code: 'IODP4.1', 
-    nom: 'Plans de contingence pour risques agricoles',
-    description: 'Nombre de plans de contingence approuvés pour les risques liés au secteur agricole',
-    formule: 'Nombre cumulé de plans de contingence approuvés',
-    unite: 'nombre',
-    frequence: 'annuelle',
-    cible: 4,
-    valeur_actuelle: 2,
-    valeur_reference: 3,
-    progression: 50,
-    id_composante: 3,
-    est_iodp: true
-  },
-  { 
-    id: 7, 
-    code: 'IODP5.1', 
-    nom: 'Bénéficiaires directs du projet',
-    description: 'Nombre total de bénéficiaires directs du projet',
-    formule: 'Somme cumulée des bénéficiaires',
-    unite: 'nombre',
-    frequence: 'annuelle',
-    cible: 600000,
-    valeur_actuelle: 142622,
-    valeur_reference: 0,
-    progression: 24,
-    id_composante: 0,
-    est_iodp: true
-  },
-  { 
-    id: 8, 
-    code: 'IODP5.2', 
-    nom: 'Bénéficiaires directs du projet - Femmes',
-    description: 'Nombre de femmes bénéficiaires directes du projet',
-    formule: 'Somme cumulée des bénéficiaires femmes',
-    unite: 'nombre',
-    frequence: 'annuelle',
-    cible: 300000,
-    valeur_actuelle: 77059,
-    valeur_reference: 0,
-    progression: 26,
-    id_composante: 0,
-    est_iodp: true
-  },
-  { 
-    id: 9, 
-    code: 'IODP6.1', 
-    nom: 'Provinces soumettant des plans de maintenance routière',
-    description: 'Nombre de provinces soumettant des plans annuels au FONER',
-    formule: 'Comptage des provinces',
-    unite: 'nombre',
-    frequence: 'annuelle',
-    cible: 4,
-    valeur_actuelle: 0,
-    valeur_reference: 0,
-    progression: 0,
-    id_composante: 2,
-    est_iodp: true
-  },
-];
-
 export const IODPList: React.FC = () => {
+  const navigate = useNavigate();
   const [indicateurs, setIndicateurs] = useState<Indicateur[]>([]);
   const [widgetData, setWidgetData] = useState<WidgetData>({
     total: 0,
@@ -274,7 +138,7 @@ export const IODPList: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [calculDialogOpen, setCalculDialogOpen] = useState(false);
-  const [selectedIndicateur, setSelectedIndicateur] = useState<Indicateur | null>(null);
+  const [selectedIndicateur] = useState<Indicateur | null>(null);
   const [donneesCalcul, setDonneesCalcul] = useState<Record<string, any>>({});
   const [resultatCalcul, setResultatCalcul] = useState<{ valeur: number; progression: number } | null>(null);
 
@@ -295,11 +159,9 @@ export const IODPList: React.FC = () => {
       setWidgetData(stats);
     } catch (err) {
       console.error('Erreur API:', err);
-      setError('Erreur de connexion au serveur. Affichage des données de démonstration.');
-      setIndicateurs(mockIndicateurs);
-      
-      const stats = calculateWidgetData(mockIndicateurs);
-      setWidgetData(stats);
+      setError('Erreur de connexion au serveur.');
+      setIndicateurs([]);
+      setWidgetData(calculateWidgetData([]));
     } finally {
       setLoading(false);
     }
@@ -307,13 +169,6 @@ export const IODPList: React.FC = () => {
 
   const handleExpand = (id: number) => {
     setExpandedId(expandedId === id ? null : id);
-  };
-
-  const handleOpenCalcul = (indicateur: Indicateur) => {
-    setSelectedIndicateur(indicateur);
-    setDonneesCalcul({});
-    setResultatCalcul(null);
-    setCalculDialogOpen(true);
   };
 
   const handleCalculer = async () => {
@@ -369,107 +224,22 @@ export const IODPList: React.FC = () => {
       <Grid container spacing={2} sx={{ mb: 4 }}>
         {/* Carte 1: Total indicateurs ODP */}
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card sx={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Box>
-                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                    Indicateurs ODP
-                  </Typography>
-                  <Typography variant="h3" sx={{ fontWeight: 700, mt: 1 }}>
-                    {widgetData.total}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    sur 29 indicateurs totaux (dont 20 IR)
-                  </Typography>
-                </Box>
-                <GoogleIcon name="track_changes" size={40} sx={{ color: '#1976D2', opacity: 0.7 }} />
-              </Box>
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                {widgetData.non_renseignes} sans données
-              </Typography>
-            </CardContent>
-          </Card>
+          <GradientWidget title="Indicateurs ODP" value={widgetData.total} icon={<GoogleIcon name="track_changes" size={36} />} detail={`${widgetData.non_renseignes} sans données`} color="primary" onClick={() => navigate('/indicateurs/cadre')} />
         </Grid>
 
         {/* Carte 2: Progression moyenne des ODP */}
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card sx={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Box>
-                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                    Progression Moyenne (ODP)
-                  </Typography>
-                  <Typography variant="h3" sx={{ fontWeight: 700, color: getProgressionColor(widgetData.progression_moyenne) }}>
-                    {widgetData.progression_moyenne}%
-                  </Typography>
-                </Box>
-                <GoogleIcon name="trending_up" size={40} sx={{ color: getProgressionColor(widgetData.progression_moyenne), opacity: 0.7 }} />
-              </Box>
-              <LinearProgress
-                variant="determinate"
-                value={Math.min(widgetData.progression_moyenne, 100)}
-                sx={{ mt: 1.5, height: 6, borderRadius: '8px', bgcolor: '#E0E0E0' }}
-              />
-            </CardContent>
-          </Card>
+          <GradientWidget title="Progression moyenne ODP" value={`${widgetData.progression_moyenne}%`} icon={<GoogleIcon name="trending_up" size={36} />} detail="Progression globale" color="success" onClick={() => navigate('/database/indicateurs')} />
         </Grid>
 
         {/* Carte 3: Indicateurs ODP atteints */}
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card 
-            sx={{ 
-              borderRadius: '16px', 
-              boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-              borderLeft: '4px solid #2E7D32'
-            }}
-          >
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Box>
-                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                    ✅ ODP Atteints
-                  </Typography>
-                  <Typography variant="h3" sx={{ fontWeight: 700, color: '#2E7D32' }}>
-                    {widgetData.atteints}
-                  </Typography>
-                </Box>
-                <GoogleIcon name="check_circle" size={40} sx={{ color: '#2E7D32', opacity: 0.7 }} />
-              </Box>
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                {widgetData.total > 0 ? Math.round((widgetData.atteints / widgetData.total) * 100) : 0}% des ODP
-              </Typography>
-            </CardContent>
-          </Card>
+          <GradientWidget title="ODP atteints" value={widgetData.atteints} icon={<GoogleIcon name="check_circle" size={36} />} detail={`${widgetData.total > 0 ? Math.round((widgetData.atteints / widgetData.total) * 100) : 0}% des ODP`} color="warning" onClick={() => navigate('/outils/collecte')} />
         </Grid>
 
         {/* Carte 4: Indicateurs ODP critiques */}
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card 
-            sx={{ 
-              borderRadius: '16px', 
-              boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-              borderLeft: '4px solid #E53935'
-            }}
-          >
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Box>
-                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                    🔴 ODP Critiques
-                  </Typography>
-                  <Typography variant="h3" sx={{ fontWeight: 700, color: '#E53935' }}>
-                    {widgetData.critiques}
-                  </Typography>
-                </Box>
-                <GoogleIcon name="warning" size={40} sx={{ color: '#E53935', opacity: 0.7 }} />
-              </Box>
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                {widgetData.en_alerte} en alerte · {widgetData.en_bonne_voie} bonne voie
-              </Typography>
-            </CardContent>
-          </Card>
+          <GradientWidget title="ODP critiques" value={widgetData.critiques} icon={<GoogleIcon name="warning" size={36} />} detail={`${widgetData.en_alerte} en alerte · ${widgetData.en_bonne_voie} en bonne voie`} color="info" onClick={() => navigate('/outils/collecte')} />
         </Grid>
       </Grid>
 
@@ -509,7 +279,7 @@ export const IODPList: React.FC = () => {
       <Grid container spacing={3}>
         {indicateurs.map((indicateur) => (
           <Grid size={{ xs: 12 }} key={indicateur.id}>
-            <Card sx={{ borderRadius: '10px' }}>
+            <Card sx={{ borderRadius: '10px', cursor: 'pointer' }} onClick={() => navigate(`/indicateurs/${indicateur.id}`)}>
               <CardContent>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <Box sx={{ flex: 1 }}>
@@ -557,7 +327,7 @@ export const IODPList: React.FC = () => {
                         sx={{
                           height: 8,
                           borderRadius: '8px',
-                          bgcolor: '#E0E0E0',
+                          bgcolor: 'action.selected',
                           '& .MuiLinearProgress-bar': {
                             bgcolor: getProgressionColor(indicateur.progression),
                             borderRadius: '8px',
@@ -597,13 +367,24 @@ export const IODPList: React.FC = () => {
                   </Box>
                   
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                    <Tooltip title="Calculer">
-                      <IconButton onClick={() => handleOpenCalcul(indicateur)} sx={{ bgcolor: '#F1F8E9', borderRadius: '10px' }}>
-                        <GoogleIcon name="calculate" size={24} />
+                    <Tooltip title="Renseigner">
+                      <IconButton
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          navigate(`/indicateurs/${indicateur.id}`);
+                        }}
+                        sx={{ bgcolor: 'action.hover', borderRadius: '10px' }}
+                      >
+                        <GoogleIcon name="edit" size={24} />
                       </IconButton>
                     </Tooltip>
                     <Tooltip title="Détails">
-                      <IconButton onClick={() => handleExpand(indicateur.id)}>
+                      <IconButton
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleExpand(indicateur.id);
+                        }}
+                      >
                         {expandedId === indicateur.id ? <GoogleIcon name="expand_less" size={24} /> : <GoogleIcon name="expand_more" size={24} />}
                       </IconButton>
                     </Tooltip>
@@ -612,11 +393,11 @@ export const IODPList: React.FC = () => {
                 
                 {/* Section détaillée */}
                 <Collapse in={expandedId === indicateur.id}>
-                  <Box sx={{ mt: 3, pt: 2, borderTop: '1px solid #E0E0E0' }}>
+                  <Box sx={{ mt: 3, pt: 2, borderTop: 1, borderColor: 'divider' }}>
                     <Typography variant="subtitle2" gutterBottom>
                       Formule de calcul
                     </Typography>
-                    <Paper sx={{ p: 2, bgcolor: '#F5F5F5', fontFamily: 'monospace', fontSize: '0.875rem', mb: 2 }}>
+                    <Paper sx={{ p: 2, bgcolor: 'action.hover', fontFamily: 'monospace', fontSize: '0.875rem', mb: 2 }}>
                       {indicateur.formule}
                     </Paper>
                   </Box>

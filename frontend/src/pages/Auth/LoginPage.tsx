@@ -48,7 +48,7 @@ export const LoginPage: React.FC = () => {
         minHeight: '100vh',
         display: 'flex',
         alignItems: 'center',
-        bgcolor: '#F1F8E9',
+        bgcolor: 'action.hover',
         background: 'radial-gradient(circle at top, rgba(76, 175, 80, 0.12), transparent 38%), linear-gradient(180deg, #F7FBF2 0%, #EDF6E5 100%)',
       }}
     >

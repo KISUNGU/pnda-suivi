@@ -47,15 +47,15 @@ import { useNotifications } from '../../context/NotificationsContext';
 const getStatusChip = (statut: string) => {
   switch (statut) {
     case 'recue':
-      return <Chip label="Reçue" size="small" sx={{ bgcolor: '#E3F2FD', color: '#1976D2' }} />;
+      return <Chip label="Reçue" size="small" sx={{ bgcolor: 'rgba(57, 135, 229, 0.14)', color: '#1976D2' }} />;
     case 'en_cours':
-      return <Chip label="En cours" size="small" sx={{ bgcolor: '#FFF8E1', color: '#FF8F00' }} />;
+      return <Chip label="En cours" size="small" sx={{ bgcolor: 'rgba(250, 178, 25, 0.14)', color: '#FF8F00' }} />;
     case 'referee':
-      return <Chip label="Référée" size="small" sx={{ bgcolor: '#F3E5F5', color: '#7B1FA2' }} />;
+      return <Chip label="Référée" size="small" sx={{ bgcolor: 'rgba(146, 39, 143, 0.16)', color: '#7B1FA2' }} />;
     case 'traitee':
-      return <Chip label="Traitée" size="small" sx={{ bgcolor: '#E8F5E9', color: '#2E7D32' }} />;
+      return <Chip label="Traitée" size="small" sx={{ bgcolor: 'action.hover', color: '#2E7D32' }} />;
     case 'cloturee':
-      return <Chip label="Clôturée" size="small" sx={{ bgcolor: '#ECEFF1', color: '#546E7A' }} />;
+      return <Chip label="Clôturée" size="small" sx={{ bgcolor: 'action.hover', color: '#546E7A' }} />;
     default:
       return <Chip label={statut} size="small" />;
   }
@@ -266,6 +266,7 @@ export const PlainteList: React.FC = () => {
               icon={<GoogleIcon name="assignment" size={36} />}
               trend={{ value: Math.max(stats.sensibles || 0, sensitiveComplaintNotifications.length), direction: 'up', period: 'cas sensibles' }}
               color="primary"
+              onClick={() => setNouveauOpen(true)}
             />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
@@ -275,6 +276,7 @@ export const PlainteList: React.FC = () => {
               icon={<GoogleIcon name="pending_actions" size={36} />}
               trend={{ value: (stats.total || 0) > 0 ? Math.round(((stats.en_cours || 0) / stats.total) * 100) : 0, direction: 'up', period: 'du total' }}
               color="warning"
+              onClick={() => setFilters({ ...filters, statut: 'en_cours', page: 0 })}
             />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
@@ -284,6 +286,7 @@ export const PlainteList: React.FC = () => {
               icon={<GoogleIcon name="check_circle" size={36} />}
               trend={{ value: (stats.total || 0) > 0 ? Math.round(((stats.traitees || 0) / stats.total) * 100) : 0, direction: 'up', period: 'du total' }}
               color="success"
+              onClick={() => setFilters({ ...filters, statut: 'traitee', page: 0 })}
             />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
@@ -292,6 +295,7 @@ export const PlainteList: React.FC = () => {
               value={Math.max(stats.sensibles || 0, sensitiveComplaintNotifications.length).toLocaleString('fr-FR')}
               icon={<GoogleIcon name="warning" size={36} />}
               trend={{ value: unreadComplaintNotifications.length, direction: unreadComplaintNotifications.length > 0 ? 'down' : 'up', period: unreadComplaintNotifications.length > 0 ? 'notifications non lues' : 'aucune alerte' }}
+              onClick={() => navigate('/outils/collecte?form=plainte_grm')}
               color="danger"
             />
           </Grid>
@@ -383,7 +387,7 @@ export const PlainteList: React.FC = () => {
       />
       <TableContainer component={Paper} sx={{ borderRadius: '10px', overflow: 'hidden' }}>
         <Table>
-          <TableHead sx={{ bgcolor: '#F1F8E9' }}>
+          <TableHead sx={{ bgcolor: 'action.hover' }}>
             <TableRow>
               <TableCell>N° Plainte</TableCell>
               <TableCell>Type</TableCell>

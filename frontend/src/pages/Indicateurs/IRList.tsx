@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import type { ReactElement } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Alert,
   Box,
@@ -29,6 +30,7 @@ import indicateurService from '../../services/indicateur.service';
 import type { Indicateur } from '../../services/indicateur.service';
 import GoogleIcon from '../../components/common/GoogleIcon';
 import { ExportToolbar } from '../../components/common/ExportToolbar/ExportToolbar';
+import { GradientWidget } from '../../components/common/Widget/GradientWidget';
 
 type ComposanteGroup = {
   id: number;
@@ -198,8 +200,9 @@ export function IRList() {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [expandedComposante, setExpandedComposante] = useState<number | null>(1);
   const [tabValue, setTabValue] = useState(0);
+  const navigate = useNavigate();
   const [calculDialogOpen, setCalculDialogOpen] = useState(false);
-  const [selectedIndicateur, setSelectedIndicateur] = useState<Indicateur | null>(null);
+  const [selectedIndicateur] = useState<Indicateur | null>(null);
   const [valeurSaisie, setValeurSaisie] = useState('');
   const [resultatCalcul, setResultatCalcul] = useState<{ valeur: number; progression: number } | null>(null);
 
@@ -243,13 +246,6 @@ export function IRList() {
 
   const handleToggleComposante = (composanteId: number) => {
     setExpandedComposante((currentId) => (currentId === composanteId ? null : composanteId));
-  };
-
-  const handleOpenCalcul = (indicateur: Indicateur) => {
-    setSelectedIndicateur(indicateur);
-    setValeurSaisie('');
-    setResultatCalcul(null);
-    setCalculDialogOpen(true);
   };
 
   const handleCalculer = async () => {
@@ -297,107 +293,22 @@ export function IRList() {
       <Grid container spacing={2} sx={{ mb: 4 }}>
   {/* Carte 1: Total indicateurs IR */}
   <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-    <Card sx={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
-      <CardContent>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Box>
-            <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-              Indicateurs de Résultats (IR)
-            </Typography>
-            <Typography variant="h3" sx={{ fontWeight: 700, mt: 1 }}>
-              {widgetData.total}
-            </Typography>
-            {/* <Typography variant="caption" color="text.secondary">
-              sur 29 indicateurs totaux (dont 9 ODP)
-            </Typography> */}
-          </Box>
-          <GoogleIcon name="analytics" size={40} sx={{ color: '#1976D2', opacity: 0.7 }} />
-        </Box>
-        <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-          {widgetData.non_renseignes} sans données
-        </Typography>
-      </CardContent>
-    </Card>
+    <GradientWidget title="Indicateurs de résultats" value={widgetData.total} icon={<GoogleIcon name="analytics" size={36} />} detail={`${widgetData.non_renseignes} sans données`} color="primary" onClick={() => navigate('/database/indicateurs')} />
   </Grid>
 
   {/* Carte 2: Progression moyenne des IR */}
   <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-    <Card sx={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
-      <CardContent>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Box>
-            <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-              Progression Moyenne (IR)
-            </Typography>
-            <Typography variant="h3" sx={{ fontWeight: 700, color: getProgressionColor(widgetData.progression_moyenne) }}>
-              {widgetData.progression_moyenne}%
-            </Typography>
-          </Box>
-          <GoogleIcon name="trending_up" size={40} sx={{ color: getProgressionColor(widgetData.progression_moyenne), opacity: 0.7 }} />
-        </Box>
-        <LinearProgress
-          variant="determinate"
-          value={Math.min(widgetData.progression_moyenne, 100)}
-          sx={{ mt: 1.5, height: 6, borderRadius: '8px', bgcolor: '#E0E0E0' }}
-        />
-      </CardContent>
-    </Card>
+    <GradientWidget title="Progression moyenne IR" value={`${widgetData.progression_moyenne}%`} icon={<GoogleIcon name="trending_up" size={36} />} detail="Progression globale" color="success" onClick={() => navigate('/indicateurs/cadre')} />
   </Grid>
 
   {/* Carte 3: Indicateurs atteints */}
   <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-    <Card 
-      sx={{ 
-        borderRadius: '16px', 
-        boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-        borderLeft: '4px solid #2E7D32'
-      }}
-    >
-      <CardContent>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Box>
-            <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-              ✅ IR Atteints
-            </Typography>
-            <Typography variant="h3" sx={{ fontWeight: 700, color: '#2E7D32' }}>
-              {widgetData.atteints}
-            </Typography>
-          </Box>
-          <GoogleIcon name="check_circle" size={40} sx={{ color: '#2E7D32', opacity: 0.7 }} />
-        </Box>
-        <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-          {widgetData.total > 0 ? Math.round((widgetData.atteints / widgetData.total) * 100) : 0}% des IR
-        </Typography>
-      </CardContent>
-    </Card>
+    <GradientWidget title="IR atteints" value={widgetData.atteints} icon={<GoogleIcon name="check_circle" size={36} />} detail={`${widgetData.total > 0 ? Math.round((widgetData.atteints / widgetData.total) * 100) : 0}% des IR`} color="warning" onClick={() => navigate('/outils/collecte')} />
   </Grid>
 
   {/* Carte 4: Indicateurs critiques */}
   <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-    <Card 
-      sx={{ 
-        borderRadius: '16px', 
-        boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-        borderLeft: '4px solid #E53935'
-      }}
-    >
-      <CardContent>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Box>
-            <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-              🔴 IR Critiques
-            </Typography>
-            <Typography variant="h3" sx={{ fontWeight: 700, color: '#E53935' }}>
-              {widgetData.critiques}
-            </Typography>
-          </Box>
-          <GoogleIcon name="warning" size={40} sx={{ color: '#E53935', opacity: 0.7 }} />
-        </Box>
-        <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-          {widgetData.en_alerte} en alerte · {widgetData.en_bonne_voie} bonne voie
-        </Typography>
-      </CardContent>
-    </Card>
+    <GradientWidget title="IR critiques" value={widgetData.critiques} icon={<GoogleIcon name="warning" size={36} />} detail={`${widgetData.en_alerte} en alerte · ${widgetData.en_bonne_voie} en bonne voie`} color="info" onClick={() => navigate('/outils/collecte')} />
   </Grid>
 </Grid>
 
@@ -418,7 +329,7 @@ export function IRList() {
           <Grid size={{ xs: 12, sm: 6, md: 3 }} key={comp.id}>
             <Card 
               sx={{ 
-                borderRadius: '16px', 
+                borderRadius: '11px', 
                 boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
                 cursor: 'pointer',
                 transition: 'transform 0.2s',
@@ -433,7 +344,16 @@ export function IRList() {
                     Composante {comp.id}
                   </Typography>
                 </Box>
-                <Typography variant="h4" fontWeight={700} color={getProgressionColor(comp.progression_moyenne)}>
+                <Typography
+                  fontWeight={700}
+                  color={getProgressionColor(comp.progression_moyenne)}
+                  sx={{
+                    fontSize: 'clamp(1.25rem, 2.4vw, 1.7rem)',
+                    lineHeight: 1.1,
+                    letterSpacing: '-0.03em',
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                >
                   {comp.progression_moyenne}%
                 </Typography>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
@@ -447,7 +367,7 @@ export function IRList() {
                 <LinearProgress
                   variant="determinate"
                   value={Math.min(comp.progression_moyenne, 100)}
-                  sx={{ mt: 1.5, height: 6, borderRadius: '8px', bgcolor: '#E0E0E0' }}
+                  sx={{ mt: 1.5, height: 6, borderRadius: '8px', bgcolor: 'action.selected' }}
                 />
                 <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
                   {comp.total} indicateurs
@@ -523,7 +443,12 @@ export function IRList() {
             <Collapse in={expandedComposante === group.id}>
               <Box sx={{ mt: 3 }}>
                 {group.indicateurs.map((indicateur) => (
-                  <Paper key={indicateur.id} variant="outlined" sx={{ p: 2, mb: 2, borderRadius: '10px' }}>
+                  <Paper
+                    key={indicateur.id}
+                    variant="outlined"
+                    onClick={() => navigate(`/indicateurs/${indicateur.id}`)}
+                    sx={{ p: 2, mb: 2, borderRadius: '10px', cursor: 'pointer' }}
+                  >
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2 }}>
                       <Box sx={{ flex: 1 }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, flexWrap: 'wrap' }}>
@@ -569,7 +494,7 @@ export function IRList() {
                             sx={{
                               height: 8,
                               borderRadius: '8px',
-                              bgcolor: '#E0E0E0',
+                              bgcolor: 'action.selected',
                               '& .MuiLinearProgress-bar': {
                                 bgcolor: getProgressionColor(indicateur.progression),
                               },
@@ -599,19 +524,25 @@ export function IRList() {
                         </Box>
                       </Box>
 
-                      <Tooltip title="Calculer">
-                        <IconButton onClick={() => handleOpenCalcul(indicateur)} sx={{ bgcolor: '#F1F8E9', borderRadius: '10px' }}>
-                          <GoogleIcon name="calculate" size={24} />
+                      <Tooltip title="Renseigner">
+                        <IconButton
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            navigate(`/indicateurs/${indicateur.id}`);
+                          }}
+                          sx={{ bgcolor: 'action.hover', borderRadius: '10px' }}
+                        >
+                          <GoogleIcon name="edit" size={24} />
                         </IconButton>
                       </Tooltip>
                     </Box>
 
                     <Collapse in={expandedId === indicateur.id}>
-                      <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid #E0E0E0' }}>
+                      <Box sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: 'divider' }}>
                         <Typography variant="subtitle2" gutterBottom>
                           Formule de calcul
                         </Typography>
-                        <Paper sx={{ p: 2, bgcolor: '#F5F5F5', fontFamily: 'monospace', fontSize: '0.875rem' }}>
+                        <Paper sx={{ p: 2, bgcolor: 'action.hover', fontFamily: 'monospace', fontSize: '0.875rem' }}>
                           {indicateur.formule}
                         </Paper>
                       </Box>

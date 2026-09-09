@@ -95,7 +95,7 @@ export const NotificationsPage: React.FC = () => {
       </Box>
 
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <GradientWidget
             title="Total"
             value={summary.total.toLocaleString('fr-FR')}
@@ -104,7 +104,7 @@ export const NotificationsPage: React.FC = () => {
             color="primary"
           />
         </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <GradientWidget
             title="Non lues"
             value={summary.unread.toLocaleString('fr-FR')}
@@ -113,13 +113,22 @@ export const NotificationsPage: React.FC = () => {
             color="danger"
           />
         </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <GradientWidget
             title="Risques / Plaintes"
             value={((summary.byType.risk ?? 0) + (summary.byType.complaint ?? 0)).toLocaleString('fr-FR')}
             icon={<GoogleIcon name="crisis_alert" size={36} />}
             trend={{ value: summary.total > 0 ? Math.round((((summary.byType.risk ?? 0) + (summary.byType.complaint ?? 0)) / summary.total) * 100) : 0, direction: 'up', period: 'des notifications' }}
             color="info"
+          />
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <GradientWidget
+            title="Critiques"
+            value={(summary.bySeverity.danger ?? 0).toLocaleString('fr-FR')}
+            icon={<GoogleIcon name="error" size={36} />}
+            trend={{ value: summary.total > 0 ? Math.round(((summary.bySeverity.danger ?? 0) / summary.total) * 100) : 0, direction: (summary.bySeverity.danger ?? 0) > 0 ? 'down' : 'up', period: 'du total' }}
+            color="warning"
           />
         </Grid>
       </Grid>
@@ -136,7 +145,7 @@ export const NotificationsPage: React.FC = () => {
         ))}
       </Stack>
 
-      <Paper sx={{ borderRadius: 3, overflow: 'hidden' }}>
+      <Paper sx={{ borderRadius: 2.1, overflow: 'hidden' }}>
         {filteredNotifications.length === 0 ? (
           <Box sx={{ p: 4, textAlign: 'center' }}>
             <GoogleIcon name="notifications_off" size={40} sx={{ color: 'text.disabled', mb: 1 }} />
@@ -157,7 +166,7 @@ export const NotificationsPage: React.FC = () => {
                     p: 2.5,
                     cursor: 'pointer',
                     bgcolor: notification.read ? 'background.paper' : '#F7FBF7',
-                    '&:hover': { bgcolor: '#F2F8F2' },
+                    '&:hover': { bgcolor: 'action.hover' },
                   }}
                 >
                   <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ xs: 'flex-start', md: 'center' }}>

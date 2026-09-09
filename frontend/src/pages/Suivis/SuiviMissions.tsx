@@ -13,8 +13,6 @@ import {
   Tabs,
   Tab,
   Grid,
-  Card,
-  CardContent,
   Chip,
   TextField,
   InputAdornment,
@@ -23,6 +21,7 @@ import {
 } from '@mui/material';
 import GoogleIcon from '../../components/common/GoogleIcon';
 import { ExportToolbar } from '../../components/common/ExportToolbar/ExportToolbar';
+import { GradientWidget } from '../../components/common/Widget/GradientWidget';
 import { suiviService } from '../../services/suivi.service';
 import type { SuiviMission, SuiviStats } from '../../services/suivi.service';
 
@@ -42,23 +41,13 @@ interface StatCardProps {
 }
 
 const StatCard: React.FC<StatCardProps> = ({ label, value, color, icon }) => (
-  <Card sx={{ borderLeft: `4px solid ${color}`, bgcolor: `${color}18` }}>
-    <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Box>
-          <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1 }}>
-            {label}
-          </Typography>
-          <Typography variant="h6" fontWeight={700} sx={{ mt: 0.25 }}>
-            {value}
-          </Typography>
-        </Box>
-        <Box sx={{ color, opacity: 0.7 }}>
-          <GoogleIcon name={icon} size={28} />
-        </Box>
-      </Box>
-    </CardContent>
-  </Card>
+  <GradientWidget
+    title={label}
+    value={value}
+    icon={<GoogleIcon name={icon} size={36} />}
+    color={color === '#388e3c' ? 'success' : color === '#f57c00' ? 'warning' : color === '#7b1fa2' ? 'info' : 'primary'}
+    onClick={() => window.scrollTo({ top: 420, behavior: 'smooth' })}
+  />
 );
 
 const fmtUSD = (v: number) =>
@@ -353,7 +342,7 @@ export const SuiviMissions: React.FC = () => {
                     {rows.map((m, i) => (
                       <TableRow
                         key={m.id}
-                        sx={{ bgcolor: i % 2 === 0 ? 'inherit' : 'grey.50' }}
+                        sx={{ bgcolor: i % 2 === 0 ? 'inherit' : 'action.hover' }}
                       >
                         <TableCell
                           sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.8rem' }}
@@ -414,7 +403,7 @@ export const SuiviMissions: React.FC = () => {
               })}
 
               {/* Totals footer */}
-              <TableRow sx={{ bgcolor: 'grey.200' }}>
+              <TableRow sx={{ bgcolor: 'action.selected' }}>
                 <TableCell
                   colSpan={5}
                   sx={{ fontWeight: 700, fontSize: '0.85rem', py: 1 }}

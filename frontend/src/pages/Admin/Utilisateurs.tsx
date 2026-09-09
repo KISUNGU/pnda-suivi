@@ -49,7 +49,7 @@ import {
   LockReset,
   CheckCircle,
   Cancel,
-} from '@mui/icons-material';
+} from '../../components/common/PageIcons';
 import { useNavigate } from 'react-router-dom';
 import GoogleIcon from '../../components/common/GoogleIcon';
 import { GradientWidget } from '../../components/common/Widget/GradientWidget';
@@ -318,6 +318,7 @@ export const Utilisateurs: React.FC = () => {
               icon={<GoogleIcon name="groups" size={36} />}
               trend={{ value: stats.nouveaux_mois, direction: 'up', period: 'ce mois' }}
               color="primary"
+              onClick={() => handleOpenForm()}
             />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
@@ -327,6 +328,7 @@ export const Utilisateurs: React.FC = () => {
               icon={<GoogleIcon name="verified_user" size={36} />}
               trend={{ value: stats.total > 0 ? Math.round(((stats.par_statut?.actif || 0) / stats.total) * 100) : 0, direction: 'up', period: 'comptes actifs' }}
               color="success"
+              onClick={() => handleOpenForm()}
             />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
@@ -335,6 +337,7 @@ export const Utilisateurs: React.FC = () => {
               value={(stats.par_role?.ot || 0).toLocaleString('fr-FR')}
               icon={<GoogleIcon name="engineering" size={36} />}
               trend={{ value: stats.total > 0 ? Math.round(((stats.par_role?.ot || 0) / stats.total) * 100) : 0, direction: 'up', period: 'du total' }}
+              onClick={() => handleOpenForm()}
               color="warning"
             />
           </Grid>
@@ -344,6 +347,7 @@ export const Utilisateurs: React.FC = () => {
               value={(stats.par_role?.admin || 0).toLocaleString('fr-FR')}
               icon={<GoogleIcon name="admin_panel_settings" size={36} />}
               trend={{ value: warningUserNotifications.length, direction: warningUserNotifications.length > 0 ? 'down' : 'up', period: warningUserNotifications.length > 0 ? 'alertes admin' : 'accès complet' }}
+              onClick={() => handleOpenForm()}
               color="danger"
             />
           </Grid>
@@ -437,7 +441,7 @@ export const Utilisateurs: React.FC = () => {
       {/* Tableau des utilisateurs */}
       <TableContainer component={Paper} sx={{ borderRadius: 2, overflow: 'hidden' }}>
         <Table>
-          <TableHead sx={{ bgcolor: '#F1F8E9' }}>
+          <TableHead sx={{ bgcolor: 'action.hover' }}>
             <TableRow>
               <TableCell>Utilisateur</TableCell>
               <TableCell>Email / Contact</TableCell>

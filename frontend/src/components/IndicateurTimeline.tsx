@@ -86,7 +86,7 @@ export function IndicateurTimeline({ indicateur }: Props) {
           sx={{
             height: 8,
             borderRadius: '8px',
-            bgcolor: '#E0E0E0',
+            bgcolor: 'action.selected',
             '& .MuiLinearProgress-bar': { bgcolor: getProgressColor(lastRealise, finalCible) },
           }}
         />
@@ -95,14 +95,14 @@ export function IndicateurTimeline({ indicateur }: Props) {
       {/* Tableau des évolutions annuelles */}
       <TableContainer component={Paper} variant="outlined" sx={{ mb: 2 }}>
         <Table size="small">
-          <TableHead sx={{ bgcolor: '#F5F5F5' }}>
+          <TableHead sx={{ bgcolor: 'action.hover' }}>
             <TableRow>
               <TableCell rowSpan={2} sx={{ fontWeight: 700 }}>Année</TableCell>
               <TableCell colSpan={2} align="center" sx={{ fontWeight: 700 }}>Cible</TableCell>
               <TableCell colSpan={2} align="center" sx={{ fontWeight: 700 }}>Réalisé</TableCell>
               <TableCell rowSpan={2} align="center" sx={{ fontWeight: 700 }}>Performance</TableCell>
             </TableRow>
-            <TableRow sx={{ bgcolor: '#FAFAFA' }}>
+            <TableRow sx={{ bgcolor: 'action.hover' }}>
               <TableCell align="right" sx={{ fontSize: '0.75rem' }}>Valeur</TableCell>
               <TableCell align="center" sx={{ fontSize: '0.75rem' }}>Statut</TableCell>
               <TableCell align="right" sx={{ fontSize: '0.75rem' }}>Valeur</TableCell>
@@ -173,7 +173,7 @@ export function IndicateurTimeline({ indicateur }: Props) {
 
       {/* Métadonnées (source, méthodologie, responsable) */}
       {(indicateur.source_donnees || indicateur.methodologie_collecte || indicateur.responsable_collecte) && (
-        <Box sx={{ mt: 2, p: 1.5, bgcolor: '#F9F9F9', borderRadius: '8px' }}>
+        <Box sx={{ mt: 2, p: 1.5, bgcolor: 'action.hover', borderRadius: '8px' }}>
           <Typography variant="caption" color="text.secondary" display="block">
             <strong>📁 Source :</strong> {indicateur.source_donnees || 'Non spécifiée'}
           </Typography>
@@ -188,7 +188,7 @@ export function IndicateurTimeline({ indicateur }: Props) {
 
       {/* Formule de calcul */}
       {indicateur.formule && (
-        <Box sx={{ mt: 1.5, p: 1.5, bgcolor: '#E8F5E9', borderRadius: '8px' }}>
+        <Box sx={{ mt: 1.5, p: 1.5, bgcolor: 'action.hover', borderRadius: '8px' }}>
           <Typography variant="caption" fontWeight={600}>📐 Formule :</Typography>
           <Typography variant="caption" fontFamily="monospace" display="block">
             {indicateur.formule}

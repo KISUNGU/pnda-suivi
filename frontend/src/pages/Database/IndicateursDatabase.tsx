@@ -52,11 +52,12 @@ import {
   ShowChart,
   Assessment,
   Visibility,
-} from '@mui/icons-material';
+} from '../../components/common/PageIcons';
 import GoogleIcon from '../../components/common/GoogleIcon';
 import { GradientWidget } from '../../components/common/Widget/GradientWidget';
 import { moduleGridStyles } from '../../components/common/Layout/moduleGridStyles';
 import { ExportToolbar } from '../../components/common/ExportToolbar/ExportToolbar';
+import { useNavigate } from 'react-router-dom';
 import { indicateursDatabaseService, type IndicateurComplet, type IndicateurFilters, type IndicateurStats } from '../../services/indicateursDatabase.service';
 
 interface TabPanelProps {
@@ -73,229 +74,6 @@ function TabPanel(props: TabPanelProps) {
     </div>
   );
 }
-
-// Données mockées
-const mockIndicateurs: IndicateurComplet[] = [
-  // IODP
-  {
-    id: 1,
-    code: 'IODP1.1',
-    nom: 'Hausse des ventes sur les marchés formels',
-    description: 'Augmentation en pourcentage des ventes des petits exploitants sur les marchés formels',
-    type: 'iodp',
-    composante: 'Accès au marché',
-    sous_composante: 'Appui à l\'inclusion dans les chaînes de valeur',
-    formule: '((Surplus à l\'année t / Surplus à l\'année 0) - 1) x 100',
-    unite: '%',
-    frequence: 'annuelle',
-    source_donnees: 'Enquêtes sur la production des bénéficiaires',
-    responsable_collecte: 'UNCP',
-    valeurs: { reference: 12, cible: 30, actuelle: 15, progression: 50 },
-    historique: [
-      { periode: 'T1 2025', valeur: 12, source: 'Enquête baseline' },
-      { periode: 'T2 2025', valeur: 13, source: 'Enquête mi-parcours' },
-      { periode: 'T3 2025', valeur: 14, source: 'Enquête trimestrielle' },
-      { periode: 'T4 2025', valeur: 14.5, source: 'Enquête trimestrielle' },
-      { periode: 'T1 2026', valeur: 15, source: 'Enquête trimestrielle' },
-    ],
-    statut: 'actif',
-    created_at: '2024-01-01',
-    updated_at: '2026-03-28',
-  },
-  {
-    id: 2,
-    code: 'IODP2.1',
-    nom: 'Nombre d\'exploitants ayant adopté une technologie améliorée',
-    description: 'Nombre cumulé de petits exploitants ayant adopté une technologie agricole améliorée',
-    type: 'iodp',
-    composante: 'Productivité agricole',
-    sous_composante: 'Appui aux petits exploitants',
-    formule: 'Somme cumulée des petits exploitants bénéficiaires',
-    unite: 'nombre',
-    frequence: 'annuelle',
-    source_donnees: 'Enregistrement des petits exploitants',
-    responsable_collecte: 'UNCP',
-    valeurs: { reference: 25000, cible: 50000, actuelle: 32450, progression: 64.9 },
-    historique: [
-      { periode: 'T1 2025', valeur: 25000, source: 'RNA' },
-      { periode: 'T2 2025', valeur: 28000, source: 'RNA' },
-      { periode: 'T3 2025', valeur: 29500, source: 'RNA' },
-      { periode: 'T4 2025', valeur: 31000, source: 'RNA' },
-      { periode: 'T1 2026', valeur: 32450, source: 'RNA' },
-    ],
-    statut: 'actif',
-    created_at: '2024-01-01',
-    updated_at: '2026-03-28',
-  },
-  {
-    id: 3,
-    code: 'IODP2.3',
-    nom: 'Hausse du rendement de maïs (AIC)',
-    description: 'Augmentation en pourcentage du rendement de maïs grâce aux pratiques AIC',
-    type: 'iodp',
-    composante: 'Productivité agricole',
-    sous_composante: 'Appui aux petits exploitants',
-    formule: '((Rendement maïs année t - Rendement maïs année 0) / Rendement maïs année 0) x 100',
-    unite: '%',
-    frequence: 'annuelle',
-    source_donnees: 'Enquêtes sur la production des bénéficiaires',
-    responsable_collecte: 'UNCP',
-    valeurs: { reference: 18, cible: 30, actuelle: 23, progression: 76.7 },
-    historique: [
-      { periode: 'T1 2025', valeur: 18, source: 'Enquête baseline' },
-      { periode: 'T2 2025', valeur: 19, source: 'Enquête mi-parcours' },
-      { periode: 'T3 2025', valeur: 21, source: 'Enquête trimestrielle' },
-      { periode: 'T4 2025', valeur: 22, source: 'Enquête trimestrielle' },
-      { periode: 'T1 2026', valeur: 23, source: 'Enquête trimestrielle' },
-    ],
-    statut: 'actif',
-    created_at: '2024-01-01',
-    updated_at: '2026-03-28',
-  },
-  {
-    id: 4,
-    code: 'IODP3.1',
-    nom: 'Plans de contingence pour risques agricoles',
-    description: 'Nombre de plans de contingence approuvés pour les risques liés au secteur agricole',
-    type: 'iodp',
-    composante: 'Capacité du secteur public',
-    sous_composante: 'Renforcement des capacités',
-    formule: 'Nombre cumulé de plans de contingence approuvés',
-    unite: 'nombre',
-    frequence: 'annuelle',
-    source_donnees: 'Rapport d\'activités du Programme',
-    responsable_collecte: 'UNCP',
-    valeurs: { reference: 3, cible: 8, actuelle: 5, progression: 62.5 },
-    historique: [
-      { periode: 'T1 2025', valeur: 3, source: 'Rapport annuel' },
-      { periode: 'T2 2025', valeur: 3, source: 'Rapport trimestriel' },
-      { periode: 'T3 2025', valeur: 4, source: 'Rapport trimestriel' },
-      { periode: 'T4 2025', valeur: 4, source: 'Rapport trimestriel' },
-      { periode: 'T1 2026', valeur: 5, source: 'Rapport trimestriel' },
-    ],
-    statut: 'actif',
-    created_at: '2024-01-01',
-    updated_at: '2026-03-28',
-  },
-  // IR
-  {
-    id: 5,
-    code: 'IR1.1.1',
-    nom: 'Petits exploitants atteints par des actifs agricoles',
-    description: 'Nombre de petits exploitants ayant reçu des actifs ou services agricoles',
-    type: 'ir',
-    composante: 'Productivité agricole',
-    sous_composante: 'Appui aux petits exploitants',
-    formule: 'Somme cumulée des bénéficiaires',
-    unite: 'nombre',
-    frequence: 'semestrielle',
-    source_donnees: 'Données collectées par l\'OT',
-    responsable_collecte: 'UNCP',
-    valeurs: { reference: 98000, cible: 150000, actuelle: 124530, progression: 83 },
-    historique: [
-      { periode: 'S1 2025', valeur: 98000, source: 'OT' },
-      { periode: 'S2 2025', valeur: 112000, source: 'OT' },
-      { periode: 'S1 2026', valeur: 124530, source: 'OT' },
-    ],
-    statut: 'actif',
-    created_at: '2024-01-01',
-    updated_at: '2026-03-28',
-  },
-  {
-    id: 6,
-    code: 'IR2.1.1',
-    nom: 'Kilomètres de routes réhabilitées',
-    description: 'Total des routes réhabilitées par le programme',
-    type: 'ir',
-    composante: 'Accès au marché',
-    sous_composante: 'Infrastructures rurales',
-    formule: 'Somme des km de routes',
-    unite: 'km',
-    frequence: 'annuelle',
-    source_donnees: 'Les missions de contrôle, Ingénieurs du programme',
-    responsable_collecte: 'OVDA/UNCP',
-    valeurs: { reference: 150, cible: 500, actuelle: 300, progression: 60 },
-    historique: [
-      { periode: 'T1 2025', valeur: 150, source: 'OVDA' },
-      { periode: 'T2 2025', valeur: 180, source: 'OVDA' },
-      { periode: 'T3 2025', valeur: 220, source: 'OVDA' },
-      { periode: 'T4 2025', valeur: 260, source: 'OVDA' },
-      { periode: 'T1 2026', valeur: 300, source: 'OVDA' },
-    ],
-    statut: 'actif',
-    created_at: '2024-01-01',
-    updated_at: '2026-03-28',
-  },
-  {
-    id: 7,
-    code: 'IR3.1.4',
-    nom: 'Traitement des réclamations GRM',
-    description: 'Pourcentage des plaintes traitées dans les délais',
-    type: 'ir',
-    composante: 'Services publics agricoles',
-    sous_composante: 'Renforcement des capacités',
-    formule: '(Plaintes traitées / Plaintes reçues) x 100',
-    unite: '%',
-    frequence: 'annuelle',
-    source_donnees: 'GRM Système d\'information',
-    responsable_collecte: 'OT/UNCP/UEP',
-    valeurs: { reference: 65, cible: 90, actuelle: 78, progression: 86.7 },
-    historique: [
-      { periode: 'T1 2025', valeur: 65, source: 'GRM' },
-      { periode: 'T2 2025', valeur: 68, source: 'GRM' },
-      { periode: 'T3 2025', valeur: 72, source: 'GRM' },
-      { periode: 'T4 2025', valeur: 75, source: 'GRM' },
-      { periode: 'T1 2026', valeur: 78, source: 'GRM' },
-    ],
-    statut: 'actif',
-    created_at: '2024-01-01',
-    updated_at: '2026-03-28',
-  },
-  {
-    id: 8,
-    code: 'IR4.1',
-    nom: 'Plans de contingence préparés',
-    description: 'Plans de réponse aux urgences agricoles approuvés',
-    type: 'ir',
-    composante: 'Intervention d\'urgence agricole',
-    formule: 'Nombre de plans approuvés',
-    unite: 'nombre',
-    frequence: 'annuelle',
-    source_donnees: 'Rapport Final du Manuel d\'Intervention d\'Urgence',
-    responsable_collecte: 'UNCP/UEP',
-    valeurs: { reference: 2, cible: 8, actuelle: 5, progression: 62.5 },
-    historique: [
-      { periode: 'T1 2025', valeur: 2, source: 'Rapport' },
-      { periode: 'T2 2025', valeur: 2, source: 'Rapport' },
-      { periode: 'T3 2025', valeur: 3, source: 'Rapport' },
-      { periode: 'T4 2025', valeur: 4, source: 'Rapport' },
-      { periode: 'T1 2026', valeur: 5, source: 'Rapport' },
-    ],
-    statut: 'actif',
-    created_at: '2024-01-01',
-    updated_at: '2026-03-28',
-  },
-];
-
-const mockStats: IndicateurStats = {
-  total: 28,
-  par_type: { iodp: 11, ir: 17 },
-  par_composante: {
-    'Productivité agricole': 12,
-    'Accès au marché': 8,
-    'Services publics agricoles': 5,
-    'Intervention d\'urgence agricole': 3,
-  },
-  par_frequence: {
-    mensuelle: 4,
-    trimestrielle: 8,
-    semestrielle: 6,
-    annuelle: 10,
-  },
-  progression_moyenne: 72.5,
-  indicateurs_atteints: 8,
-  indicateurs_en_alerte: 5,
-};
 
 const getTypeColor = (type: string) => {
   return type === 'iodp' ? '#2E7D32' : '#1976D2';
@@ -319,6 +97,7 @@ const getProgressionColor = (progression: number) => {
 };
 
 export const IndicateursDatabase: React.FC = () => {
+  const navigate = useNavigate();
   const [indicateurs, setIndicateurs] = useState<IndicateurComplet[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -355,13 +134,15 @@ export const IndicateursDatabase: React.FC = () => {
         indicateursDatabaseService.getStats(),
       ]);
       const d = indRes.data;
-      setIndicateurs(d.data?.length ? d.data : mockIndicateurs);
-      setTotal(d.total ?? mockIndicateurs.length);
-      setStats(statsRes.data || mockStats);
-    } catch {
-      setIndicateurs(mockIndicateurs);
-      setTotal(mockIndicateurs.length);
-      setStats(mockStats);
+      setIndicateurs(d.data ?? []);
+      setTotal(d.total ?? 0);
+      setStats(statsRes.data ?? null);
+    } catch (err) {
+      console.error('Erreur chargement indicateurs:', err);
+      setError('Impossible de charger la base des indicateurs');
+      setIndicateurs([]);
+      setTotal(0);
+      setStats(null);
     } finally {
       setLoading(false);
     }
@@ -397,11 +178,6 @@ export const IndicateursDatabase: React.FC = () => {
       page: 0,
       limit: 10,
     });
-  };
-
-  const handleViewDetail = (indicateur: IndicateurComplet) => {
-    setSelectedIndicateur(indicateur);
-    setDetailDialogOpen(true);
   };
 
   const handleOpenUpdate = (indicateur: IndicateurComplet) => {
@@ -480,6 +256,7 @@ export const IndicateursDatabase: React.FC = () => {
               icon={<GoogleIcon name="analytics" size={36} />}
               trend={{ value: stats.par_type.iodp, direction: 'up', period: 'IODP' }}
               color="primary"
+              onClick={() => navigate('/indicateurs/cadre')}
             />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
@@ -488,6 +265,7 @@ export const IndicateursDatabase: React.FC = () => {
               value={`${stats.progression_moyenne}%`}
               icon={<GoogleIcon name="trending_up" size={36} />}
               trend={{ value: Math.round(stats.progression_moyenne), direction: 'up', period: 'de la cible' }}
+              onClick={() => navigate('/indicateurs/ir')}
               color="info"
             />
           </Grid>
@@ -497,6 +275,7 @@ export const IndicateursDatabase: React.FC = () => {
               value={stats.indicateurs_atteints.toLocaleString('fr-FR')}
               icon={<GoogleIcon name="check_circle" size={36} />}
               trend={{ value: stats.total > 0 ? Math.round((stats.indicateurs_atteints / stats.total) * 100) : 0, direction: 'up', period: 'du total' }}
+              onClick={() => navigate('/indicateurs/iodp')}
               color="success"
             />
           </Grid>
@@ -506,6 +285,7 @@ export const IndicateursDatabase: React.FC = () => {
               value={stats.indicateurs_en_alerte.toLocaleString('fr-FR')}
               icon={<GoogleIcon name="warning" size={36} />}
               trend={{ value: stats.total > 0 ? Math.round((stats.indicateurs_en_alerte / stats.total) * 100) : 0, direction: 'down', period: 'progression < 50%' }}
+              onClick={() => navigate('/outils/collecte')}
               color="danger"
             />
           </Grid>
@@ -605,7 +385,7 @@ export const IndicateursDatabase: React.FC = () => {
       />
       <TableContainer component={Paper} sx={{ borderRadius: 2, overflow: 'hidden' }}>
         <Table>
-          <TableHead sx={{ bgcolor: '#F1F8E9' }}>
+          <TableHead sx={{ bgcolor: 'action.hover' }}>
             <TableRow>
               <TableCell>Code</TableCell>
               <TableCell>Nom</TableCell>
@@ -619,7 +399,12 @@ export const IndicateursDatabase: React.FC = () => {
           </TableHead>
           <TableBody>
             {indicateurs.map((ind) => (
-              <TableRow key={ind.id} hover>
+              <TableRow
+                key={ind.id}
+                hover
+                onClick={() => navigate(`/indicateurs/${ind.id}`)}
+                sx={{ cursor: 'pointer' }}
+              >
                 <TableCell>
                   <Typography variant="body2" fontWeight={500}>{ind.code}</Typography>
                 </TableCell>
@@ -649,13 +434,13 @@ export const IndicateursDatabase: React.FC = () => {
                       <Chip label={ind.valeurs.reference.toLocaleString()} size="small" variant="outlined" />
                     </Tooltip>
                     <Tooltip title="Cible annuelle">
-                      <Chip label={(ind.valeurs.cible_annuelle ?? ind.valeurs.cible).toLocaleString()} size="small" variant="outlined" sx={{ bgcolor: '#E3F2FD' }} />
+                      <Chip label={(ind.valeurs.cible_annuelle ?? ind.valeurs.cible).toLocaleString()} size="small" variant="outlined" sx={{ bgcolor: 'rgba(57, 135, 229, 0.14)' }} />
                     </Tooltip>
                     <Tooltip title="Cible finale">
-                      <Chip label={ind.valeurs.cible.toLocaleString()} size="small" sx={{ bgcolor: '#FFF3E0' }} />
+                      <Chip label={ind.valeurs.cible.toLocaleString()} size="small" sx={{ bgcolor: 'rgba(250, 178, 25, 0.14)' }} />
                     </Tooltip>
                     <Tooltip title="Actuelle">
-                      <Chip label={ind.valeurs.actuelle.toLocaleString()} size="small" sx={{ bgcolor: '#E8F5E9' }} />
+                      <Chip label={ind.valeurs.actuelle.toLocaleString()} size="small" sx={{ bgcolor: 'action.hover' }} />
                     </Tooltip>
                   </Stack>
                 </TableCell>
@@ -671,9 +456,9 @@ export const IndicateursDatabase: React.FC = () => {
                     </Typography>
                   </Box>
                 </TableCell>
-                <TableCell align="center">
+                <TableCell align="center" onClick={(event) => event.stopPropagation()}>
                   <Tooltip title="Voir détails">
-                    <IconButton size="small" onClick={() => handleViewDetail(ind)}>
+                    <IconButton size="small" onClick={() => navigate(`/indicateurs/${ind.id}`)}>
                       <Visibility fontSize="small" />
                     </IconButton>
                   </Tooltip>
@@ -785,7 +570,7 @@ export const IndicateursDatabase: React.FC = () => {
                 <Grid container spacing={2}>
                   <Grid size={{ xs: 12 }}>
                     <Typography variant="subtitle2" color="text.secondary">Formule de calcul</Typography>
-                    <Paper sx={{ p: 2, bgcolor: '#F5F5F5', fontFamily: 'monospace', borderRadius: 2 }}>
+                    <Paper sx={{ p: 2, bgcolor: 'action.hover', fontFamily: 'monospace', borderRadius: 2 }}>
                       {selectedIndicateur.formule}
                     </Paper>
                   </Grid>
@@ -807,7 +592,7 @@ export const IndicateursDatabase: React.FC = () => {
               <TabPanel value={tabValue} index={2}>
                 <TableContainer component={Paper} variant="outlined">
                   <Table size="small">
-                    <TableHead sx={{ bgcolor: '#F5F5F5' }}>
+                    <TableHead sx={{ bgcolor: 'action.hover' }}>
                       <TableRow>
                         <TableCell>Période</TableCell>
                         <TableCell align="right">Valeur</TableCell>
@@ -850,14 +635,14 @@ export const IndicateursDatabase: React.FC = () => {
                     </Card>
                   </Grid>
                   <Grid size={{ xs: 12, md: 3 }}>
-                    <Card sx={{ textAlign: 'center', p: 2, bgcolor: '#E8F5E9' }}>
+                    <Card sx={{ textAlign: 'center', p: 2, bgcolor: 'action.hover' }}>
                       <Typography variant="caption" color="text.secondary">Valeur actuelle</Typography>
                       <Typography variant="h5" color="primary.main">{selectedIndicateur.valeurs.actuelle.toLocaleString()} {selectedIndicateur.unite}</Typography>
                     </Card>
                   </Grid>
                   {selectedIndicateur.valeurs.final_realise !== undefined && selectedIndicateur.valeurs.final_realise !== null && (
                     <Grid size={{ xs: 12, md: 6 }}>
-                      <Card sx={{ textAlign: 'center', p: 2, bgcolor: '#FFF8E1' }}>
+                      <Card sx={{ textAlign: 'center', p: 2, bgcolor: 'rgba(250, 178, 25, 0.14)' }}>
                         <Typography variant="caption" color="text.secondary">Réalisé final</Typography>
                         <Typography variant="h5" color="#E65100">{selectedIndicateur.valeurs.final_realise.toLocaleString()} {selectedIndicateur.unite}</Typography>
                       </Card>
