@@ -11,6 +11,7 @@ export type { CountRow, DbPool, ResultSetHeader, RowDataPacket } from './db/type
 // Domaines extraits sous db/ : re-exportes ici pour que les appelants
 // continuent d'importer depuis './db'.
 export * from './db/agent';
+export * from './db/cadre';
 export * from './db/aide';
 export * from './db/configuration';
 export * from './db/ptba';

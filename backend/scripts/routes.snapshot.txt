@@ -41,8 +41,11 @@ GET    /api/beneficiaires/stats
 GET    /api/beneficiaires/ventes-semences
 GET    /api/beneficiaires/ventes-semences/stats
 GET    /api/cadre-resultats
+GET    /api/cadre-resultats/:code([A-Za-z0-9.]+)/valeurs
 GET    /api/cadre-resultats/cibles-provinciales
+GET    /api/cadre-resultats/controle
 GET    /api/cadre-resultats/stats
+GET    /api/cadre-resultats/valeurs
 GET    /api/calculateur/export/:format
 GET    /api/calculateur/historique
 GET    /api/calculateur/indicateurs
