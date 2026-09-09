@@ -84,6 +84,8 @@ vérifier d'abord ce fichier.
 | `npm --prefix backend run routes` | Liste les routes réellement montées |
 | `npm --prefix backend run routes -- --check` | Échoue si l'inventaire des routes a changé |
 | `npm --prefix frontend run typecheck` | Vérification des types du front |
+| `npm --prefix backend run smoke` | Appelle toutes les routes GET contre la base et rapporte leur code |
+| `npm --prefix backend run controle:cadre` | Contrôle de cohérence du cadre de résultats |
 | `npm --prefix frontend run lint:budget` | Vérifie que la dette de lint ne grossit pas |
 | `npm run build` | Build de production des deux |
 
@@ -127,7 +129,7 @@ backend/src/
 ├── middleware/
 │   ├── auth.ts            Vérification du jeton, requireRole
 │   └── scope.ts           Cloisonnement provincial
-├── routes/                Un router par domaine — 25 fichiers, 172 routes
+├── routes/                Un router par domaine — 25 fichiers, 175 routes
 │   ├── auth · dashboard · beneficiaires · indicateurs · cadre-resultats
 │   ├── grm · risques · plans-attenuation · environnement
 │   ├── ptba · activites · activites-database · ot · agent
@@ -135,6 +137,7 @@ backend/src/
 │   └── notifications · calculateur · powerbi · database-views · aide · configuration
 ├── db.ts                  Couche d'accès aux données (en cours de découpage)
 ├── db/core.ts             Pool Postgres + couche de compatibilité mysql2 vers pg
+├── db/cadre.ts            Valeurs désagrégées du cadre + règles de cohérence
 ├── db/types.ts            Types de la couche données
 ├── utils/mappers.ts       Base de données vers objets d'API
 └── types/app.types.ts
@@ -152,7 +155,7 @@ puis à supprimer `compatQuery` — sans jamais toucher à `getPgPool()`.
 
 ### Inventaire des routes
 
-`backend/scripts/routes.snapshot.txt` fige les 172 routes exposées.
+`backend/scripts/routes.snapshot.txt` fige les 175 routes exposées.
 `npm run routes -- --check` compare l'application réellement montée à cet instantané et échoue
 au moindre écart. C'est ce qui permet de restructurer le backend sans changer l'API par accident.
 
@@ -161,6 +164,40 @@ Quand une route change **volontairement**, régénérer l'instantané et le comm
 ```bash
 npm --prefix backend run routes -- --write
 ```
+
+---
+
+## Le cadre de résultats
+
+C'est le cœur métier : le chiffre qu'un IODP affiche sur un tableau de bord doit être celui du
+rapport ISR, et on doit pouvoir dire d'où il vient.
+
+**Deux modèles coexistent le temps de la bascule.**
+
+`cadre_resultats` porte les fiches des 32 indicateurs (7 IODP, 25 IR) et, historiquement, leurs
+valeurs en **colonnes** : `prevu_2023` … `realise_2027`. Ce modèle n'a aucune dimension province
+ni sexe — la désagrégation n'y est qu'un texte libre dans `desagrege_par`, et l'axe sexe est
+porté en dupliquant l'indicateur (les lignes « — Femmes »).
+
+`cadre_valeur`, introduite par la migration `0006`, porte **une ligne par indicateur × année ×
+province × sexe**, avec statut de validation, source, auteur et validateur. Les 4 lignes
+« — Femmes » y sont rattachées à leur indicateur mère par `code_parent` : ce ne sont plus des
+indicateurs autonomes mais des désagrégations.
+
+Les routes `/api/cadre-resultats`, `/stats` et `/cibles-provinciales` lisent encore l'ancien
+modèle et alimentent les écrans actuels. Les routes `/valeurs`, `/:code/valeurs` et `/controle`
+lisent le nouveau. La bascule se fait écran par écran.
+
+**Contrôle de cohérence.** `npm run controle:cadre` applique six règles qui portent sur le sens
+des valeurs et qu'aucune contrainte de base ne peut exprimer : un sous-total femmes supérieur à
+son total, un sous-total strictement égal au total (recopie de tableur), une cible provinciale
+identique à la cible nationale, deux chiffres pour la cible de fin de projet… Les mêmes règles
+alimentent `GET /api/cadre-resultats/controle`, réservée aux rôles nationaux. Le terminal et
+l'interface disent donc la même chose.
+
+La commande sort en code 1 s'il reste une anomalie bloquante : utilisable comme garde avant une
+revue. **Sur l'état actuel, elle en signale.** Les corriger demande une décision de l'UNCP et une
+nouvelle version du classeur, pas une retouche en base.
 
 ---
 
@@ -185,9 +222,12 @@ d'abaisser le budget — le cliquet ne tourne que dans un sens.
 
 - Les valeurs d'indicateurs ne sont pas **calculées** depuis les collectes validées, le RNA et
   le PTBA. Le calculateur est un outil à part.
-- Il n'y a pas de cycle complet brouillon → soumis → contrôlé OT → validé UPEP → consolidé UNCP,
-  avec motif de rejet, pièces jointes et horodatage.
-- La désagrégation (sexe, jeunes, province, territoire) est incomplète au regard du cadre.
+- Le cycle brouillon → soumis → contrôlé OT → validé UPEP → consolidé UNCP existe comme colonne
+  `statut` de `cadre_valeur`, mais aucune transition n'est encore implémentée : pas de motif de
+  rejet, pas de pièce jointe, pas d'horodatage de validation.
+- La désagrégation existe désormais comme structure (`cadre_valeur`), mais les données sont
+  maigres : 19 lignes portent l'axe sexe, 18 l'axe province, sur 157. Aucun axe jeunes ni
+  territoire.
 - Les formulaires de collecte sont statiques dans le front, non versionnés en base.
 - Deux modules parallèles coexistent pour les mêmes objets — `/api/activites` et
   `/api/activites-database`, `/api/beneficiaires` et `/api/database/beneficiaires`. Tant que les
